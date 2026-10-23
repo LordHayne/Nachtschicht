@@ -56,6 +56,9 @@ echo "✓ Done: $OUT"
 
 if [ "${1:-}" = "--install" ]; then
   mkdir -p "$HOME/Applications"
+  # `open` would only bring an already running copy to the front, so quit it first.
+  osascript -e "tell application id \"local.thomas.nachtschicht\" to quit" >/dev/null 2>&1 || true
+  pkill -f "$HOME/Applications/$APP.app/Contents/MacOS/$APP" 2>/dev/null || true
   rm -rf "$HOME/Applications/$APP.app"
   cp -R "$OUT" "$HOME/Applications/"
   echo "✓ Installed: ~/Applications/$APP.app"

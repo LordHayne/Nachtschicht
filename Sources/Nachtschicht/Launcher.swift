@@ -78,7 +78,10 @@ enum LaunchError: LocalizedError {
 struct LaunchWatcher {
     enum Event {
         case needsConfirmation
+        /// Steam got its answer (or never needed one – it logs routine steps the same way).
+        case continued
         case running
+        case cancelled
         case failed
     }
 
@@ -125,6 +128,10 @@ struct LaunchWatcher {
                 event = .running
             } else if line.contains("waiting for user response") {
                 event = .needsConfirmation
+            } else if line.contains("continues with user response") {
+                event = .continued
+            } else if line.contains("GameAction"), line.localizedCaseInsensitiveContains("cancel") {
+                event = .cancelled
             } else if line.contains("GameAction"), line.localizedCaseInsensitiveContains("failed") {
                 event = .failed
             }

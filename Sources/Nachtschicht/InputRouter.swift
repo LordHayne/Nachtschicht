@@ -19,8 +19,13 @@ final class InputRouter {
             let code = event.keyCode
             let chars = event.charactersIgnoringModifiers ?? ""
             let plain = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
+            let command = event.modifierFlags.intersection([.command, .control, .option]) == .command
             let handled = MainActor.assumeIsolated {
-                self?.handleKey(code: code, chars: chars, plain: plain) ?? false
+                if command, chars.lowercased() == "f" {
+                    self?.model?.focusSearch()
+                    return true
+                }
+                return self?.handleKey(code: code, chars: chars, plain: plain) ?? false
             }
             return handled ? nil : event
         }
@@ -48,16 +53,32 @@ final class InputRouter {
         switch code {
         case 123: model.move(-1); return true            // ←
         case 124: model.move(1); return true             // →
+        case 126: model.moveRow(-1); return model.showingLibrary // ↑
+        case 125: model.moveRow(1); return model.showingLibrary  // ↓
         case 115: model.jump(toStart: true); return true // Pos1
         case 119: model.jump(toStart: false); return true // Ende
-        case 36, 76: model.primaryAction(); return true // Return / Enter
+        case 36, 76:                                     // Return / Enter
+            if model.showingLibrary { model.showSelectedGame() } else { model.primaryAction() }
+            return true
+        case 53:                                         // Esc
+            if model.showingLibrary { model.showingLibrary = false; return true }
+            if !model.searchText.isEmpty { model.searchText = ""; return true }
+            return false
         default: break
         }
-        if chars.lowercased() == "o", model.selected != nil {
+        switch chars.lowercased() {
+        case "o" where model.selected != nil:
             model.showingOptions = true
             return true
+        case "l":
+            model.toggleLibrary()
+            return true
+        case "/":
+            model.focusSearch()
+            return true
+        default:
+            return false
         }
-        return false
     }
 
     // MARK: - Gamepad
@@ -76,6 +97,18 @@ final class InputRouter {
         pad.dpad.right.pressedChangedHandler = { [weak self] _, _, pressed in
             MainActor.assumeIsolated { self?.dpad(1, pressed: pressed) }
         }
+        pad.dpad.up.pressedChangedHandler = { [weak self] _, _, pressed in
+            guard pressed else { return }
+            MainActor.assumeIsolated { self?.model?.moveRow(-1) }
+        }
+        pad.dpad.down.pressedChangedHandler = { [weak self] _, _, pressed in
+            guard pressed else { return }
+            MainActor.assumeIsolated { self?.model?.moveRow(1) }
+        }
+        pad.buttonX.pressedChangedHandler = { [weak self] _, _, pressed in
+            guard pressed else { return }
+            MainActor.assumeIsolated { self?.model?.toggleLibrary() }
+        }
         pad.leftThumbstick.xAxis.valueChangedHandler = { [weak self] _, value in
             MainActor.assumeIsolated { self?.stick(value) }
         }
@@ -85,7 +118,10 @@ final class InputRouter {
         }
         pad.buttonB.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
-            MainActor.assumeIsolated { self?.model?.showingOptions = false }
+            MainActor.assumeIsolated {
+                guard let model = self?.model else { return }
+                if model.showingOptions { model.showingOptions = false } else { model.showingLibrary = false }
+            }
         }
         pad.buttonY.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
@@ -107,7 +143,7 @@ final class InputRouter {
 
     private func primary() {
         guard let model, !model.showingOptions else { return }
-        model.primaryAction()
+        if model.showingLibrary { model.showSelectedGame() } else { model.primaryAction() }
     }
 
     private func toggleOptions() {

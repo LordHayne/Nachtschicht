@@ -3,8 +3,20 @@ import SwiftUI
 
 @MainActor
 final class LibraryModel: ObservableObject {
+    /// Everything the scan found.
+    @Published private(set) var allGames: [Game] = []
+    /// What's shown and navigated: `allGames` narrowed by the search.
     @Published private(set) var games: [Game] = []
     @Published var selectedIndex = 0
+    @Published var searchText = "" {
+        didSet { if searchText != oldValue { applyFilter(selectBestMatch: true) } }
+    }
+    /// Bumped to move keyboard focus into the search field (⌘F).
+    @Published private(set) var searchFocusRequest = 0
+    /// The full-library grid instead of the single game with its cover rail.
+    @Published var showingLibrary = false
+    /// Covers per row in the grid, reported by the grid so ↑/↓ can jump a row.
+    var gridColumns = 1
     @Published private(set) var isScanning = false
     @Published private(set) var launchingID: String?
     /// Steam is showing a question (licence, setup) for the game being launched.
@@ -24,7 +36,7 @@ final class LibraryModel: ObservableObject {
     }
 
     /// Nothing to show and Nachtschicht's own Steam isn't ready yet.
-    var needsSetup: Bool { games.isEmpty && !SetupModel.isComplete }
+    var needsSetup: Bool { allGames.isEmpty && !SetupModel.isComplete }
 
     var selected: Game? {
         games.indices.contains(selectedIndex) ? games[selectedIndex] : nil
@@ -46,9 +58,8 @@ final class LibraryModel: ObservableObject {
             let found = await Task.detached(priority: .userInitiated) {
                 LibraryScanner.scan(bottlesRoot: root, extraBottles: builtIn)
             }.value
-            let previous = selected?.id
-            games = found
-            selectedIndex = found.firstIndex(where: { $0.id == previous }) ?? 0
+            allGames = found
+            applyFilter()
             isScanning = false
             watchDownloads()
         }
@@ -58,7 +69,7 @@ final class LibraryModel: ObservableObject {
 
     /// While Steam downloads something, re-read the manifests every few seconds for progress.
     private func watchDownloads() {
-        let downloading = games.contains { if case .downloading = $0.install { return true } else { return false } }
+        let downloading = allGames.contains { if case .downloading = $0.install { return true } else { return false } }
         guard downloading, downloadWatcher == nil else { return }
         downloadWatcher = Task {
             try? await Task.sleep(for: .seconds(3))
@@ -99,6 +110,56 @@ final class LibraryModel: ObservableObject {
         }
     }
 
+    // MARK: - Search & views
+
+    /// Matches ignoring case, accents and punctuation, so "baldurs" finds "Baldur's Gate 3".
+    private static func searchKey(_ text: String) -> String {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            .unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || $0 == " " }
+            .map(String.init).joined()
+    }
+
+    /// `selectBestMatch`: while typing, jump to the first hit instead of keeping the old selection.
+    private func applyFilter(selectBestMatch: Bool = false) {
+        let previous = selected?.id
+        let words = Self.searchKey(searchText).split(separator: " ").map(String.init)
+        if words.isEmpty {
+            games = allGames
+        } else {
+            let matches = allGames.filter { game in
+                let name = Self.searchKey(game.name)
+                return words.allSatisfy { name.contains($0) }
+            }
+            // Names where a word starts with the search ("ark" → ARK, Arkham) before mid-word hits
+            // (Amnesia: The Dark Descent); otherwise keep the library order.
+            func startsWord(_ game: Game) -> Bool {
+                let nameWords = Self.searchKey(game.name).split(separator: " ")
+                return words.allSatisfy { word in nameWords.contains { $0.hasPrefix(word) } }
+            }
+            games = matches.filter(startsWord) + matches.filter { !startsWord($0) }
+        }
+        selectedIndex = selectBestMatch && !words.isEmpty ? 0 : games.firstIndex(where: { $0.id == previous }) ?? 0
+    }
+
+    func focusSearch() {
+        searchFocusRequest += 1
+    }
+
+    func toggleLibrary() {
+        showingLibrary.toggle()
+    }
+
+    /// From the grid: show the chosen game in the big view, where its button is.
+    func showSelectedGame() {
+        showingLibrary = false
+    }
+
+    /// ↑/↓ in the grid move a whole row.
+    func moveRow(_ delta: Int) {
+        guard showingLibrary else { return }
+        move(delta * max(gridColumns, 1))
+    }
+
     func move(_ delta: Int) {
         guard !games.isEmpty else { return }
         selectedIndex = max(0, min(games.count - 1, selectedIndex + delta))
@@ -128,9 +189,11 @@ final class LibraryModel: ObservableObject {
             // Only get out of the way once the game is really running. A question from Steam can
             // take as long as the player needs; a launch that shows no sign of life ends after 2 min.
             var quietSeconds = 0
+            var totalSeconds = 0
             var started = false
-            while quietSeconds < 120 {
+            while quietSeconds < 120 && totalSeconds < 900 {
                 try? await Task.sleep(for: .seconds(1))
+                totalSeconds += 1
                 switch watcher.poll() {
                 case .running?:
                     started = true
@@ -138,6 +201,12 @@ final class LibraryModel: ObservableObject {
                     launchNeedsConfirmation = true
                     quietSeconds = 0
                     continue
+                case .continued?:
+                    launchNeedsConfirmation = false
+                    quietSeconds = 0
+                    continue
+                case .cancelled?:
+                    break
                 case .failed?:
                     errorMessage = L10n.t("Steam couldn't start %@.", game.name)
                 case nil:

@@ -141,6 +141,20 @@ enum L10n {
         "VR only": "Nur VR",
         "Needs a VR headset – this game can't be played on a Mac.": "Braucht eine VR-Brille – dieses Spiel läuft nicht auf dem Mac.",
 
+        // Search & library
+        "Search": "Suchen",
+        "Search (⌘F)": "Suchen (⌘F)",
+        "Clear search": "Suche löschen",
+        "%ld of %ld games": "%ld von %ld Spielen",
+        "No games match “%@”": "Keine Spiele zu „%@“",
+        "Whole library (L)": "Ganze Bibliothek (L)",
+        "Back to the game (L)": "Zurück zum Spiel (L)",
+        "Installed": "Installiert",
+        "Downloading": "Wird geladen",
+        "In your library": "In deiner Bibliothek",
+        "Open": "Öffnen",
+        "Back": "Zurück",
+
         // Errors
         "Component list version %ld needs a newer Nachtschicht.": "Komponentenliste Version %ld braucht ein neueres Nachtschicht.",
         "No component list available. Check your internet connection.": "Keine Komponentenliste verfügbar. Prüfe deine Internetverbindung.",

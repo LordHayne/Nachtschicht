@@ -13,9 +13,19 @@ struct LibraryView: View {
                     .id(game.id)
                     .transition(.opacity)
             }
+            if model.showingLibrary {
+                Theme.night.opacity(0.86).ignoresSafeArea()
+                    .transition(.opacity)
+            }
 
             VStack(alignment: .leading, spacing: 0) {
                 TopBar()
+
+                if model.showingLibrary && !model.games.isEmpty {
+                    LibraryGrid()
+                        .padding(.top, 16)
+                        .transition(.opacity)
+                } else {
                 Spacer(minLength: 24)
 
                 if let game = model.selected {
@@ -25,6 +35,9 @@ struct LibraryView: View {
                         .padding(.horizontal, Theme.gutter)
                 } else if model.needsSetup {
                     SetupView(setup: model.setup)
+                        .padding(.horizontal, Theme.gutter)
+                } else if !model.searchText.isEmpty && !model.allGames.isEmpty {
+                    NoResults()
                         .padding(.horizontal, Theme.gutter)
                 } else if !model.isScanning {
                     EmptyLibrary()
@@ -36,12 +49,14 @@ struct LibraryView: View {
                 if !model.games.isEmpty {
                     CoverRail()
                 }
+                }
                 HintBar()
                     .padding(.horizontal, Theme.gutter)
                     .padding(.bottom, 22)
             }
         }
         .animation(.easeOut(duration: 0.28), value: model.selected?.id)
+        .animation(.easeOut(duration: 0.22), value: model.showingLibrary)
         .sheet(isPresented: $model.showingOptions) {
             if let game = model.selected {
                 GameOptionsSheet(game: game)
@@ -126,13 +141,24 @@ private struct TopBar: View {
             Text("Nachtschicht")
                 .font(Theme.display(15))
                 .foregroundStyle(Theme.ink)
-            if !model.games.isEmpty {
-                Text(model.games.count == 1 ? L10n.t("1 game") : L10n.t("%ld games", model.games.count))
-                    .font(.system(size: 13))
+            if !model.allGames.isEmpty {
+                Text(countText)
+                    .font(.system(size: 13).monospacedDigit())
                     .foregroundStyle(Theme.muted)
             }
 
             Spacer()
+
+            if !model.allGames.isEmpty {
+                SearchField()
+                RoundIconButton(
+                    symbol: model.showingLibrary ? "rectangle.inset.filled" : "square.grid.3x3",
+                    help: model.showingLibrary ? L10n.t("Back to the game (L)") : L10n.t("Whole library (L)"),
+                    size: 34
+                ) {
+                    model.toggleLibrary()
+                }
+            }
 
             if model.isScanning {
                 ProgressView().controlSize(.small)
@@ -159,6 +185,70 @@ private struct TopBar: View {
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.top, 36)
+    }
+
+    private var countText: String {
+        let total = model.allGames.count
+        if model.searchText.isEmpty {
+            return total == 1 ? L10n.t("1 game") : L10n.t("%ld games", total)
+        }
+        return L10n.t("%ld of %ld games", model.games.count, total)
+    }
+}
+
+/// Search as you type; ⌘F or / jumps here, Return goes back to the results, Esc clears.
+private struct SearchField: View {
+    @EnvironmentObject private var model: LibraryModel
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.muted)
+            TextField("", text: $model.searchText, prompt: Text(L10n.t("Search")).foregroundStyle(Theme.muted))
+                .textFieldStyle(.plain)
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.ink)
+                .focused($focused)
+                .onSubmit { focused = false }
+                .onExitCommand {
+                    model.searchText = ""
+                    focused = false
+                }
+            if !model.searchText.isEmpty {
+                Button {
+                    model.searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.muted)
+                }
+                .buttonStyle(.plain)
+                .help(L10n.t("Clear search"))
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(width: 230, height: 34)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(Theme.sodium.opacity(focused ? 0.8 : 0), lineWidth: 1.5))
+        .onChange(of: model.searchFocusRequest) { _, _ in focused = true }
+        .help(L10n.t("Search (⌘F)"))
+    }
+}
+
+private struct NoResults: View {
+    @EnvironmentObject private var model: LibraryModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(L10n.t("No games match “%@”", model.searchText))
+                .font(Theme.display(30))
+                .foregroundStyle(Theme.ink)
+            Button(L10n.t("Clear search")) { model.searchText = "" }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+        }
     }
 }
 
@@ -376,7 +466,7 @@ private struct CoverRail: View {
     }
 }
 
-private struct CoverCard: View {
+struct CoverCard: View {
     let game: Game
     let isSelected: Bool
     @State private var cover: NSImage?
@@ -450,13 +540,19 @@ private struct HintBar: View {
     var body: some View {
         HStack(spacing: 22) {
             Spacer()
-            if model.controllerConnected {
+            if model.showingLibrary {
+                Hint(symbol: model.controllerConnected ? "a.circle.fill" : "return", text: L10n.t("Open"))
+                Hint(symbol: "arrow.up.and.down.and.arrow.left.and.right", text: L10n.t("Select"))
+                Hint(symbol: model.controllerConnected ? "b.circle.fill" : "escape", text: L10n.t("Back"))
+            } else if model.controllerConnected {
                 Hint(symbol: "a.circle.fill", text: L10n.t("Play"))
                 Hint(symbol: "y.circle.fill", text: L10n.t("Options"))
+                Hint(symbol: "x.circle.fill", text: L10n.t("Library"))
                 Hint(symbol: "arrow.left.and.right", text: L10n.t("Select"))
             } else {
                 Hint(symbol: "return", text: L10n.t("Play"))
                 Hint(symbol: "o.square", text: L10n.t("Options"))
+                Hint(symbol: "l.square", text: L10n.t("Library"))
                 Hint(symbol: "arrow.left.and.right", text: L10n.t("Select"))
             }
         }

@@ -27,12 +27,14 @@ cp components/manifest.json "$OUT/Contents/Resources/manifest.json"
 
 # Steam's browser needs this wrapper under Wine (see wrapper/steamwebhelper-wrapper.c).
 # Rebuilt when mingw-w64 is installed, otherwise the checked-in build is used.
+# (Built into the app bundle only; the checked-in binary is the one the GitHub workflow produces.)
 MINGW="$(command -v x86_64-w64-mingw32-gcc || true)"
 if [ -n "$MINGW" ]; then
   "$MINGW" -O2 -Wall -Wextra -municode -mwindows -static \
-    -o wrapper/steamwebhelper.exe wrapper/steamwebhelper-wrapper.c
+    -o "$OUT/Contents/Resources/steamwebhelper.exe" wrapper/steamwebhelper-wrapper.c
+else
+  cp wrapper/steamwebhelper.exe "$OUT/Contents/Resources/steamwebhelper.exe"
 fi
-cp wrapper/steamwebhelper.exe "$OUT/Contents/Resources/steamwebhelper.exe"
 
 # Keeps the background Steam out of the Dock (x86_64, loaded into Wine processes).
 clang -arch x86_64 -mmacosx-version-min=11.0 -dynamiclib -framework AppKit -Wall \

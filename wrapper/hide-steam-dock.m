@@ -1,0 +1,38 @@
+// Keeps Steam's own processes out of the Dock when Nachtschicht runs it in the background.
+//
+// Wine turns a process into a regular Dock app as soon as it shows any window. Steam's browser
+// (steamwebhelper) does that even with -silent, for tiny invisible menu windows. This library is
+// loaded into Wine processes via DYLD_INSERT_LIBRARIES and downgrades that request to an accessory
+// app – only for Steam's processes, so its dialogs still appear but no Dock icon does. Games keep
+// their normal Dock icon.
+//
+// Build (x86_64, like Wine): clang -arch x86_64 -dynamiclib -framework AppKit -o hide-steam-dock.dylib hide-steam-dock.m
+
+#import <AppKit/AppKit.h>
+#import <crt_externs.h>
+#import <objc/runtime.h>
+
+static BOOL isSteamProcess(void) {
+    // Wine rewrites argv[0] to the Windows path of the program it's running.
+    char **argv = *_NSGetArgv();
+    if (!argv || !argv[0]) return NO;
+    NSString *program = [@(argv[0]) lowercaseString];
+    return [program containsString:@"steamwebhelper"]
+        || [program hasSuffix:@"\\steam\\steam.exe"]
+        || [program containsString:@"steamservice"];
+}
+
+static BOOL (*originalSetActivationPolicy)(id, SEL, NSApplicationActivationPolicy);
+
+static BOOL nachtschichtSetActivationPolicy(id self, SEL _cmd, NSApplicationActivationPolicy policy) {
+    if (policy == NSApplicationActivationPolicyRegular && isSteamProcess()) {
+        policy = NSApplicationActivationPolicyAccessory;
+    }
+    return originalSetActivationPolicy(self, _cmd, policy);
+}
+
+__attribute__((constructor)) static void install(void) {
+    Method method = class_getInstanceMethod([NSApplication class], @selector(setActivationPolicy:));
+    if (!method) return;
+    originalSetActivationPolicy = (void *)method_setImplementation(method, (IMP)nachtschichtSetActivationPolicy);
+}

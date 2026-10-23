@@ -1,0 +1,538 @@
+import AppKit
+import SwiftUI
+
+struct LibraryView: View {
+    @EnvironmentObject private var model: LibraryModel
+
+    var body: some View {
+        ZStack {
+            Theme.night.ignoresSafeArea()
+
+            if let game = model.selected {
+                Backdrop(game: game)
+                    .id(game.id)
+                    .transition(.opacity)
+            }
+
+            VStack(alignment: .leading, spacing: 0) {
+                TopBar()
+                Spacer(minLength: 24)
+
+                if let game = model.selected {
+                    GameDetail(game: game)
+                        .id(game.id)
+                        .transition(.opacity)
+                        .padding(.horizontal, Theme.gutter)
+                } else if model.needsSetup {
+                    SetupView(setup: model.setup)
+                        .padding(.horizontal, Theme.gutter)
+                } else if !model.isScanning {
+                    EmptyLibrary()
+                        .padding(.horizontal, Theme.gutter)
+                }
+
+                Spacer(minLength: 28)
+
+                if !model.games.isEmpty {
+                    CoverRail()
+                }
+                HintBar()
+                    .padding(.horizontal, Theme.gutter)
+                    .padding(.bottom, 22)
+            }
+        }
+        .animation(.easeOut(duration: 0.28), value: model.selected?.id)
+        .sheet(isPresented: $model.showingOptions) {
+            if let game = model.selected {
+                GameOptionsSheet(game: game)
+            }
+        }
+        .alert(
+            L10n.t("Launch Failed"),
+            isPresented: Binding(
+                get: { model.errorMessage != nil },
+                set: { if !$0 { model.errorMessage = nil } }
+            ),
+            actions: { Button("OK") {} },
+            message: { Text(model.errorMessage ?? "") }
+        )
+        .onAppear {
+            model.startInput()
+            if model.games.isEmpty { model.reload() }
+            model.startBackgroundSteam()
+        }
+    }
+}
+
+// MARK: - Backdrop
+
+private struct Backdrop: View {
+    let game: Game
+    @State private var hero: NSImage?
+    @State private var cover: NSImage?
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                if let hero {
+                    Image(nsImage: hero)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                } else if let cover {
+                    // No hero art: use the cover as a soft light source instead.
+                    Image(nsImage: cover)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .blur(radius: 70)
+                        .opacity(0.55)
+                        .clipped()
+                }
+
+                LinearGradient(
+                    stops: [
+                        .init(color: Theme.night.opacity(0.10), location: 0),
+                        .init(color: Theme.night.opacity(0.50), location: 0.45),
+                        .init(color: Theme.night.opacity(0.94), location: 0.78),
+                        .init(color: Theme.night, location: 1),
+                    ],
+                    startPoint: .top, endPoint: .bottom
+                )
+                LinearGradient(
+                    colors: [Theme.night.opacity(0.85), Theme.night.opacity(0)],
+                    startPoint: .leading, endPoint: UnitPoint(x: 0.6, y: 0.5)
+                )
+            }
+        }
+        .ignoresSafeArea()
+        .task(id: game.id) {
+            hero = await ArtworkStore.shared.image(for: game, kind: .hero)
+            if hero == nil {
+                cover = await ArtworkStore.shared.image(for: game, kind: .cover)
+            }
+        }
+    }
+}
+
+// MARK: - Top bar
+
+private struct TopBar: View {
+    @EnvironmentObject private var model: LibraryModel
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Text("Nachtschicht")
+                .font(Theme.display(15))
+                .foregroundStyle(Theme.ink)
+            if !model.games.isEmpty {
+                Text(model.games.count == 1 ? L10n.t("1 game") : L10n.t("%ld games", model.games.count))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.muted)
+            }
+
+            Spacer()
+
+            if model.isScanning {
+                ProgressView().controlSize(.small)
+            }
+            RoundIconButton(symbol: "arrow.clockwise", help: L10n.t("Rescan library (⌘R)"), size: 34) {
+                model.reload()
+            }
+            SettingsLink {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.ink)
+                    .frame(width: 34, height: 34)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .help(L10n.t("Settings (⌘,)"))
+
+            TimelineView(.everyMinute) { context in
+                Text(context.date, format: .dateTime.hour().minute())
+                    .font(.system(size: 15, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(Theme.ink)
+            }
+            .padding(.leading, 6)
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.top, 36)
+    }
+}
+
+// MARK: - Selected game
+
+private struct GameDetail: View {
+    let game: Game
+    @EnvironmentObject private var model: LibraryModel
+    @State private var logo: NSImage?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            Group {
+                if let logo {
+                    Image(nsImage: logo)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 480, maxHeight: 170, alignment: .bottomLeading)
+                        .shadow(color: .black.opacity(0.6), radius: 20, y: 8)
+                } else {
+                    Text(game.name)
+                        .font(Theme.display(54))
+                        .foregroundStyle(Theme.ink)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.5)
+                        .frame(maxWidth: 760, alignment: .bottomLeading)
+                        .shadow(color: .black.opacity(0.5), radius: 16, y: 6)
+                }
+            }
+            .frame(height: 170, alignment: .bottomLeading)
+            .accessibilityLabel(game.name)
+
+            HStack(alignment: .top, spacing: 34) {
+                Stat(label: L10n.t("Last played"), value: game.lastPlayed.map(Format.relative) ?? L10n.t("Never"))
+                if let minutes = game.playtimeMinutes, minutes > 0 {
+                    Stat(label: L10n.t("Play time"), value: Format.playtime(minutes))
+                }
+                switch game.install {
+                case .installed:
+                    Stat(label: L10n.t("Size"), value: Format.bytes(game.sizeOnDisk))
+                case .notInstalled:
+                    Stat(label: L10n.t("Download"), value: game.sizeOnDisk > 0
+                         ? L10n.t("up to %@", Format.bytes(game.sizeOnDisk)) : "–")
+                case .downloading:
+                    Stat(label: L10n.t("Download"), value: Format.bytes(game.sizeOnDisk))
+                }
+                Stat(label: "Bottle", value: game.bottle.name)
+            }
+
+            if game.isVROnly {
+                Label(L10n.t("Needs a VR headset – this game can't be played on a Mac."), systemImage: "visionpro")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+            }
+
+            HStack(spacing: 14) {
+                PlayButton(install: game.install, isLaunching: model.launchingID == game.id,
+                           needsConfirmation: model.launchNeedsConfirmation,
+                           vrOnly: game.isVROnly && game.install == .notInstalled) {
+                    model.primaryAction()
+                }
+                RoundIconButton(symbol: "slider.horizontal.3", help: L10n.t("Options for this game (O)")) {
+                    model.showingOptions = true
+                }
+                RoundIconButton(symbol: "folder", help: L10n.t("Show game folder in Finder")) {
+                    model.revealSelected()
+                }
+            }
+        }
+        .task(id: game.id) {
+            logo = await ArtworkStore.shared.image(for: game, kind: .logo)
+        }
+    }
+}
+
+private struct Stat: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.muted)
+            Text(value)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Theme.ink)
+                .lineLimit(1)
+        }
+    }
+}
+
+/// The one big button: Download → Downloading … % → Play.
+private struct PlayButton: View {
+    let install: InstallState
+    let isLaunching: Bool
+    var needsConfirmation = false
+    /// VR-only and not downloaded: nothing useful to do on a Mac.
+    var vrOnly = false
+    let action: () -> Void
+    @State private var hovering = false
+
+    private var busy: Bool {
+        if isLaunching || vrOnly { return true }
+        if case .downloading = install { return true }
+        return false
+    }
+
+    private var title: String {
+        if isLaunching { return needsConfirmation ? L10n.t("Confirm in the Steam window") : L10n.t("Launching …") }
+        if vrOnly { return L10n.t("VR only") }
+        switch install {
+        case .installed: return L10n.t("Play")
+        case .notInstalled: return L10n.t("Download")
+        case .downloading(let fraction?): return L10n.t("Downloading … %ld %%", Int(fraction * 100))
+        case .downloading(nil): return L10n.t("Preparing download …")
+        }
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                if vrOnly {
+                    Image(systemName: "visionpro")
+                        .font(.system(size: 15, weight: .bold))
+                } else if busy {
+                    ProgressView()
+                        .controlSize(.small)
+                        .environment(\.colorScheme, .light)
+                } else {
+                    Image(systemName: install == .notInstalled ? "arrow.down" : "play.fill")
+                        .font(.system(size: 15, weight: .bold))
+                }
+                Text(title)
+                    .font(Theme.display(17))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(Theme.night)
+            .padding(.horizontal, 32)
+            .frame(height: 52)
+            .background(
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Theme.sodium.opacity(busy ? 0.55 : 1))
+                    if case .downloading(let fraction?) = install {
+                        GeometryReader { geo in
+                            Capsule().fill(Theme.sodium).frame(width: max(52, geo.size.width * fraction))
+                        }
+                    }
+                }
+            )
+            .clipShape(Capsule())
+            .shadow(color: Theme.sodium.opacity(hovering ? 0.55 : 0.3), radius: hovering ? 24 : 14)
+            .contentShape(Capsule())
+            .animation(.easeOut(duration: 0.4), value: install)
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: hovering)
+    }
+}
+
+struct RoundIconButton: View {
+    let symbol: String
+    let help: String
+    var size: CGFloat = 52
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: size * 0.32, weight: .semibold))
+                .foregroundStyle(Theme.ink)
+                .frame(width: size, height: size)
+                .background(.ultraThinMaterial, in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+}
+
+// MARK: - Cover rail
+
+private struct CoverRail: View {
+    @EnvironmentObject private var model: LibraryModel
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 18) {
+                    ForEach(Array(model.games.enumerated()), id: \.element.id) { index, game in
+                        CoverCard(game: game, isSelected: index == model.selectedIndex)
+                            .id(game.id)
+                            .onTapGesture {
+                                if index == model.selectedIndex {
+                                    model.primaryAction()
+                                } else {
+                                    model.selectedIndex = index
+                                }
+                            }
+                    }
+                }
+                .padding(.horizontal, Theme.gutter)
+                .padding(.vertical, 22)
+            }
+            .frame(height: 290)
+            .onChange(of: model.selectedIndex) { _, _ in
+                guard let id = model.selected?.id else { return }
+                withAnimation(.easeOut(duration: 0.22)) {
+                    proxy.scrollTo(id, anchor: UnitPoint(x: 0.3, y: 0.5))
+                }
+            }
+        }
+    }
+}
+
+private struct CoverCard: View {
+    let game: Game
+    let isSelected: Bool
+    @State private var cover: NSImage?
+
+    var body: some View {
+        ZStack {
+            if let cover {
+                Image(nsImage: cover)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                LinearGradient(colors: [Theme.slate, Theme.night], startPoint: .top, endPoint: .bottom)
+                Text(game.name)
+                    .font(.system(size: 15, weight: .bold).width(.expanded))
+                    .foregroundStyle(Theme.ink.opacity(0.85))
+                    .multilineTextAlignment(.center)
+                    .padding(14)
+            }
+        }
+        .frame(width: 154, height: 231)
+        .saturation(game.install == .notInstalled ? 0.15 : 1)
+        .overlay(alignment: .bottom) { installBadge }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Theme.sodium, lineWidth: isSelected ? 3 : 0)
+        )
+        .scaleEffect(isSelected ? 1.08 : 1)
+        .opacity(isSelected ? 1 : 0.6)
+        .shadow(color: .black.opacity(isSelected ? 0.55 : 0.25), radius: isSelected ? 22 : 8, y: isSelected ? 12 : 4)
+        .animation(.spring(response: 0.28, dampingFraction: 0.82), value: isSelected)
+        .help(game.name)
+        .task(id: game.id) {
+            cover = await ArtworkStore.shared.image(for: game, kind: .cover)
+        }
+    }
+
+    @ViewBuilder private var installBadge: some View {
+        switch game.install {
+        case .installed:
+            EmptyView()
+        case .notInstalled:
+            HStack {
+                Spacer()
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Theme.ink, Theme.night.opacity(0.7))
+                    .padding(8)
+            }
+            .frame(maxHeight: .infinity, alignment: .bottom)
+        case .downloading(let fraction):
+            VStack(spacing: 0) {
+                Spacer()
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Rectangle().fill(Theme.night.opacity(0.75))
+                        Rectangle().fill(Theme.sodium).frame(width: geo.size.width * (fraction ?? 0))
+                    }
+                }
+                .frame(height: 6)
+            }
+        }
+    }
+}
+
+// MARK: - Hints & empty state
+
+private struct HintBar: View {
+    @EnvironmentObject private var model: LibraryModel
+
+    var body: some View {
+        HStack(spacing: 22) {
+            Spacer()
+            if model.controllerConnected {
+                Hint(symbol: "a.circle.fill", text: L10n.t("Play"))
+                Hint(symbol: "y.circle.fill", text: L10n.t("Options"))
+                Hint(symbol: "arrow.left.and.right", text: L10n.t("Select"))
+            } else {
+                Hint(symbol: "return", text: L10n.t("Play"))
+                Hint(symbol: "o.square", text: L10n.t("Options"))
+                Hint(symbol: "arrow.left.and.right", text: L10n.t("Select"))
+            }
+        }
+        .opacity(model.games.isEmpty ? 0 : 1)
+    }
+}
+
+private struct Hint: View {
+    let symbol: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: symbol).font(.system(size: 14, weight: .semibold))
+            Text(text).font(.system(size: 13, weight: .medium))
+        }
+        .foregroundStyle(Theme.muted)
+    }
+}
+
+private struct EmptyLibrary: View {
+    @EnvironmentObject private var model: LibraryModel
+
+    var body: some View {
+        if Engine.isSteamInstalled {
+            connected
+        } else {
+            bottles
+        }
+    }
+
+    private var connected: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text(L10n.t("Steam is connected"))
+                .font(Theme.display(36))
+                .foregroundStyle(Theme.ink)
+            Text(L10n.t("Install a game in Steam – it shows up here as soon as it's on your Mac."))
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: 560, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Button(L10n.t("Open Steam")) { model.openSteam() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.sodium)
+                    .foregroundStyle(Theme.night)
+                Button(L10n.t("Rescan")) { model.reload() }
+                    .buttonStyle(.bordered)
+            }
+            .controlSize(.large)
+        }
+    }
+
+    private var bottles: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text(L10n.t("No games here yet"))
+                .font(Theme.display(36))
+                .foregroundStyle(Theme.ink)
+            Text(L10n.t("Nachtschicht shows the Steam games installed in your CrossOver bottles. Install Steam in a bottle, download a game there, then rescan your library."))
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: 560, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(L10n.t("Scanned: %@", Prefs.bottlesRoot.path))
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.muted.opacity(0.8))
+                .textSelection(.enabled)
+            HStack(spacing: 12) {
+                Button(L10n.t("Rescan")) { model.reload() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.sodium)
+                    .foregroundStyle(Theme.night)
+                Button(L10n.t("Choose Another Folder …")) { model.chooseBottlesFolder() }
+                    .buttonStyle(.bordered)
+            }
+            .controlSize(.large)
+        }
+    }
+}

@@ -1,0 +1,32 @@
+{
+  "comment": "What scripts/update-components.py tracks. Each entry becomes one component in manifest.json, pinned to the newest stable GitHub release. 'license' overrides GitHub's detection when the repo has no recognisable LICENSE file. 'tag' pins a specific release (the later DXVK-macOS repack dropped dxgi.dll, which games need).",
+  "sources": [
+    {
+      "id": "wine",
+      "kind": "engine",
+      "repo": "Gcenx/macOS_Wine_builds",
+      "asset": "^wine-devel-[0-9.]+-osx64\\.tar\\.xz$",
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "id": "dxmt",
+      "kind": "graphics",
+      "repo": "3Shain/dxmt",
+      "asset": "^dxmt-v[0-9.]+-builtin\\.tar\\.gz$",
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "id": "dxvk-macos",
+      "kind": "graphics",
+      "repo": "Gcenx/DXVK-macOS",
+      "asset": "^dxvk-macOS-async-v[0-9.]+-[0-9]+\\.tar\\.gz$",
+      "tag": "v1.10.3-20230507"
+    },
+    {
+      "id": "winetricks",
+      "kind": "tool",
+      "repo": "Winetricks/winetricks",
+      "file": "src/winetricks"
+    }
+  ]
+}

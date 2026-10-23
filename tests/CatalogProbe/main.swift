@@ -1,0 +1,10 @@
+// Prints the owned games Nachtschicht reads from a Steam install: tests/CatalogProbe/run.sh <Steam folder>
+import Foundation
+
+let root = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
+let start = Date()
+let games = SteamCatalog.ownedGames(steamRoot: root)
+print("\(games.count) owned games in \(Int(Date().timeIntervalSince(start) * 1000)) ms")
+for game in games where CommandLine.arguments.count < 3 ? games.firstIndex(of: game)! < 8 : String(game.appID) == CommandLine.arguments[2] {
+    print(String(format: "%8d  %8.0f MB  %@  [%@]", game.appID, Double(game.size) / 1e6, game.name, game.installDir))
+}

@@ -1,0 +1,39 @@
+name: Build steamwebhelper wrapper
+
+on:
+  push:
+    paths:
+      - "wrapper/steamwebhelper-wrapper.c"
+  pull_request:
+    paths:
+      - "wrapper/steamwebhelper-wrapper.c"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mingw-w64
+        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64
+
+      - name: Build
+        run: |
+          x86_64-w64-mingw32-gcc -O2 -Wall -Wextra -Werror -municode -mwindows -static \
+            -o wrapper/steamwebhelper.exe wrapper/steamwebhelper-wrapper.c
+          sha256sum wrapper/steamwebhelper.exe
+
+      # build.sh falls back to the checked-in binary on Macs without mingw-w64, so keep it current.
+      - name: Commit rebuilt binary
+        if: github.event_name == 'push'
+        run: |
+          if git diff --quiet wrapper/steamwebhelper.exe; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add wrapper/steamwebhelper.exe
+          git commit -m "Rebuild steamwebhelper wrapper"
+          git push

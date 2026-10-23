@@ -166,9 +166,22 @@ enum LibraryScanner {
         let flags = state["stateflags"]?.string.flatMap { Int($0) } ?? 4
         let toDownload = state["bytestodownload"]?.string.flatMap { Double($0) } ?? 0
         let downloaded = state["bytesdownloaded"]?.string.flatMap { Double($0) } ?? 0
-        let install: InstallState = flags & 4 != 0
-            ? .installed
-            : .downloading(toDownload > 0 ? min(downloaded / toDownload, 1) : nil)
+        let toStage = state["bytestostage"]?.string.flatMap { Double($0) } ?? 0
+        let install: InstallState
+        if flags & 4 != 0 {
+            install = .installed
+        } else if toDownload > 0 || toStage > 0 {
+            // Steam only writes BytesDownloaded when a download pauses or ends; meanwhile the
+            // unpacked files pile up in steamapps/downloading/<appid>, so measure that too and
+            // take whichever is further along.
+            let reported = toDownload > 0 ? downloaded / toDownload : 0
+            let staged = toStage > 0
+                ? Double(folderSize(steamapps.appendingPathComponent("downloading/\(appID)", isDirectory: true))) / toStage
+                : 0
+            install = .downloading(min(max(reported, staged), 0.99))
+        } else {
+            install = .downloading(nil)
+        }
 
         let lower = name.lowercased()
         if lower.contains("redistributable") || lower.hasPrefix("steam linux runtime") || lower.hasPrefix("proton ") {
@@ -191,6 +204,17 @@ enum LibraryScanner {
         game.install = install
         game.installDirName = installDirName
         return game
+    }
+
+    private static func folderSize(_ url: URL) -> Int64 {
+        let keys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .isRegularFileKey]
+        guard let files = FileManager.default.enumerator(at: url, includingPropertiesForKeys: Array(keys)) else { return 0 }
+        var total: Int64 = 0
+        for case let file as URL in files {
+            guard let values = try? file.resourceValues(forKeys: keys), values.isRegularFile == true else { continue }
+            total += Int64(values.totalFileAllocatedSize ?? 0)
+        }
+        return total
     }
 
     // MARK: - Extra library folders (e.g. D:\SteamLibrary)

@@ -25,6 +25,11 @@ final class InputRouter {
                     self?.model?.focusSearch()
                     return true
                 }
+                // ⌘⌫ like "Move to Trash" in Finder – asks before removing anything.
+                if command, code == 51, NSApp.keyWindow?.firstResponder is NSText == false {
+                    self?.model?.requestUninstall()
+                    return true
+                }
                 return self?.handleKey(code: code, chars: chars, plain: plain) ?? false
             }
             return handled ? nil : event

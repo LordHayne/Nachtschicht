@@ -155,6 +155,21 @@ enum L10n {
         "Open": "Öffnen",
         "Back": "Zurück",
 
+        // Uninstall
+        "Uninstall": "Deinstallieren",
+        "Uninstall …": "Deinstallieren …",
+        "Uninstall (⌘⌫)": "Deinstallieren (⌘⌫)",
+        "Uninstall %@?": "%@ deinstallieren?",
+        "Uninstalling …": "Wird deinstalliert …",
+        "Cancel Download": "Download abbrechen",
+        "Cancel the download of %@?": "Download von %@ abbrechen?",
+        "Keep": "Behalten",
+        "This removes the game from your Mac and frees %@. It stays in your Steam library, so you can download it again any time. Saves in the Steam Cloud are kept.":
+            "Das Spiel wird von deinem Mac entfernt und gibt %@ frei. Es bleibt in deiner Steam-Bibliothek, du kannst es jederzeit wieder herunterladen. Spielstände in der Steam Cloud bleiben erhalten.",
+        "The part downloaded so far is deleted. You can start the download again any time.":
+            "Der bisher geladene Teil wird gelöscht. Du kannst den Download jederzeit neu starten.",
+        "%@ could not be uninstalled: %@": "%@ konnte nicht deinstalliert werden: %@",
+
         // Errors
         "Component list version %ld needs a newer Nachtschicht.": "Komponentenliste Version %ld braucht ein neueres Nachtschicht.",
         "No component list available. Check your internet connection.": "Keine Komponentenliste verfügbar. Prüfe deine Internetverbindung.",

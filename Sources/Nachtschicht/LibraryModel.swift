@@ -22,6 +22,9 @@ final class LibraryModel: ObservableObject {
     /// Steam is showing a question (licence, setup) for the game being launched.
     @Published private(set) var launchNeedsConfirmation = false
     @Published var showingOptions = false
+    /// Waiting for the user to confirm removing this game (or its download).
+    @Published var pendingUninstall: Game?
+    @Published private(set) var uninstallingID: String?
     @Published var errorMessage: String?
     @Published var controllerConnected = false
 
@@ -89,7 +92,7 @@ final class LibraryModel: ObservableObject {
 
     /// The big button: play when installed, otherwise ask Steam to download it.
     func primaryAction() {
-        guard let game = selected else { return }
+        guard let game = selected, uninstallingID != game.id else { return }
         switch game.install {
         case .installed: launchSelected()
         case .notInstalled: if !game.isVROnly { download(game) }
@@ -223,6 +226,36 @@ final class LibraryModel: ObservableObject {
             case .quit: NSApp.terminate(nil)
             case .hide: NSApp.hide(nil)
             case .stay: break
+            }
+        }
+    }
+
+    // MARK: - Uninstall
+
+    /// Only games in Nachtschicht's own Steam; CrossOver bottles are managed by their own Steam.
+    func canUninstall(_ game: Game) -> Bool {
+        game.bottle.isBuiltIn && game.install != .notInstalled && uninstallingID == nil && launchingID != game.id
+    }
+
+    func requestUninstall(_ game: Game? = nil) {
+        guard let game = game ?? selected, canUninstall(game) else { return }
+        pendingUninstall = game
+    }
+
+    func confirmUninstall() {
+        guard let game = pendingUninstall else { return }
+        pendingUninstall = nil
+        uninstallingID = game.id
+        Task {
+            defer {
+                uninstallingID = nil
+                reload(quiet: true)
+            }
+            do {
+                guard let wine = await Engine.installedWine() else { return }
+                try await Engine.uninstall(appID: game.appID, installDirName: game.installDirName, wine: wine)
+            } catch {
+                errorMessage = L10n.t("%@ could not be uninstalled: %@", game.name, error.localizedDescription)
             }
         }
     }

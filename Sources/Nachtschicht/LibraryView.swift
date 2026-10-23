@@ -4,6 +4,11 @@ import SwiftUI
 struct LibraryView: View {
     @EnvironmentObject private var model: LibraryModel
 
+    private var uninstallTitle: String {
+        guard let game = model.pendingUninstall else { return "" }
+        return game.isInstalled ? L10n.t("Uninstall %@?", game.name) : L10n.t("Cancel the download of %@?", game.name)
+    }
+
     var body: some View {
         ZStack {
             Theme.night.ignoresSafeArea()
@@ -70,6 +75,25 @@ struct LibraryView: View {
             ),
             actions: { Button("OK") {} },
             message: { Text(model.errorMessage ?? "") }
+        )
+        .alert(
+            uninstallTitle,
+            isPresented: Binding(
+                get: { model.pendingUninstall != nil },
+                set: { if !$0 { model.pendingUninstall = nil } }
+            ),
+            presenting: model.pendingUninstall,
+            actions: { game in
+                Button(game.isInstalled ? L10n.t("Uninstall") : L10n.t("Cancel Download"), role: .destructive) {
+                    model.confirmUninstall()
+                }
+                Button(L10n.t("Keep"), role: .cancel) {}
+            },
+            message: { game in
+                Text(game.isInstalled
+                     ? L10n.t("This removes the game from your Mac and frees %@. It stays in your Steam library, so you can download it again any time. Saves in the Steam Cloud are kept.", Format.bytes(game.sizeOnDisk))
+                     : L10n.t("The part downloaded so far is deleted. You can start the download again any time."))
+            }
         )
         .onAppear {
             model.startInput()
@@ -306,6 +330,7 @@ private struct GameDetail: View {
 
             HStack(spacing: 14) {
                 PlayButton(install: game.install, isLaunching: model.launchingID == game.id,
+                           isUninstalling: model.uninstallingID == game.id,
                            needsConfirmation: model.launchNeedsConfirmation,
                            vrOnly: game.isVROnly && game.install == .notInstalled) {
                     model.primaryAction()
@@ -315,6 +340,14 @@ private struct GameDetail: View {
                 }
                 RoundIconButton(symbol: "folder", help: L10n.t("Show game folder in Finder")) {
                     model.revealSelected()
+                }
+                if model.canUninstall(game) {
+                    RoundIconButton(
+                        symbol: game.isInstalled ? "trash" : "xmark",
+                        help: game.isInstalled ? L10n.t("Uninstall (⌘⌫)") : L10n.t("Cancel Download")
+                    ) {
+                        model.requestUninstall(game)
+                    }
                 }
             }
         }
@@ -345,6 +378,7 @@ private struct Stat: View {
 private struct PlayButton: View {
     let install: InstallState
     let isLaunching: Bool
+    var isUninstalling = false
     var needsConfirmation = false
     /// VR-only and not downloaded: nothing useful to do on a Mac.
     var vrOnly = false
@@ -352,13 +386,14 @@ private struct PlayButton: View {
     @State private var hovering = false
 
     private var busy: Bool {
-        if isLaunching || vrOnly { return true }
+        if isLaunching || vrOnly || isUninstalling { return true }
         if case .downloading = install { return true }
         return false
     }
 
     private var title: String {
         if isLaunching { return needsConfirmation ? L10n.t("Confirm in the Steam window") : L10n.t("Launching …") }
+        if isUninstalling { return L10n.t("Uninstalling …") }
         if vrOnly { return L10n.t("VR only") }
         switch install {
         case .installed: return L10n.t("Play")
@@ -443,6 +478,7 @@ private struct CoverRail: View {
                     ForEach(Array(model.games.enumerated()), id: \.element.id) { index, game in
                         CoverCard(game: game, isSelected: index == model.selectedIndex)
                             .id(game.id)
+                            .modifier(GameContextMenu(game: game, index: index))
                             .onTapGesture {
                                 if index == model.selectedIndex {
                                     model.primaryAction()
@@ -463,6 +499,37 @@ private struct CoverRail: View {
                 }
             }
         }
+    }
+}
+
+/// Right-click on a cover: the same actions as the big view, without selecting first.
+struct GameContextMenu: ViewModifier {
+    let game: Game
+    let index: Int
+    @EnvironmentObject private var model: LibraryModel
+
+    func body(content: Content) -> some View {
+        content.contextMenu {
+            switch game.install {
+            case .installed:
+                Button(L10n.t("Play")) { select(); model.primaryAction() }
+            case .notInstalled where !game.isVROnly:
+                Button(L10n.t("Download")) { select(); model.primaryAction() }
+            default:
+                EmptyView()
+            }
+            Button(L10n.t("Show game folder in Finder")) { select(); model.revealSelected() }
+            if model.canUninstall(game) {
+                Divider()
+                Button(game.isInstalled ? L10n.t("Uninstall …") : L10n.t("Cancel Download"), role: .destructive) {
+                    model.requestUninstall(game)
+                }
+            }
+        }
+    }
+
+    private func select() {
+        model.selectedIndex = index
     }
 }
 

@@ -299,14 +299,43 @@ enum Engine {
 
     /// Quits Steam politely (so it saves its state) and starts it again hidden.
     static func restartSteamInBackground(_ wine: URL) async throws {
-        if isSteamRunning {
-            try startSteam(wine, arguments: ["-shutdown"])
-            for _ in 0..<20 where isSteamRunning {
-                try await Task.sleep(for: .seconds(1))
-            }
-            if isSteamRunning { stopAll(wine) }
-        }
+        try await stopSteam(wine)
         try startSteam(wine, arguments: ["-silent"])
+    }
+
+    /// Asks Steam to quit and waits up to 20 s before ending it the hard way.
+    static func stopSteam(_ wine: URL) async throws {
+        guard isSteamRunning else { return }
+        try startSteam(wine, arguments: ["-shutdown"])
+        for _ in 0..<20 {
+            guard isSteamRunning else { return }
+            try await Task.sleep(for: .seconds(1))
+        }
+        stopAll(wine)
+    }
+
+    /// Removes a game (or a download in progress) without any Steam window: with Steam stopped,
+    /// its manifest and files go, and Steam simply finds it not installed when it starts again.
+    /// The game stays in the Steam library, and saves outside the game folder are untouched.
+    static func uninstall(appID: Int, installDirName: String, wine: URL) async throws {
+        try await stopSteam(wine)
+        defer { try? startSteam(wine, arguments: ["-silent"]) }
+
+        let fm = FileManager.default
+        let steamapps = steamRoot.appendingPathComponent("steamapps", isDirectory: true)
+        var targets = [
+            steamapps.appendingPathComponent("appmanifest_\(appID).acf"),
+            steamapps.appendingPathComponent("downloading/\(appID)", isDirectory: true),
+            steamapps.appendingPathComponent("shadercache/\(appID)", isDirectory: true),
+        ]
+        // Never let an empty or odd folder name turn into deleting all of steamapps/common.
+        let name = installDirName.trimmingCharacters(in: .whitespaces)
+        if !name.isEmpty, !name.contains("/"), name != ".", name != ".." {
+            targets.append(steamapps.appendingPathComponent("common/\(name)", isDirectory: true))
+        }
+        for target in targets where fm.fileExists(atPath: target.path) {
+            try fm.removeItem(at: target)
+        }
     }
 
     /// Starts Steam without waiting; used for signing in and for launching games.

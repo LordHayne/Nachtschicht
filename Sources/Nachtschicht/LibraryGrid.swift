@@ -50,6 +50,7 @@ struct LibraryGrid: View {
                                     ForEach(section.items, id: \.game.id) { item in
                                         GridCard(game: item.game, isSelected: item.index == model.selectedIndex)
                                             .id(item.game.id)
+                                            .modifier(GameContextMenu(game: item.game, index: item.index))
                                             .onTapGesture {
                                                 if item.index == model.selectedIndex {
                                                     model.showSelectedGame()

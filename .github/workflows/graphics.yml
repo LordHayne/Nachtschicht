@@ -1,0 +1,194 @@
+name: Build graphics package
+
+# DXMT (Direct3D 10/11 → Metal) patched for Wine 11, plus Wine's Mac driver rebuilt with visible
+# symbols so DXMT can attach its Metal layer to game windows. Published as one release asset that
+# components/manifest.json points to. WINE_VERSION must match the engine pinned in sources.json.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "engine/**"
+      - ".github/workflows/graphics.yml"
+
+permissions:
+  contents: write
+
+env:
+  WINE_VERSION: "11.18"
+  DXMT_VERSION: v0.80
+  LLVM_VERSION: llvmorg-15.0.7
+  # Wine headers/tools DXMT builds against (from DXMT's own CI)
+  WINE_TOOLCHAIN_URL: https://github.com/3Shain/wine/releases/download/v8.16-3shain/wine.tar.gz
+
+jobs:
+  llvm:
+    # DXMT's shader compiler (airconv) links LLVM 15 built for macOS x86_64. ~1 h once, then cached.
+    runs-on: macos-15
+    steps:
+      - name: Cache LLVM
+        id: cache
+        uses: actions/cache@v4
+        with:
+          key: llvm-darwin-${{ env.LLVM_VERSION }}-x86_64
+          path: toolchains/llvm-darwin
+          lookup-only: true
+
+      - name: Build LLVM (x86_64)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          brew install ninja || true
+          git clone --depth 1 --branch "$LLVM_VERSION" https://github.com/llvm/llvm-project.git toolchains/llvm-project
+          cmake -B toolchains/llvm-build -S toolchains/llvm-project/llvm \
+            -DCMAKE_INSTALL_PREFIX="$PWD/toolchains/llvm-darwin" \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DLLVM_HOST_TRIPLE=x86_64-apple-darwin \
+            -DLLVM_ENABLE_ASSERTIONS=On \
+            -DLLVM_ENABLE_ZSTD=Off \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLLVM_TARGETS_TO_BUILD="" \
+            -DLLVM_BUILD_TOOLS=Off \
+            -G Ninja
+          cmake --build toolchains/llvm-build
+          cmake --install toolchains/llvm-build
+
+      - name: Save LLVM
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: llvm-darwin-${{ env.LLVM_VERSION }}-x86_64
+          path: toolchains/llvm-darwin
+
+  dxmt:
+    needs: llvm
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch DXMT and apply Nachtschicht patches
+        run: |
+          git clone --depth 1 --branch "$DXMT_VERSION" --recurse-submodules --shallow-submodules \
+            https://github.com/3Shain/dxmt.git dxmt
+          for patch in engine/patches/dxmt-*.patch; do
+            echo "Applying $patch"
+            git -C dxmt apply --verbose "$GITHUB_WORKSPACE/$patch"
+          done
+
+      - name: Restore LLVM
+        uses: actions/cache/restore@v4
+        with:
+          key: llvm-darwin-${{ env.LLVM_VERSION }}-x86_64
+          path: toolchains/llvm-darwin
+          fail-on-cache-miss: true
+
+      - name: Toolchain
+        run: |
+          brew install mingw-w64 ninja || true
+          pip3 install meson==1.10.0 --break-system-packages
+          sudo xcode-select -s /Applications/Xcode_16.1.app
+          mkdir -p dxmt/toolchains/wine
+          curl -fsSL "$WINE_TOOLCHAIN_URL" | tar -xz -C dxmt/toolchains/wine
+          mv toolchains/llvm-darwin dxmt/toolchains/llvm-darwin
+
+      - name: Build 64-bit
+        working-directory: dxmt
+        run: |
+          meson setup --cross-file build-win64.txt -Denable_nvapi=true -Denable_nvngx=true \
+            -Dnative_llvm_path=toolchains/llvm-darwin -Dwine_install_path=toolchains/wine \
+            build --buildtype release --prefix "$PWD/install64" --strip
+          meson compile -C build
+          meson install -C build
+
+      - name: Build 32-bit
+        working-directory: dxmt
+        run: |
+          meson setup --cross-file build-win32.txt -Dwine_install_path=toolchains/wine \
+            build32 --buildtype release --prefix "$PWD/install32" --strip
+          meson compile -C build32
+          meson install -C build32
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dxmt
+          path: |
+            dxmt/install64
+            dxmt/install32
+
+  winemac:
+    runs-on: macos-15
+    steps:
+      - name: Tools and sources
+        run: |
+          brew install bison flex pkg-config mingw-w64 || true
+          git clone --depth 1 --branch "wine-$WINE_VERSION" https://gitlab.winehq.org/wine/wine.git wine
+          # Link against the same Vulkan loader the engine ships (Gcenx build of this Wine version).
+          mkdir -p gcenx
+          curl -fsSL "https://github.com/Gcenx/macOS_Wine_builds/releases/download/$WINE_VERSION/wine-devel-$WINE_VERSION-osx64.tar.xz" \
+            | tar -xJ -C gcenx
+          ln -s "$PWD/gcenx/Wine Devel.app/Contents/Resources/wine/lib" gcenxlib
+
+      - name: Configure (x86_64, visible symbols)
+        run: |
+          export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+          mkdir build && cd build
+          ../wine/configure --host=x86_64-apple-darwin --enable-win64 --disable-tests \
+            --without-freetype --without-x --without-gstreamer --without-cups --without-sane \
+            --without-krb5 --without-gssapi --without-sdl --without-usb --without-pcap \
+            --without-netapi --without-gnutls --without-unwind \
+            CC="clang -arch x86_64" CXX="clang++ -arch x86_64" \
+            CFLAGS="-fvisibility=default -O2 -Wno-error -mmacosx-version-min=11.0" \
+            LDFLAGS="-L$GITHUB_WORKSPACE/gcenxlib -mmacosx-version-min=11.0"
+          # configure picks up otool's description instead of the install name; use what Gcenx uses.
+          sed -i '' 's|^#define SONAME_LIBVULKAN .*|#define SONAME_LIBVULKAN "libvulkan.1.dylib"|' include/config.h
+
+      - name: Build winemac.so
+        working-directory: build
+        run: |
+          export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+          make -j"$(sysctl -n hw.logicalcpu)" dlls/winemac.drv/winemac.so
+          exports=$(nm -g dlls/winemac.drv/winemac.so | awk '$2=="T"' | wc -l | tr -d ' ')
+          echo "exported functions: $exports"
+          test "$exports" -ge 100
+          for sym in OnMainThread macdrv_get_cocoa_window macdrv_view_create_metal_view macdrv_view_get_metal_layer macdrv_view_release_metal_view; do
+            nm -g dlls/winemac.drv/winemac.so | grep -q " T _$sym$" || { echo "missing $sym"; exit 1; }
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: winemac
+          path: build/dlls/winemac.drv/winemac.so
+
+  package:
+    needs: [dxmt, winemac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Assemble
+        id: assemble
+        run: |
+          root="graphics"
+          mkdir -p "$root/x86_64-windows" "$root/i386-windows" "$root/x86_64-unix"
+          find artifacts/dxmt/install64 -name '*.dll' -exec cp {} "$root/x86_64-windows/" \;
+          find artifacts/dxmt/install32 -name '*.dll' -exec cp {} "$root/i386-windows/" \;
+          find artifacts/dxmt -name 'winemetal.so' -exec cp {} "$root/x86_64-unix/" \;
+          cp artifacts/winemac/winemac.so "$root/x86_64-unix/winemac.so"
+          ls -lR "$root"
+          version="${WINE_VERSION}-dxmt${DXMT_VERSION#v}-${GITHUB_RUN_NUMBER}"
+          name="nachtschicht-graphics-$version.tar.gz"
+          tar -czf "$name" "$root"
+          sha256sum "$name"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "graphics-${{ steps.assemble.outputs.version }}" "${{ steps.assemble.outputs.name }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Graphics ${{ steps.assemble.outputs.version }}" \
+            --notes "DXMT $DXMT_VERSION with Nachtschicht's Wine 11 patches, and winemac.so from Wine $WINE_VERSION built with visible symbols. Licences: DXMT LGPL-2.1-or-later, Wine LGPL-2.1-or-later; sources: https://github.com/3Shain/dxmt, https://gitlab.winehq.org/wine/wine, patches in engine/patches."

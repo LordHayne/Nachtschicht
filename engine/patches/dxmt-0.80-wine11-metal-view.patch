@@ -1,0 +1,124 @@
+diff --git a/src/winemetal/unix/winemetal_unix.c b/src/winemetal/unix/winemetal_unix.c
+index 4744692..665690c 100644
+--- a/src/winemetal/unix/winemetal_unix.c
++++ b/src/winemetal/unix/winemetal_unix.c
+@@ -1,5 +1,6 @@
+ #include <stdatomic.h>
+ #include <dlfcn.h>
++#include <pthread.h>
+ #import <Cocoa/Cocoa.h>
+ #import <ColorSync/ColorSync.h>
+ #import <CoreFoundation/CFRunLoop.h>
+@@ -1552,12 +1553,9 @@ typedef struct macdrv_opaque_window *macdrv_window;
+ typedef struct macdrv_opaque_window_data *macdrv_window_data;
+ typedef struct opaque_window_surface *window_surface;
+ typedef struct opaque_HWND *HWND;
+-struct macdrv_win_data {
+-  HWND hwnd; /* hwnd that this private data belongs to */
+-  macdrv_window cocoa_window;
+-  macdrv_view cocoa_view;
+-  macdrv_view client_cocoa_view;
+-};
++/* Only declared: its layout differs between Wine versions, and on Wine 11 the client view field is
++ * only filled in by GDI presents, so it is still NULL when a swapchain is created. */
++struct macdrv_win_data;
+ 
+ struct macdrv_functions_t {
+   void (*macdrv_init_display_devices)(BOOL);
+@@ -1575,37 +1573,64 @@ struct macdrv_functions_t {
+ static NTSTATUS
+ _CreateMetalViewFromHWND(void *obj) {
+   struct unixcall_create_metal_view_from_hwnd *params = obj;
+-
+-  struct macdrv_win_data *(*pfn_get_win_data)(HWND hwnd) = NULL;
+-  void (*pfn_release_win_data)(struct macdrv_win_data *data) = NULL;
+-  macdrv_metal_view (*pfn_macdrv_view_create_metal_view)(macdrv_view v, macdrv_metal_device d) = NULL;
+-  macdrv_metal_layer (*pfn_macdrv_view_get_metal_layer)(macdrv_metal_view v) = NULL;
++  params->ret_view = 0;
++  params->ret_layer = 0;
++
++  /* Nachtschicht patch for Wine 11 (after notpop/dxmt 924a607e, MIT): reach the NSView through the
++   * public macdrv_get_cocoa_window() + [NSWindow contentView] instead of struct macdrv_win_data.
++   * The macdrv metal-view calls hop to the main thread themselves (OnMainThread is not
++   * re-entrant), so only the contentView lookup is dispatched here. */
++  macdrv_window (*pfn_get_cocoa_window)(HWND, BOOL) = NULL;
++  macdrv_metal_view (*pfn_create_metal_view)(macdrv_view, macdrv_metal_device) = NULL;
++  macdrv_metal_layer (*pfn_get_metal_layer)(macdrv_metal_view) = NULL;
++  void (*pfn_on_main_thread)(dispatch_block_t) = NULL;
+ 
+   struct macdrv_functions_t *macdrv_functions;
+   if ((macdrv_functions = dlsym(RTLD_DEFAULT, "macdrv_functions"))) {
+-    pfn_get_win_data = macdrv_functions->get_win_data;
+-    pfn_release_win_data = macdrv_functions->release_win_data;
+-    pfn_macdrv_view_create_metal_view = macdrv_functions->macdrv_view_create_metal_view;
+-    pfn_macdrv_view_get_metal_layer = macdrv_functions->macdrv_view_get_metal_layer;
++    pfn_get_cocoa_window = macdrv_functions->macdrv_get_cocoa_window;
++    pfn_create_metal_view = macdrv_functions->macdrv_view_create_metal_view;
++    pfn_get_metal_layer = macdrv_functions->macdrv_view_get_metal_layer;
++    pfn_on_main_thread = macdrv_functions->on_main_thread;
+   } else {
+-    pfn_get_win_data = dlsym(RTLD_DEFAULT, "get_win_data");
+-    pfn_release_win_data = dlsym(RTLD_DEFAULT, "release_win_data");
+-    pfn_macdrv_view_create_metal_view = dlsym(RTLD_DEFAULT, "macdrv_view_create_metal_view");
+-    pfn_macdrv_view_get_metal_layer = dlsym(RTLD_DEFAULT, "macdrv_view_get_metal_layer");
++    pfn_get_cocoa_window = dlsym(RTLD_DEFAULT, "macdrv_get_cocoa_window");
++    pfn_create_metal_view = dlsym(RTLD_DEFAULT, "macdrv_view_create_metal_view");
++    pfn_get_metal_layer = dlsym(RTLD_DEFAULT, "macdrv_view_get_metal_layer");
++    pfn_on_main_thread = dlsym(RTLD_DEFAULT, "OnMainThread");
++  }
++  if (!pfn_get_cocoa_window || !pfn_create_metal_view || !pfn_get_metal_layer) {
++    fprintf(stderr, "[dxmt/winemetal] macdrv symbols not visible; Wine's winemac.so needs "
++                    "-fvisibility=default\n");
++    return STATUS_SUCCESS;
+   }
+ 
+-  if (pfn_get_win_data && pfn_release_win_data && pfn_macdrv_view_create_metal_view &&
+-      pfn_macdrv_view_get_metal_layer) {
+-    struct macdrv_win_data *win_data = pfn_get_win_data((HWND)params->hwnd);
+-    macdrv_metal_view view =
+-        pfn_macdrv_view_create_metal_view(win_data->client_cocoa_view, (macdrv_metal_device)params->device);
+-    params->ret_view = (obj_handle_t)view;
+-    if (view) {
+-      params->ret_layer = (obj_handle_t)pfn_macdrv_view_get_metal_layer(view);
+-    }
+-    pfn_release_win_data(win_data);
++  macdrv_window window = pfn_get_cocoa_window((HWND)(uintptr_t)params->hwnd, FALSE);
++  if (!window) {
++    fprintf(stderr, "[dxmt/winemetal] no Cocoa window for hwnd %p yet\n", (void *)(uintptr_t)params->hwnd);
++    return STATUS_SUCCESS;
+   }
+ 
++  __block NSView *content_view = nil;
++  dispatch_block_t fetch = ^{
++    content_view = [(NSWindow *)window contentView];
++  };
++  if (pthread_main_np())
++    fetch();
++  else if (pfn_on_main_thread)
++    pfn_on_main_thread(fetch);
++  else
++    dispatch_sync(dispatch_get_main_queue(), fetch);
++  if (!content_view) {
++    fprintf(stderr, "[dxmt/winemetal] window %p has no contentView\n", (void *)window);
++    return STATUS_SUCCESS;
++  }
++
++  macdrv_metal_view view = pfn_create_metal_view((macdrv_view)content_view, (macdrv_metal_device)params->device);
++  if (!view) {
++    fprintf(stderr, "[dxmt/winemetal] macdrv_view_create_metal_view failed\n");
++    return STATUS_SUCCESS;
++  }
++  params->ret_view = (obj_handle_t)view;
++  params->ret_layer = (obj_handle_t)pfn_get_metal_layer(view);
+   return STATUS_SUCCESS;
+ }
+ 
+@@ -1622,7 +1647,7 @@ _ReleaseMetalView(void *obj) {
+     pfn_macdrv_view_release_metal_view = dlsym(RTLD_DEFAULT, "macdrv_view_release_metal_view");
+   }
+ 
+-  if (pfn_macdrv_view_release_metal_view)
++  if (pfn_macdrv_view_release_metal_view && params->handle)
+     pfn_macdrv_view_release_metal_view((macdrv_metal_view)params->handle);
+ 
+   return STATUS_SUCCESS;

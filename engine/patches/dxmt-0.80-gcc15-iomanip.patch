@@ -1,0 +1,12 @@
+diff --git a/src/util/com/com_guid.cpp b/src/util/com/com_guid.cpp
+index 11bf4a7..2c86492 100644
+--- a/src/util/com/com_guid.cpp
++++ b/src/util/com/com_guid.cpp
+@@ -15,6 +15,7 @@
+ 
+ #include "../thread.hpp"
+ #include "../log/log.hpp"
++#include <iomanip>
+ 
+ namespace dxmt {
+ 

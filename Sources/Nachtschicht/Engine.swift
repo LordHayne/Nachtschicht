@@ -19,13 +19,10 @@ enum Engine {
     ]
     /// Settings games inherit from the background Steam. Bump `steamConfigVersion` whenever this
     /// or `steamDLLOverrides` changes, so a running Steam gets restarted with them.
-    static let steamConfigVersion = 2
+    static let steamConfigVersion = 3
     static let gameEnvironment = [
         // Compile shaders in the background instead of stalling the frame that first needs them.
         "DXVK_ASYNC": "1",
-        // Apple chips share memory between CPU and GPU; without this DXVK reports a tiny
-        // "video memory" (Unity saw 128 MB) and games may cut texture quality.
-        "DXVK_CONFIG": "dxgi.emulateUMA = True",
     ]
 
     /// Wine's builtin crypto avoids TLS failures in Steam's browser; the overlay DLL deadlocks games.
@@ -326,7 +323,6 @@ enum Engine {
         var lines = [
             "\(marker) before each start – changes here are overwritten.",
             "dxvk.enableAsync = True",
-            "dxgi.emulateUMA = True",
         ]
         if options.metalHUD { lines.append("dxvk.hud = fps,frametimes,gpuload") }
         try? (lines.joined(separator: "\n") + "\n").write(to: file, atomically: true, encoding: .utf8)

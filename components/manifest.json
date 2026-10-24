@@ -25,12 +25,12 @@
     {
       "id": "graphics",
       "kind": "graphics",
-      "version": "11.18-dxmt0.80-2",
-      "url": "https://github.com/LordHayne/Nachtschicht/releases/download/graphics-11.18-dxmt0.80-2/nachtschicht-graphics-11.18-dxmt0.80-2.tar.gz",
-      "sha256": "37a270bb9955e7f37ab20d3623a704efdb291de794714ec15bae68b18fa51cdf",
-      "size": 19061506,
+      "version": "11.18-dxmt0.80-3",
+      "url": "https://github.com/LordHayne/Nightforge/releases/download/graphics-11.18-dxmt0.80-3/nachtschicht-graphics-11.18-dxmt0.80-3.tar.gz",
+      "sha256": "5ac8cd0863c026f6ceb4a2c7aa051be76af76371e644d60a64d81d7b037dc26d",
+      "size": 19061033,
       "license": "LGPL-2.1-or-later",
-      "source": "https://github.com/LordHayne/Nachtschicht"
+      "source": "https://github.com/LordHayne/Nightforge"
     },
     {
       "id": "dxvk-macos",
@@ -55,12 +55,12 @@
     {
       "id": "cabextract",
       "kind": "tool",
-      "version": "1.11-1",
-      "url": "https://github.com/LordHayne/Nachtschicht/releases/download/cabextract-1.11-1/nachtschicht-cabextract-1.11-1.tar.gz",
-      "sha256": "8815bfefbc775232fa844b3ed416dd82c1dcfa8a03f8ebb5e144a4be36234e10",
+      "version": "1.11-3",
+      "url": "https://github.com/LordHayne/Nightforge/releases/download/cabextract-1.11-3/nightforge-cabextract-1.11-3.tar.gz",
+      "sha256": "8f11a677d7e3c73e8926232ae040e328ace14ea0abbfcc1270e4104b1c0de964",
       "size": 85622,
       "license": "GPL-3.0-or-later",
-      "source": "https://github.com/LordHayne/Nachtschicht"
+      "source": "https://github.com/LordHayne/Nightforge"
     }
   ]
 }

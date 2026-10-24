@@ -21,7 +21,7 @@
       "kind": "graphics",
       "repo": "LordHayne/Nightforge",
       "tagPrefix": "graphics-",
-      "asset": "^(nightforge|nightforge)-graphics-.*\\.tar\\.gz$",
+      "asset": "^(nachtschicht|nightforge)-graphics-.*\\.tar\\.gz$",
       "license": "LGPL-2.1-or-later"
     },
     {
@@ -42,7 +42,7 @@
       "kind": "tool",
       "repo": "LordHayne/Nightforge",
       "tagPrefix": "cabextract-",
-      "asset": "^(nightforge|nightforge)-cabextract-.*\\.tar\\.gz$",
+      "asset": "^(nachtschicht|nightforge)-cabextract-.*\\.tar\\.gz$",
       "license": "GPL-3.0-or-later"
     }
   ]

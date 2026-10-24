@@ -5,7 +5,8 @@ enum ArtKind: String {
 
     var fileNames: [String] {
         switch self {
-        case .cover: return ["library_600x900_2x.jpg", "library_600x900.jpg"]
+        // Newer games only ship the portrait cover as library_capsule.
+        case .cover: return ["library_600x900_2x.jpg", "library_600x900.jpg", "library_capsule_2x.jpg", "library_capsule.jpg"]
         case .hero: return ["library_hero.jpg"]
         case .logo: return ["logo.png"]
         }
@@ -50,14 +51,16 @@ actor ArtworkStore {
         let missingMarker = cacheDir.appendingPathComponent(key + ".missing")
 
         if let image = NSImage(contentsOf: cached) { return image }
-        if fm.fileExists(atPath: missingMarker.path) { return nil }
 
+        // Steam's own cache first – it can gain art after a "missing" marker was written.
         if let local = localFile(game: game, kind: kind),
            let data = try? Data(contentsOf: local),
            let image = NSImage(data: data) {
             try? data.write(to: cached)
+            try? fm.removeItem(at: missingMarker)
             return image
         }
+        if fm.fileExists(atPath: missingMarker.path) { return nil }
 
         var everythingWas404 = true
         for url in remoteURLs(appID: game.appID, kind: kind) {

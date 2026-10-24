@@ -331,6 +331,7 @@ private struct GameDetail: View {
             HStack(spacing: 14) {
                 PlayButton(install: game.install, isLaunching: model.launchingID == game.id,
                            isUninstalling: model.uninstallingID == game.id,
+                           isRunning: model.isRunning(game),
                            needsConfirmation: model.launchNeedsConfirmation,
                            vrOnly: game.isVROnly && game.install == .notInstalled) {
                     model.primaryAction()
@@ -379,6 +380,7 @@ private struct PlayButton: View {
     let install: InstallState
     let isLaunching: Bool
     var isUninstalling = false
+    var isRunning = false
     var needsConfirmation = false
     /// VR-only and not downloaded: nothing useful to do on a Mac.
     var vrOnly = false
@@ -394,6 +396,7 @@ private struct PlayButton: View {
     private var title: String {
         if isLaunching { return needsConfirmation ? L10n.t("Confirm in the Steam window") : L10n.t("Launching …") }
         if isUninstalling { return L10n.t("Uninstalling …") }
+        if isRunning { return L10n.t("Running – switch to game") }
         if vrOnly { return L10n.t("VR only") }
         switch install {
         case .installed: return L10n.t("Play")
@@ -406,7 +409,9 @@ private struct PlayButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                if vrOnly {
+                if isRunning && !busy {
+                    Circle().fill(Color.green).frame(width: 10, height: 10)
+                } else if vrOnly {
                     Image(systemName: "visionpro")
                         .font(.system(size: 15, weight: .bold))
                 } else if busy {
@@ -476,7 +481,7 @@ private struct CoverRail: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 18) {
                     ForEach(Array(model.games.enumerated()), id: \.element.id) { index, game in
-                        CoverCard(game: game, isSelected: index == model.selectedIndex)
+                        CoverCard(game: game, isSelected: index == model.selectedIndex, isRunning: model.isRunning(game))
                             .id(game.id)
                             .modifier(GameContextMenu(game: game, index: index))
                             .onTapGesture {
@@ -512,7 +517,7 @@ struct GameContextMenu: ViewModifier {
         content.contextMenu {
             switch game.install {
             case .installed:
-                Button(L10n.t("Play")) { select(); model.primaryAction() }
+                Button(model.isRunning(game) ? L10n.t("Switch to Game") : L10n.t("Play")) { select(); model.primaryAction() }
             case .notInstalled where !game.isVROnly:
                 Button(L10n.t("Download")) { select(); model.primaryAction() }
             default:
@@ -536,6 +541,7 @@ struct GameContextMenu: ViewModifier {
 struct CoverCard: View {
     let game: Game
     let isSelected: Bool
+    var isRunning = false
     @State private var cover: NSImage?
 
     var body: some View {
@@ -556,6 +562,19 @@ struct CoverCard: View {
         .frame(width: 154, height: 231)
         .saturation(game.install == .notInstalled ? 0.15 : 1)
         .overlay(alignment: .bottom) { installBadge }
+        .overlay(alignment: .topLeading) {
+            if isRunning {
+                HStack(spacing: 5) {
+                    Circle().fill(Color.green).frame(width: 7, height: 7)
+                    Text(L10n.t("Running")).font(.system(size: 11, weight: .bold))
+                }
+                .foregroundStyle(Theme.ink)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Theme.night.opacity(0.75), in: Capsule())
+                .padding(8)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)

@@ -25,6 +25,8 @@ final class LibraryModel: ObservableObject {
     /// Waiting for the user to confirm removing this game (or its download).
     @Published var pendingUninstall: Game?
     @Published private(set) var uninstallingID: String?
+    /// Games whose Windows process is running right now, with that process's pid.
+    @Published private(set) var running: [String: pid_t] = [:]
     @Published var errorMessage: String?
     @Published var controllerConnected = false
 
@@ -49,6 +51,58 @@ final class LibraryModel: ObservableObject {
         guard !inputStarted else { return }
         inputStarted = true
         input.start(model: self)
+        watchRunningGames()
+    }
+
+    // MARK: - Running games
+
+    /// Wine shows each game process with its Windows path, e.g.
+    /// "C:\…\steamapps\common\Oxygen Train\Oxygen Train.exe" – match that against the install folders.
+    private func watchRunningGames() {
+        Task {
+            while !Task.isCancelled {
+                let folders = Dictionary(
+                    allGames.filter(\.isInstalled).map { ("\\steamapps\\common\\\($0.installDirName.lowercased())\\", $0.id) },
+                    uniquingKeysWith: { first, _ in first }
+                )
+                let found = await Task.detached(priority: .utility) { Self.runningGames(folders) }.value
+                if found != running { running = found }
+                try? await Task.sleep(for: .seconds(3))
+            }
+        }
+    }
+
+    nonisolated private static func runningGames(_ folders: [String: String]) -> [String: pid_t] {
+        guard !folders.isEmpty else { return [:] }
+        let ps = Process()
+        let pipe = Pipe()
+        ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+        ps.arguments = ["-axo", "pid=,command="]
+        ps.standardOutput = pipe
+        guard (try? ps.run()) != nil else { return [:] }
+        let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        ps.waitUntilExit()
+
+        var result: [String: pid_t] = [:]
+        for line in output.split(separator: "\n") {
+            let lower = line.lowercased()
+            // Steam's crash handler and similar helpers live in the same folder; the game's
+            // own process is the first .exe there that isn't one of those.
+            guard lower.contains(".exe"), !lower.contains("crashhandler"), !lower.contains("unitycrash") else { continue }
+            for (folder, id) in folders where result[id] == nil && lower.contains(folder) {
+                let fields = line.split(separator: " ", maxSplits: 1)
+                if let pid = fields.first.flatMap({ pid_t($0) }) { result[id] = pid }
+            }
+        }
+        return result
+    }
+
+    func isRunning(_ game: Game) -> Bool { running[game.id] != nil }
+
+    /// Brings the running game's window to the front.
+    func switchToGame(_ game: Game) {
+        guard let pid = running[game.id] else { return }
+        NSRunningApplication(processIdentifier: pid)?.activate(options: [.activateAllWindows])
     }
 
     /// `quiet` refreshes without the scanning indicator (used for download progress).
@@ -86,13 +140,19 @@ final class LibraryModel: ObservableObject {
         guard SetupModel.isComplete else { return }
         Task {
             guard let wine = try? await Engine.ensureEngine() else { return }
-            try? Engine.ensureSteamRunning(wine)
+            // Let the running-game check see the processes before deciding on a restart.
+            try? await Task.sleep(for: .seconds(4))
+            try? await Engine.ensureSteamRunning(wine, busy: !running.isEmpty)
         }
     }
 
     /// The big button: play when installed, otherwise ask Steam to download it.
     func primaryAction() {
         guard let game = selected, uninstallingID != game.id else { return }
+        if isRunning(game) {
+            switchToGame(game)
+            return
+        }
         switch game.install {
         case .installed: launchSelected()
         case .notInstalled: if !game.isVROnly { download(game) }
@@ -234,7 +294,8 @@ final class LibraryModel: ObservableObject {
 
     /// Only games in Nachtschicht's own Steam; CrossOver bottles are managed by their own Steam.
     func canUninstall(_ game: Game) -> Bool {
-        game.bottle.isBuiltIn && game.install != .notInstalled && uninstallingID == nil && launchingID != game.id
+        game.bottle.isBuiltIn && game.install != .notInstalled && uninstallingID == nil
+            && launchingID != game.id && !isRunning(game)
     }
 
     func requestUninstall(_ game: Game? = nil) {

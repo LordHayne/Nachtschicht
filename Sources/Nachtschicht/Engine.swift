@@ -17,6 +17,17 @@ enum Engine {
         "-no-cef-sandbox", "-cef-single-process", "-noverifyfiles",
         "-cef-disable-gpu", "-cef-disable-gpu-compositing",
     ]
+    /// Settings games inherit from the background Steam. Bump `steamConfigVersion` whenever this
+    /// or `steamDLLOverrides` changes, so a running Steam gets restarted with them.
+    static let steamConfigVersion = 2
+    static let gameEnvironment = [
+        // Compile shaders in the background instead of stalling the frame that first needs them.
+        "DXVK_ASYNC": "1",
+        // Apple chips share memory between CPU and GPU; without this DXVK reports a tiny
+        // "video memory" (Unity saw 128 MB) and games may cut texture quality.
+        "DXVK_CONFIG": "dxgi.emulateUMA = True",
+    ]
+
     /// Wine's builtin crypto avoids TLS failures in Steam's browser; the overlay DLL deadlocks games.
     /// Games inherit these from Steam, so DirectX goes to DXVK's DLLs in the prefix (native first).
     static let steamDLLOverrides = "dxgi,d3d11,d3d10core,d3d9=n,b;bcrypt=b;ncrypt=b;gameoverlayrenderer,gameoverlayrenderer64=d"
@@ -292,9 +303,33 @@ enum Engine {
     }
 
     /// Starts Steam hidden unless it's already running. Downloads and game launches go through it.
-    static func ensureSteamRunning(_ wine: URL) throws {
-        guard !isSteamRunning else { return }
-        try startSteam(wine, arguments: ["-silent"])
+    /// A Steam started with older game settings is restarted, unless `busy` (a game is running).
+    static func ensureSteamRunning(_ wine: URL, busy: Bool = false) async throws {
+        let key = "steamConfigVersion"
+        let current = UserDefaults.standard.integer(forKey: key) == steamConfigVersion
+        if isSteamRunning {
+            guard !current, !busy else { return }
+            try await restartSteamInBackground(wine)
+        } else {
+            try startSteam(wine, arguments: ["-silent"])
+        }
+        UserDefaults.standard.set(steamConfigVersion, forKey: key)
+    }
+
+    /// DXVK settings also go into dxvk.conf in the game folder, which DXVK reads on its own –
+    /// the game is started by the already running Steam, so environment variables may not reach it.
+    static func writeGameConfig(installDir: URL, options: GameOptions) {
+        let file = installDir.appendingPathComponent("dxvk.conf")
+        let marker = "# Written by Nachtschicht"
+        let ours = (try? String(contentsOf: file, encoding: .utf8))?.hasPrefix(marker) ?? false
+        guard ours || !FileManager.default.fileExists(atPath: file.path) else { return }  // the game ships its own
+        var lines = [
+            "\(marker) before each start – changes here are overwritten.",
+            "dxvk.enableAsync = True",
+            "dxgi.emulateUMA = True",
+        ]
+        if options.metalHUD { lines.append("dxvk.hud = fps,frametimes,gpuload") }
+        try? (lines.joined(separator: "\n") + "\n").write(to: file, atomically: true, encoding: .utf8)
     }
 
     /// Quits Steam politely (so it saves its state) and starts it again hidden.
@@ -344,7 +379,7 @@ enum Engine {
         let process = Process()
         process.executableURL = wine
         process.arguments = [steamExeWindowsPath] + steamArguments + arguments
-        var env = environment(wine: wine)
+        var env = environment(wine: wine).merging(gameEnvironment) { _, new in new }
         env["WINEDLLOVERRIDES"] = steamDLLOverrides
         process.environment = env.merging(extraEnvironment) { _, new in new }
         process.standardInput = FileHandle.nullDevice

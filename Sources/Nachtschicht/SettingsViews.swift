@@ -20,7 +20,7 @@ struct GameOptionsSheet: View {
             Toggle(isOn: $options.metalHUD) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(L10n.t("Performance HUD in game"))
-                    Text(L10n.t("Shows the Metal HUD with FPS, frame time and GPU load."))
+                    Text(L10n.t("Shows frames per second, frame times and GPU load in the top left corner of the game."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

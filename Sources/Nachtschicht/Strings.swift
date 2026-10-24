@@ -78,7 +78,7 @@ enum L10n {
 
         // Game options
         "Performance HUD in game": "Leistungsanzeige im Spiel",
-        "Shows the Metal HUD with FPS, frame time and GPU load.": "Blendet das Metal-HUD mit FPS, Frametime und GPU-Last ein.",
+        "Shows frames per second, frame times and GPU load in the top left corner of the game.": "Zeigt Bilder pro Sekunde, Frametimes und GPU-Last oben links im Spiel.",
         "Launch Options": "Startparameter",
         "e.g. -dx11 -skipintro": "z. B. -dx11 -skipintro",
         "Passed straight to the game at launch.": "Werden beim Start direkt an das Spiel übergeben.",
@@ -169,6 +169,10 @@ enum L10n {
         "The part downloaded so far is deleted. You can start the download again any time.":
             "Der bisher geladene Teil wird gelöscht. Du kannst den Download jederzeit neu starten.",
         "%@ could not be uninstalled: %@": "%@ konnte nicht deinstalliert werden: %@",
+
+        "Running": "Läuft",
+        "Running – switch to game": "Läuft – zum Spiel wechseln",
+        "Switch to Game": "Zum Spiel wechseln",
 
         // Errors
         "Component list version %ld needs a newer Nachtschicht.": "Komponentenliste Version %ld braucht ein neueres Nachtschicht.",

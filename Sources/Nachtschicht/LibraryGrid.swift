@@ -48,7 +48,8 @@ struct LibraryGrid: View {
                                 }
                                 LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
                                     ForEach(section.items, id: \.game.id) { item in
-                                        GridCard(game: item.game, isSelected: item.index == model.selectedIndex)
+                                        GridCard(game: item.game, isSelected: item.index == model.selectedIndex,
+                                                 isRunning: model.isRunning(item.game))
                                             .id(item.game.id)
                                             .modifier(GameContextMenu(game: item.game, index: item.index))
                                             .onTapGesture {
@@ -83,10 +84,11 @@ struct LibraryGrid: View {
 private struct GridCard: View {
     let game: Game
     let isSelected: Bool
+    var isRunning = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            CoverCard(game: game, isSelected: isSelected)
+            CoverCard(game: game, isSelected: isSelected, isRunning: isRunning)
             Text(game.name)
                 .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
                 .foregroundStyle(isSelected ? Theme.ink : Theme.muted)

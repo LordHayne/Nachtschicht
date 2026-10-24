@@ -169,6 +169,9 @@ enum Launcher {
             // Plain Wine / Whisky / GPTK: the bottle is the prefix
             environment["WINEPREFIX"] = game.bottle.url.path
         }
+        if game.bottle.isBuiltIn {
+            Engine.writeGameConfig(installDir: game.installDir, options: options)
+        }
         if options.metalHUD {
             environment["MTL_HUD_ENABLED"] = "1"
         }

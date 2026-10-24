@@ -194,7 +194,10 @@ enum Launcher {
         }
 
         let runner = URL(fileURLWithPath: runnerPath)
-        var environment = game.bottle.isBuiltIn ? Engine.environment(wine: runner) : ProcessInfo.processInfo.environment
+        // If Steam isn't running yet, this call starts it, so it needs the same game settings.
+        var environment = game.bottle.isBuiltIn
+            ? Engine.environment(wine: runner).merging(Engine.gameEnvironment) { _, new in new }
+            : ProcessInfo.processInfo.environment
         var arguments: [String] = []
 
         if game.bottle.isBuiltIn {

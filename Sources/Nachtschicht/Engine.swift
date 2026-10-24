@@ -40,6 +40,18 @@ enum Engine {
         return env
     }
 
+    /// Steam starts its games with a fresh environment built from the Windows registry, not with
+    /// its own – so the game settings go into the user environment (HKCU\Environment) as well,
+    /// where every Windows program, games included, picks them up at start.
+    static func applyGameEnvironment(wine: URL) {
+        let managed = ["DXVK_ASYNC", "MTL_HUD_ENABLED"]
+        let current = gameEnvironment
+        let values = managed.map { name in
+            current[name].map { "\"\(name)\"=\"\($0)\"" } ?? "\"\(name)\"=-"
+        }
+        importRegistry("[HKEY_CURRENT_USER\\Environment]\n" + values.joined(separator: "\n"), wine: wine)
+    }
+
     /// Changes whenever the background Steam has to restart to hand games different settings.
     static var steamConfigSignature: String {
         "\(steamConfigVersion)-hud\(Prefs.performanceHUD ? 1 : 0)"
@@ -121,6 +133,26 @@ enum Engine {
         server.environment = environment(wine: wine)
         try? server.run()
         server.waitUntilExit()
+        killLeftovers()
+    }
+
+    /// Wine helpers (winedevice.exe in particular) sometimes outlive `wineserver -k` and then
+    /// hang around for days. Anything still running with its working directory in our prefix
+    /// after the server is gone is such a leftover.
+    static func killLeftovers() {
+        let root = prefix.resolvingSymlinksInPath().path
+        var pids = [pid_t](repeating: 0, count: 4096)
+        let bytes = proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size))
+        guard bytes > 0 else { return }
+        for pid in pids.prefix(Int(bytes)) where pid > 0 {
+            var info = proc_vnodepathinfo()
+            let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
+            guard proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, size) == size else { continue }
+            let cwd = withUnsafeBytes(of: info.pvi_cdir.vip_path) { raw in
+                String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
+            }
+            if cwd.hasPrefix(root) { kill(pid, SIGKILL) }
+        }
     }
 
     /// Puts the bundled steamwebhelper wrapper in place of Steam's own (which becomes
@@ -202,6 +234,7 @@ enum Engine {
             }
         }
         try installGraphics(graphicsDir, into: wine, matchesEngine: graphics.version.hasPrefix(engine.version + "-"))
+        applyGameEnvironment(wine: wine)
         if let dxvk = manifest.component(dxvkID) {
             try installDXVK(try await store.install(dxvk), wine: wine)
         }

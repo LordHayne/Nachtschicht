@@ -140,6 +140,7 @@ final class LibraryModel: ObservableObject {
         guard SetupModel.isComplete else { return }
         Task {
             guard let wine = await Engine.installedWine() else { return }
+            Engine.applyGameEnvironment(wine: wine)
             try? await Engine.ensureSteamRunning(wine, busy: !running.isEmpty)
         }
     }

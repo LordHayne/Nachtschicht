@@ -145,9 +145,13 @@ final class LibraryModel: ObservableObject {
     }
 
     /// Keeps Nachtschicht's own Steam running hidden once it's set up.
+    /// The engine check and Steam (re)start at app launch; game launches wait for it so a pending
+    /// Steam restart can't cut off a game that was just started.
+    private var steamStartup: Task<Void, Never>?
+
     func startBackgroundSteam() {
         guard SetupModel.isComplete else { return }
-        Task {
+        steamStartup = Task {
             guard let wine = try? await Engine.ensureEngine() else { return }
             // Let the running-game check see the processes before deciding on a restart.
             try? await Task.sleep(for: .seconds(4))
@@ -248,6 +252,7 @@ final class LibraryModel: ObservableObject {
         launchNeedsConfirmation = false
         let behavior = Prefs.afterLaunch
         Task {
+            if game.bottle.isBuiltIn { await steamStartup?.value }
             let runner = game.bottle.isBuiltIn ? await Engine.installedWine()?.path : Prefs.runnerPath
             var watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
             do {

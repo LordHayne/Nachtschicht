@@ -7,7 +7,7 @@
    "license": "BSD-2-Clause"
   },
   "mac": {
-   "url": "https://github.com/LordHayne/Nachtschicht/blob/main/profiles/mac.json"
+   "url": "https://github.com/LordHayne/Nightforge/blob/main/profiles/mac.json"
   }
  },
  "games": {
@@ -1667,5 +1667,5 @@
    "source": "umu"
   }
  },
- "generated": "2026-10-24T19:45:47Z"
+ "generated": "2026-10-24T20:15:03Z"
 }

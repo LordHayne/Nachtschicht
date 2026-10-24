@@ -241,6 +241,66 @@ enum Engine {
         return wine
     }
 
+    /// The engine's wine binary without async work (for app shutdown): the newest installed copy.
+    static func installedWineNow() -> URL? {
+        let dir = ComponentStore.shared.root.appendingPathComponent(engineID, isDirectory: true)
+        let versions = (try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        return versions
+            .sorted { a, b in
+                let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                return da > db
+            }
+            .lazy.compactMap(wineBinary(in:)).first
+    }
+
+    /// When Nachtschicht quits, Steam should go too – but not while a game runs (it uploads cloud
+    /// saves after the game ends) or a download is going. Nachtschicht itself quits right after a
+    /// launch, so a small detached script waits for that and then stops Steam and the Wine session.
+    /// It gives up if Nachtschicht is opened again in the meantime.
+    static func scheduleSteamShutdown() {
+        guard isSteamInstalled, let wine = installedWineNow() else { return }
+        let script = supportDir.appendingPathComponent("steam-shutdown.sh")
+        let text = #"""
+        #!/bin/bash
+        # Written by Nachtschicht on quit: ends the background Steam once nothing needs it.
+        WINE="$1"; PREFIX="$2"
+        STEAMAPPS="$PREFIX/drive_c/Program Files (x86)/Steam/steamapps"
+        reopened() { pgrep -qf "Nachtschicht.app/Contents/MacOS/Nachtschicht"; }
+        steam_running() { ps -axo command | grep -qi '\steam\steam.exe'; }
+        busy() {
+          ps -axo command | grep -qi '\steamapps\common\' && return 0   # a game
+          find "$STEAMAPPS/downloading" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | grep -q . && return 0
+          return 1
+        }
+        while true; do
+          while busy; do reopened && exit 0; sleep 10; done
+          sleep 30                       # cloud saves of a game that just ended
+          reopened && exit 0
+          busy || break
+        done
+        export WINEPREFIX="$PREFIX" WINEDEBUG=-all
+        if steam_running; then
+          "$WINE" 'C:\Program Files (x86)\Steam\steam.exe' -shutdown >/dev/null 2>&1
+          for i in $(seq 1 20); do steam_running || break; sleep 1; done
+        fi
+        "$(dirname "$WINE")/wineserver" -k
+        sleep 2
+        # Wine helpers that outlive the server, recognisable by their working directory in the prefix.
+        lsof -a -d cwd -Fpn 2>/dev/null           | awk -v root="$PREFIX" '/^p/ { pid = substr($0, 2) } /^n/ { if (index(substr($0, 2), root) == 1) print pid }'           | while read -r pid; do kill -9 "$pid" 2>/dev/null; done
+        """#
+        guard (try? text.write(to: script, atomically: true, encoding: .utf8)) != nil else { return }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [script.path, wine.path, prefix.path]
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()  // keeps running after Nachtschicht has quit
+    }
+
     /// Installed engine binary, if setup has got that far.
     static func installedWine() async -> URL? {
         guard let manifest = try? await ComponentStore.shared.manifest(),

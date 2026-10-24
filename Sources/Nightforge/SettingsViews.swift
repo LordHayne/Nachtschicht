@@ -136,7 +136,7 @@ struct SettingsView: View {
             } header: {
                 Text(L10n.t("Launching"))
             } footer: {
-                Text(L10n.t("Leave empty for CrossOver. For Whisky or your own Wine, enter the path to the wine binary; the bottle is then passed as WINEPREFIX. “Quit launcher” makes sure nothing from Nachtschicht keeps running while you play."))
+                Text(L10n.t("Leave empty for CrossOver. For Whisky or your own Wine, enter the path to the wine binary; the bottle is then passed as WINEPREFIX. “Quit launcher” makes sure nothing from Nightforge keeps running while you play."))
                     .foregroundStyle(.secondary)
             }
         }

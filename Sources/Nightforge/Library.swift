@@ -3,7 +3,7 @@ import Foundation
 struct Bottle: Hashable {
     let name: String
     let url: URL
-    /// Nachtschicht's own prefix, run with the downloaded engine instead of CrossOver.
+    /// Nightforge's own prefix, run with the downloaded engine instead of CrossOver.
     var isBuiltIn = false
 }
 
@@ -115,7 +115,7 @@ enum LibraryScanner {
                 }
             }
 
-            // Nachtschicht's own Steam: show the whole library, not only what's on disk.
+            // Nightforge's own Steam: show the whole library, not only what's on disk.
             if bottle.isBuiltIn {
                 let catalog = SteamCatalog.ownedGames(steamRoot: steamRoot)
                 let vrOnly = Set(catalog.filter(\.vrOnly).map(\.appID))

@@ -10,7 +10,7 @@ fi
 
 OUT="$(mktemp -d)/components-smoke"
 swiftc -o "$OUT" \
-  Sources/Nachtschicht/Components.swift \
-  Sources/Nachtschicht/Strings.swift \
+  Sources/Nightforge/Components.swift \
+  Sources/Nightforge/Strings.swift \
   tests/ComponentsSmokeTest/main.swift
 "$OUT"

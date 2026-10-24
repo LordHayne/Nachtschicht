@@ -23,13 +23,13 @@ enum Prefs {
         static let gameMode = "gameMode"
     }
 
-    /// macOS Game Mode for games run by Nachtschicht's own Steam (see Engine.installGameBundle).
+    /// macOS Game Mode for games run by Nightforge's own Steam (see Engine.installGameBundle).
     /// On by default; the switch is there for the rare game whose sound crackles with it.
     static var gameMode: Bool {
         UserDefaults.standard.object(forKey: Keys.gameMode) as? Bool ?? true
     }
 
-    /// FPS display in games run by Nachtschicht's own Steam (Metal HUD for DXMT, DXVK's for DXVK).
+    /// FPS display in games run by Nightforge's own Steam (Metal HUD for DXMT, DXVK's for DXVK).
     static var performanceHUD: Bool {
         UserDefaults.standard.bool(forKey: Keys.performanceHUD)
     }
@@ -53,7 +53,7 @@ enum Prefs {
 
 /// Which translation layer runs a game's Direct3D 10/11.
 enum GraphicsLayer: String, Codable, CaseIterable, Identifiable {
-    /// Nachtschicht's default (see Engine.defaultGraphics).
+    /// Nightforge's default (see Engine.defaultGraphics).
     case automatic
     /// DXMT: Direct3D straight to Metal.
     case dxmt
@@ -117,7 +117,7 @@ enum LaunchError: LocalizedError {
     }
 }
 
-/// Follows Steam's console log after a launch request so Nachtschicht knows whether the game really
+/// Follows Steam's console log after a launch request so Nightforge knows whether the game really
 /// started, or whether Steam is waiting on a question (licence, first-time setup) in its own window.
 struct LaunchWatcher {
     enum Event {
@@ -220,7 +220,7 @@ enum Launcher {
             Engine.writeGameConfig(installDir: game.installDir, options: options)
             Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner)
         }
-        // CrossOver bottles: the game inherits this process's environment. Nachtschicht's own
+        // CrossOver bottles: the game inherits this process's environment. Nightforge's own
         // games get the HUD from the background Steam instead (Prefs.performanceHUD).
         if options.metalHUD && !game.bottle.isBuiltIn {
             environment["MTL_HUD_ENABLED"] = "1"

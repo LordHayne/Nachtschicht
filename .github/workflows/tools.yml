@@ -42,9 +42,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="$CABEXTRACT_VERSION-$GITHUB_RUN_NUMBER"
-          name="nachtschicht-cabextract-$version.tar.gz"
+          name="nightforge-cabextract-$version.tar.gz"
           tar -czf "$name" -C tools cabextract
           gh release create "cabextract-$version" "$name" \
             --repo "$GITHUB_REPOSITORY" --latest=false \
             --title "cabextract $version" \
-            --notes "cabextract $CABEXTRACT_VERSION for macOS (arm64 + x86_64), used by winetricks for Nachtschicht's per-game profiles. Licence: GPL-3.0-or-later. Source: https://www.cabextract.org.uk/cabextract-$CABEXTRACT_VERSION.tar.gz (unmodified), build steps in .github/workflows/tools.yml."
+            --notes "cabextract $CABEXTRACT_VERSION for macOS (arm64 + x86_64), used by winetricks for Nightforge's per-game profiles. Licence: GPL-3.0-or-later. Source: https://www.cabextract.org.uk/cabextract-$CABEXTRACT_VERSION.tar.gz (unmodified), build steps in .github/workflows/tools.yml."

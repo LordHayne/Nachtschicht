@@ -1,4 +1,4 @@
-// Prints the owned games Nachtschicht reads from a Steam install: tests/CatalogProbe/run.sh <Steam folder>
+// Prints the owned games Nightforge reads from a Steam install: tests/CatalogProbe/run.sh <Steam folder>
 import Foundation
 
 let root = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)

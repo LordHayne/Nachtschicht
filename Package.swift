@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "Nachtschicht",
+    name: "Nightforge",
     platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(
-            name: "Nachtschicht",
-            path: "Sources/Nachtschicht"
+            name: "Nightforge",
+            path: "Sources/Nightforge"
         )
     ]
 )

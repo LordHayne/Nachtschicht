@@ -52,7 +52,7 @@ final class InputRouter {
 
     private func handleKey(code: UInt16, chars: String, plain: Bool) -> Bool {
         guard plain, let model, !model.showingOptions else { return false }
-        guard let window = NSApp.keyWindow, window.title == "Nachtschicht" else { return false }
+        guard let window = NSApp.keyWindow, window.title == "Nightforge" else { return false }
         if window.firstResponder is NSText { return false }
 
         switch code {

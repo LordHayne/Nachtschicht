@@ -1,10 +1,10 @@
 import Foundation
 
-/// Nachtschicht's own free Wine setup: the engine component, one Windows environment ("prefix")
+/// Nightforge's own free Wine setup: the engine component, one Windows environment ("prefix")
 /// and the Windows Steam client inside it. Used when CrossOver isn't the chosen runner.
 enum Engine {
     static let engineID = "wine"
-    /// Nachtschicht's own DXMT build for Wine 11 (with winemac.so); plain upstream DXMT as fallback.
+    /// Nightforge's own DXMT build for Wine 11 (with winemac.so); plain upstream DXMT as fallback.
     static let graphicsID = "graphics"
     static let upstreamGraphicsID = "dxmt"
     /// What "Automatic" means: DXMT ran OxyRail better than DXVK (fewer layers, correct video
@@ -65,13 +65,13 @@ enum Engine {
 
     static var supportDir: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Nachtschicht", isDirectory: true)
+            .appendingPathComponent("Nightforge", isDirectory: true)
     }
 
     /// The Windows environment Steam and the games live in.
     static var prefix: URL { supportDir.appendingPathComponent("Prefix", isDirectory: true) }
 
-    static var bottle: Bottle { Bottle(name: "Nachtschicht", url: prefix, isBuiltIn: true) }
+    static var bottle: Bottle { Bottle(name: "Nightforge", url: prefix, isBuiltIn: true) }
 
     static var steamRoot: URL {
         prefix.appendingPathComponent("drive_c/Program Files (x86)/Steam", isDirectory: true)
@@ -113,7 +113,7 @@ enum Engine {
     }
 
     /// Whether Steam's main process is running (any prefix; good enough to notice a crash or restart).
-    /// Only Nachtschicht's own Steam counts – not one from a CrossOver bottle, and not a Steam left
+    /// Only Nightforge's own Steam counts – not one from a CrossOver bottle, and not a Steam left
     /// behind without its wineserver (it can't do anything any more and would block a fresh start).
     static var isSteamRunning: Bool {
         let ours = ownProcesses()
@@ -121,9 +121,9 @@ enum Engine {
             && ours.contains { $0.command.hasSuffix("/wineserver") || $0.command.contains("/wineserver ") }
     }
 
-    /// Processes started from Nachtschicht's engine (executable inside its folder), with the command
+    /// Processes started from Nightforge's engine (executable inside its folder), with the command
     /// line ps shows – Wine rewrites that to the Windows program.
-    static func ownProcesses() -> [(pid: pid_t, command: String)] {
+    static func ownProcesses(under folder: URL = supportDir) -> [(pid: pid_t, command: String)] {
         let ps = Process()
         let pipe = Pipe()
         ps.executableURL = URL(fileURLWithPath: "/bin/ps")
@@ -132,7 +132,7 @@ enum Engine {
         guard (try? ps.run()) != nil else { return [] }
         let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         ps.waitUntilExit()
-        let root = supportDir.resolvingSymlinksInPath().path
+        let root = folder.resolvingSymlinksInPath().path
         return output.split(separator: "\n").compactMap { line in
             let parts = line.trimmingCharacters(in: .whitespaces).split(separator: " ", maxSplits: 1)
             guard parts.count == 2, let pid = pid_t(parts[0]), executablePath(pid)?.hasPrefix(root) == true else { return nil }
@@ -146,7 +146,7 @@ enum Engine {
         return String(cString: buffer)
     }
 
-    /// Ends every Windows process in Nachtschicht's prefix.
+    /// Ends every Windows process in Nightforge's prefix.
     static func stopAll(_ wine: URL) {
         let server = Process()
         server.executableURL = wine.deletingLastPathComponent().appendingPathComponent("wineserver")
@@ -175,7 +175,7 @@ enum Engine {
             if cwd.hasPrefix(root) { kill(pid, SIGKILL) }
         }
         // Wine processes working somewhere else (Steam's own folder resolved differently, …)
-        // still run Nachtschicht's engine.
+        // still run Nightforge's engine.
         for process in ownProcesses() where process.pid != getpid() { kill(process.pid, SIGKILL) }
     }
 
@@ -282,19 +282,19 @@ enum Engine {
             .lazy.compactMap(wineBinary(in:)).first
     }
 
-    /// When Nachtschicht quits, Steam should go too – but not while a game runs (it uploads cloud
-    /// saves after the game ends) or a download is going. Nachtschicht itself quits right after a
+    /// When Nightforge quits, Steam should go too – but not while a game runs (it uploads cloud
+    /// saves after the game ends) or a download is going. Nightforge itself quits right after a
     /// launch, so a small detached script waits for that and then stops Steam and the Wine session.
-    /// It gives up if Nachtschicht is opened again in the meantime.
+    /// It gives up if Nightforge is opened again in the meantime.
     static func scheduleSteamShutdown() {
         guard isSteamInstalled, let wine = installedWineNow() else { return }
         let script = supportDir.appendingPathComponent("steam-shutdown.sh")
         let text = #"""
         #!/bin/bash
-        # Written by Nachtschicht on quit: ends the background Steam once nothing needs it.
+        # Written by Nightforge on quit: ends the background Steam once nothing needs it.
         WINE="$1"; PREFIX="$2"
         STEAMAPPS="$PREFIX/drive_c/Program Files (x86)/Steam/steamapps"
-        reopened() { pgrep -qf "Nachtschicht.app/Contents/MacOS/Nachtschicht"; }
+        reopened() { pgrep -qf "Nightforge.app/Contents/MacOS/Nightforge"; }
         steam_running() { ps -axo command | grep -qi '\steam\steam.exe'; }
         busy() {
           ps -axo command | grep -qi '\steamapps\common\' && return 0   # a game
@@ -325,7 +325,7 @@ enum Engine {
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
-        try? process.run()  // keeps running after Nachtschicht has quit
+        try? process.run()  // keeps running after Nightforge has quit
     }
 
     /// Installed engine binary, if setup has got that far.
@@ -338,7 +338,7 @@ enum Engine {
     }
 
     /// Copies DXMT (Direct3D 10/11 → Metal) into the engine's builtin DLL folders. Safe to repeat.
-    /// Nachtschicht's package also carries winemac.so built for one Wine version; it's only used
+    /// Nightforge's package also carries winemac.so built for one Wine version; it's only used
     /// when that matches the engine (`matchesEngine`), since a mismatched driver breaks every window.
     static func installGraphics(_ dxmtDir: URL, into wine: URL, matchesEngine: Bool = false) throws {
         let fm = FileManager.default
@@ -388,7 +388,7 @@ enum Engine {
     }
 
     /// winetricks verbs that would change every game in the shared prefix, not just the one that
-    /// asks (Proton gives each game its own prefix; Nachtschicht has one for all).
+    /// asks (Proton gives each game its own prefix; Nightforge has one for all).
     private static let sharedPrefixUnsafeVerbs: Set<String> = ["dsound"]
 
     /// The profile's winetricks verbs that aren't in the prefix yet (winetricks logs what it installed).
@@ -433,7 +433,7 @@ enum Engine {
         env["WINETRICKS_LATEST_VERSION_CHECK"] = "disabled"
         // Its download cache (XDG_CACHE_HOME/winetricks) belongs in the Mac's cache folder, not ~/.cache.
         env["XDG_CACHE_HOME"] = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Nachtschicht", isDirectory: true).path
+            .appendingPathComponent("Nightforge", isDirectory: true).path
 
         let process = Process()
         process.executableURL = script
@@ -525,7 +525,7 @@ enum Engine {
     static func importRegistry(_ body: String, wine: URL) {
         let temp = prefix.appendingPathComponent("drive_c/windows/temp", isDirectory: true)
         try? FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
-        let file = temp.appendingPathComponent("nachtschicht-\(UUID().uuidString).reg")
+        let file = temp.appendingPathComponent("nightforge-\(UUID().uuidString).reg")
         guard (try? ("REGEDIT4\n\n" + body + "\n").write(to: file, atomically: true, encoding: .utf8)) != nil else { return }
         defer { try? FileManager.default.removeItem(at: file) }
 
@@ -540,7 +540,7 @@ enum Engine {
     }
 
     /// macOS only turns Game Mode on (CPU and GPU priority, lower Bluetooth latency) for apps whose
-    /// bundle says they're games. Wine's loader is a bare binary, so this builds a small "Nachtschicht
+    /// bundle says they're games. Wine's loader is a bare binary, so this builds a small "Nightforge
     /// Game.app" next to it: the loader's folder hard-linked into Contents/MacOS, everything else it
     /// finds relative to itself linked back to the engine. Wine starts every Windows program with
     /// the loader it was started with, so Steam run from here hands it to its games.
@@ -566,6 +566,16 @@ enum Engine {
             }
         // Steam may be running from it; leave a bundle that's still right alone.
         if current { return macOS.appendingPathComponent("wine") }
+
+        // The bundle's name under Nightforge's old name; Launch Services should forget it too.
+        let legacy = root.appendingPathComponent("Nachtschicht Game.app", isDirectory: true)
+        if fm.fileExists(atPath: legacy.path) {
+            let unregister = Process()
+            unregister.executableURL = lsregister
+            unregister.arguments = ["-u", legacy.path]
+            if (try? unregister.run()) != nil { unregister.waitUntilExit() }
+            try? fm.removeItem(at: legacy)
+        }
 
         do {
             try? fm.removeItem(at: bundle)
@@ -610,8 +620,8 @@ enum Engine {
             }
             let info: [String: Any] = [
                 "CFBundleExecutable": "wine",
-                "CFBundleIdentifier": "local.nachtschicht.game",
-                "CFBundleName": "Nachtschicht Game",
+                "CFBundleIdentifier": "io.github.lordhayne.nightforge.game",
+                "CFBundleName": "Nightforge Game",
                 "CFBundleIconFile": "AppIcon",
                 "CFBundlePackageType": "APPL",
                 "LSApplicationCategoryType": "public.app-category.games",
@@ -626,14 +636,15 @@ enum Engine {
         }
         // Let Launch Services read the game category now rather than whenever it gets round to it.
         let register = Process()
-        register.executableURL = URL(fileURLWithPath:
-            "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister")
+        register.executableURL = lsregister
         register.arguments = ["-f", bundle.path]
         if (try? register.run()) != nil { register.waitUntilExit() }
         return macOS.appendingPathComponent("wine")
     }
 
-    private static let gameBundleName = "Nachtschicht Game.app"
+    private static let gameBundleName = "Nightforge Game.app"
+    private static let lsregister = URL(fileURLWithPath:
+        "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister")
 
     /// Wine links the Windows user folders (Documents, Desktop, Downloads …) to the Mac's own. Run
     /// from the game bundle, that's a new app to macOS, and the first access waits on a privacy
@@ -759,8 +770,9 @@ enum Engine {
     /// the game is started by the already running Steam, so environment variables may not reach it.
     static func writeGameConfig(installDir: URL, options: GameOptions) {
         let file = installDir.appendingPathComponent("dxvk.conf")
-        let marker = "# Written by Nachtschicht"
-        let ours = (try? String(contentsOf: file, encoding: .utf8))?.hasPrefix(marker) ?? false
+        let marker = "# Written by Nightforge"
+        let existing = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        let ours = existing.hasPrefix(marker) || existing.hasPrefix("# Written by Nachtschicht")  // the old name
         guard ours || !FileManager.default.fileExists(atPath: file.path) else { return }  // the game ships its own
         var lines = [
             "\(marker) before each start – changes here are overwritten.",

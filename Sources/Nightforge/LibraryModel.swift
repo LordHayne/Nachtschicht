@@ -32,7 +32,7 @@ final class LibraryModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var controllerConnected = false
 
-    /// First-run "Connect Steam" flow for Nachtschicht's own engine.
+    /// First-run "Connect Steam" flow for Nightforge's own engine.
     let setup = SetupModel()
 
     private lazy var input = InputRouter()
@@ -42,7 +42,7 @@ final class LibraryModel: ObservableObject {
         setup.onFinished = { [weak self] in self?.reload() }
     }
 
-    /// Nothing to show and Nachtschicht's own Steam isn't ready yet.
+    /// Nothing to show and Nightforge's own Steam isn't ready yet.
     var needsSetup: Bool { allGames.isEmpty && !SetupModel.isComplete }
 
     var selected: Game? {
@@ -151,7 +151,7 @@ final class LibraryModel: ObservableObject {
         }
     }
 
-    /// Keeps Nachtschicht's own Steam running hidden once it's set up.
+    /// Keeps Nightforge's own Steam running hidden once it's set up.
     /// The engine check and Steam (re)start at app launch; game launches wait for it so a pending
     /// Steam restart can't cut off a game that was just started.
     private var steamStartup: Task<Void, Never>?
@@ -333,7 +333,7 @@ final class LibraryModel: ObservableObject {
         }
     }
 
-    /// Brings Steam's main window, with the question it's waiting on, in front of Nachtschicht.
+    /// Brings Steam's main window, with the question it's waiting on, in front of Nightforge.
     func showSteamWindow() {
         Task {
             guard let wine = await Engine.installedWine() else { return }
@@ -347,7 +347,7 @@ final class LibraryModel: ObservableObject {
 
     // MARK: - Uninstall
 
-    /// Only games in Nachtschicht's own Steam; CrossOver bottles are managed by their own Steam.
+    /// Only games in Nightforge's own Steam; CrossOver bottles are managed by their own Steam.
     func canUninstall(_ game: Game) -> Bool {
         game.bottle.isBuiltIn && game.install != .notInstalled && uninstallingID == nil
             && launchingID != game.id && !isRunning(game)
@@ -376,7 +376,7 @@ final class LibraryModel: ObservableObject {
         }
     }
 
-    /// Opens Steam in Nachtschicht's prefix, e.g. to install a game.
+    /// Opens Steam in Nightforge's prefix, e.g. to install a game.
     func openSteam() {
         Task {
             guard let wine = await Engine.installedWine() else { return }

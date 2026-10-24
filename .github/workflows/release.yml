@@ -1,6 +1,6 @@
 name: Release app
 
-# Builds Nachtschicht.app and publishes it as a GitHub release (zip for the installer script,
+# Builds Nightforge.app and publishes it as a GitHub release (zip for the installer script,
 # DMG for people who download by hand). Triggered by pushing a tag like v0.1.0.
 # The app is ad-hoc signed (no paid Apple developer account): scripts/install.sh downloads it
 # without the quarantine flag, so macOS opens it straight away; the DMG needs one
@@ -33,29 +33,29 @@ jobs:
 
       - name: Package
         run: |
-          app=build/Nachtschicht.app
+          app=build/Nightforge.app
           codesign --verify --deep "$app"
-          ditto -c -k --sequesterRsrc --keepParent "$app" "Nachtschicht-$VERSION.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "Nightforge-$VERSION.zip"
           mkdir dmg
           cp -R "$app" dmg/
           ln -s /Applications dmg/Applications
-          hdiutil create -volname Nachtschicht -srcfolder dmg -ov -format UDZO "Nachtschicht-$VERSION.dmg"
-          shasum -a 256 Nachtschicht-*
+          hdiutil create -volname Nightforge -srcfolder dmg -ov -format UDZO "Nightforge-$VERSION.dmg"
+          shasum -a 256 Nightforge-*
 
       - name: Keep dry-run files
         if: github.ref_type != 'tag'
         uses: actions/upload-artifact@v4
         with:
-          name: nachtschicht-test-build
-          path: Nachtschicht-*
+          name: nightforge-test-build
+          path: Nightforge-*
 
       - name: Publish release
         if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "Nachtschicht-$VERSION.zip" "Nachtschicht-$VERSION.dmg" \
-            --repo "$GITHUB_REPOSITORY" --latest --title "Nachtschicht $VERSION" --notes-file - <<NOTES
+          gh release create "$GITHUB_REF_NAME" "Nightforge-$VERSION.zip" "Nightforge-$VERSION.dmg" \
+            --repo "$GITHUB_REPOSITORY" --latest --title "Nightforge $VERSION" --notes-file - <<NOTES
           Free launcher for Windows Steam games on Apple silicon Macs (macOS 14 or newer).
 
           **Install (recommended):** open Terminal and paste
@@ -64,7 +64,7 @@ jobs:
           \`\`\`
           The same line updates an existing installation.
 
-          **Or by hand:** open the DMG and drag Nachtschicht into Applications. On first launch macOS says
+          **Or by hand:** open the DMG and drag Nightforge into Applications. On first launch macOS says
           it can't verify the app (it's free and not registered with Apple): open System Settings →
           Privacy & Security, scroll down and click **Open Anyway**.
           NOTES

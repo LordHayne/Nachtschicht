@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// "Nachtschicht": a deep night-blue room lit by a single sodium-vapour lamp.
+/// "Nightforge": a deep night-blue room lit by a single sodium-vapour lamp.
 enum Theme {
     static let night = Color(red: 0x0F / 255, green: 0x14 / 255, blue: 0x1C / 255)   // #0F141C
     static let sodium = Color(red: 0xFF / 255, green: 0xB3 / 255, blue: 0x47 / 255)  // #FFB347

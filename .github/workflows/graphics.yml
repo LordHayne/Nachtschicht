@@ -66,7 +66,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch DXMT and apply Nachtschicht patches
+      - name: Fetch DXMT and apply Nightforge patches
         run: |
           git clone --depth 1 --branch "$DXMT_VERSION" --recurse-submodules --shallow-submodules \
             https://github.com/3Shain/dxmt.git dxmt
@@ -178,7 +178,7 @@ jobs:
           cp artifacts/winemac/winemac.so "$root/x86_64-unix/winemac.so"
           ls -lR "$root"
           version="${WINE_VERSION}-dxmt${DXMT_VERSION#v}-${GITHUB_RUN_NUMBER}"
-          name="nachtschicht-graphics-$version.tar.gz"
+          name="nightforge-graphics-$version.tar.gz"
           tar -czf "$name" "$root"
           sha256sum "$name"
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -191,4 +191,4 @@ jobs:
           gh release create "graphics-${{ steps.assemble.outputs.version }}" "${{ steps.assemble.outputs.name }}" \
             --repo "$GITHUB_REPOSITORY" --latest=false \
             --title "Graphics ${{ steps.assemble.outputs.version }}" \
-            --notes "DXMT $DXMT_VERSION with Nachtschicht's Wine 11 patches, and winemac.so from Wine $WINE_VERSION built with visible symbols. Licences: DXMT LGPL-2.1-or-later, Wine LGPL-2.1-or-later; sources: https://github.com/3Shain/dxmt, https://gitlab.winehq.org/wine/wine, patches in engine/patches."
+            --notes "DXMT $DXMT_VERSION with Nightforge's Wine 11 patches, and winemac.so from Wine $WINE_VERSION built with visible symbols. Licences: DXMT LGPL-2.1-or-later, Wine LGPL-2.1-or-later; sources: https://github.com/3Shain/dxmt, https://gitlab.winehq.org/wine/wine, patches in engine/patches."

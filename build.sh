@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds Nachtschicht.app. With --install it is copied to ~/Applications.
+# Builds Nightforge.app. With --install it is copied to ~/Applications.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -10,7 +10,7 @@ if [ -z "${SDKROOT:-}" ] && [ "$(xcode-select -p)" = "/Library/Developer/Command
   export SDKROOT="$CLT_SDK"
 fi
 
-APP="Nachtschicht"
+APP="Nightforge"
 OUT="build/$APP.app"
 
 echo "▸ Compiling (release, Apple Silicon) …"
@@ -61,9 +61,13 @@ echo "✓ Done: $OUT"
 if [ "${1:-}" = "--install" ]; then
   mkdir -p "$HOME/Applications"
   # `open` would only bring an already running copy to the front, so quit it first.
-  osascript -e "tell application id \"local.thomas.nachtschicht\" to quit" >/dev/null 2>&1 || true
+  osascript -e "tell application id \"io.github.lordhayne.nightforge\" to quit" >/dev/null 2>&1 || true
   pkill -f "$HOME/Applications/$APP.app/Contents/MacOS/$APP" 2>/dev/null || true
   rm -rf "$HOME/Applications/$APP.app"
+  # Nightforge's earlier name: quit and replace it (its data moves over on first start).
+  osascript -e 'tell application id "local.thomas.nachtschicht" to quit' >/dev/null 2>&1 || true
+  pkill -f "$HOME/Applications/Nachtschicht.app/Contents/MacOS/Nachtschicht" 2>/dev/null || true
+  rm -rf "$HOME/Applications/Nachtschicht.app"
   cp -R "$OUT" "$HOME/Applications/"
   echo "✓ Installed: ~/Applications/$APP.app"
   open "$HOME/Applications/$APP.app"

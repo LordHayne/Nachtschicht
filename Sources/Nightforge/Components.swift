@@ -38,7 +38,7 @@ enum ComponentError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedSchema(let version):
-            return L10n.t("Component list version %ld needs a newer Nachtschicht.", version)
+            return L10n.t("Component list version %ld needs a newer Nightforge.", version)
         case .noManifest:
             return L10n.t("No component list available. Check your internet connection.")
         case .checksumMismatch(let id):
@@ -51,7 +51,7 @@ enum ComponentError: LocalizedError {
 
 /// Downloads, verifies and unpacks components into Application Support.
 ///
-/// The manifest comes from `NachtschichtManifestURL` in Info.plist when set, falls back to the last
+/// The manifest comes from `NightforgeManifestURL` in Info.plist when set, falls back to the last
 /// copy that was fetched, and finally to the one bundled with the app, so a fresh install works offline.
 actor ComponentStore {
     static let shared = ComponentStore()
@@ -62,8 +62,8 @@ actor ComponentStore {
 
     init(
         root: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Nachtschicht/Components", isDirectory: true),
-        remoteManifestURL: URL? = (Bundle.main.object(forInfoDictionaryKey: "NachtschichtManifestURL") as? String)
+            .appendingPathComponent("Nightforge/Components", isDirectory: true),
+        remoteManifestURL: URL? = (Bundle.main.object(forInfoDictionaryKey: "NightforgeManifestURL") as? String)
             .flatMap { $0.isEmpty ? nil : URL(string: $0) },
         bundledManifestURL: URL? = Bundle.main.url(forResource: "manifest", withExtension: "json")
     ) {

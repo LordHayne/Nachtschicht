@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Builds profiles/profiles.json: per-game fixes Nachtschicht applies when it starts a game.
+"""Builds profiles/profiles.json: per-game fixes Nightforge applies when it starts a game.
 
 Two sources, merged per Steam app ID:
   * umu-protonfixes (BSD-2-Clause, https://github.com/Open-Wine-Components/umu-protonfixes):
     the game fixes behind Proton-GE and umu. They're small Python scripts; this reads them as
     syntax trees and never runs them. Only plain, unconditional calls with literal arguments
     are translated; anything else is left out and the game is marked "partial".
-  * profiles/mac.json: Nachtschicht's own profiles, tested on Macs. They win over upstream.
+  * profiles/mac.json: Nightforge's own profiles, tested on Macs. They win over upstream.
 
 Usage: build-profiles.py <umu-protonfixes checkout> [--out profiles/profiles.json]
 """
@@ -31,7 +31,7 @@ OVERRIDE_ORDERS = {
     "BUILTIN_NATIVE": "builtin,native",
 }
 
-# winetricks verbs that set the Windows version. Nachtschicht runs every game in one prefix, so
+# winetricks verbs that set the Windows version. Nightforge runs every game in one prefix, so
 # these become a per-program setting instead of changing it for Steam and all other games.
 WINDOWS_VERSIONS = {"win2k", "winxp", "win2k3", "vista", "win7", "win8", "win81", "win10", "win11"}
 
@@ -184,7 +184,7 @@ def main() -> int:
                 "commit": git_commit(options.protonfixes),
                 "license": "BSD-2-Clause",
             },
-            "mac": {"url": "https://github.com/LordHayne/Nachtschicht/blob/main/profiles/mac.json"},
+            "mac": {"url": "https://github.com/LordHayne/Nightforge/blob/main/profiles/mac.json"},
         },
         "games": dict(sorted(games.items(), key=lambda item: int(item[0]))),
     }

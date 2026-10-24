@@ -13,7 +13,7 @@ func check(_ condition: Bool, _ message: String) {
 }
 
 let fm = FileManager.default
-let work = fm.temporaryDirectory.appendingPathComponent("nachtschicht-smoke-\(UUID().uuidString)", isDirectory: true)
+let work = fm.temporaryDirectory.appendingPathComponent("nightforge-smoke-\(UUID().uuidString)", isDirectory: true)
 let payload = work.appendingPathComponent("payload", isDirectory: true)
 try fm.createDirectory(at: payload.appendingPathComponent("bin"), withIntermediateDirectories: true)
 try "hello".write(to: payload.appendingPathComponent("bin/wine"), atomically: true, encoding: .utf8)

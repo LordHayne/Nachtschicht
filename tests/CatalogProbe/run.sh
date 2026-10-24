@@ -7,5 +7,5 @@ if [ -z "${SDKROOT:-}" ] && [ "$(xcode-select -p)" = "/Library/Developer/Command
   export SDKROOT="$CLT_SDK"
 fi
 OUT="$(mktemp -d)/catalog-probe"
-swiftc -O -o "$OUT" Sources/Nachtschicht/SteamCatalog.swift tests/CatalogProbe/main.swift
+swiftc -O -o "$OUT" Sources/Nightforge/SteamCatalog.swift tests/CatalogProbe/main.swift
 "$OUT" "$@"

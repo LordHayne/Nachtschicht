@@ -21,7 +21,7 @@ SCHEMA_VERSION = 1
 
 
 def request(url: str) -> urllib.request.Request:
-    headers = {"User-Agent": "nachtschicht-components", "Accept": "application/vnd.github+json"}
+    headers = {"User-Agent": "nightforge-components", "Accept": "application/vnd.github+json"}
     token = os.environ.get("GITHUB_TOKEN")
     if token and url.startswith("https://api.github.com/"):
         headers["Authorization"] = f"Bearer {token}"

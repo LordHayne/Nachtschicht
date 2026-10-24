@@ -2,14 +2,18 @@ import AppKit
 import SwiftUI
 
 @main
-struct NachtschichtApp: App {
+struct NightforgeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = LibraryModel()
     /// Views read strings through L10n, so the window content is rebuilt when this changes.
     @AppStorage(AppLanguage.storageKey) private var language = AppLanguage.system.rawValue
 
+    init() {
+        LegacyMigration.run()  // before anything reads settings or the data folder
+    }
+
     var body: some Scene {
-        Window("Nachtschicht", id: "main") {
+        Window("Nightforge", id: "main") {
             LibraryView()
                 .id(language)
                 .environmentObject(model)

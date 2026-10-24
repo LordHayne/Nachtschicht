@@ -24,7 +24,7 @@ actor ArtworkStore {
 
     init() {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        cacheDir = base.appendingPathComponent("Nachtschicht/Artwork", isDirectory: true)
+        cacheDir = base.appendingPathComponent("Nightforge/Artwork", isDirectory: true)
         try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
         memory.countLimit = 400
     }

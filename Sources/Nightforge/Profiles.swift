@@ -1,7 +1,7 @@
 import Foundation
 
 /// Fixes for one game from profiles/profiles.json, built nightly from umu-protonfixes plus
-/// Nachtschicht's own Mac profiles (scripts/build-profiles.py). Applied silently at launch.
+/// Nightforge's own Mac profiles (scripts/build-profiles.py). Applied silently at launch.
 struct GameProfile: Decodable, Equatable {
     var name: String?
     /// Graphics layer for games left on "Automatic".
@@ -51,13 +51,13 @@ private struct ProfileDocument: Decodable {
     }
 }
 
-/// Keeps the profile list current: the online copy (`NachtschichtProfilesURL`) once per app run,
+/// Keeps the profile list current: the online copy (`NightforgeProfilesURL`) once per app run,
 /// else the last one fetched, else the copy bundled with the app.
 actor ProfileStore {
     static let shared = ProfileStore()
     static let supportedFormat = 1
 
-    private let remoteURL = (Bundle.main.object(forInfoDictionaryKey: "NachtschichtProfilesURL") as? String)
+    private let remoteURL = (Bundle.main.object(forInfoDictionaryKey: "NightforgeProfilesURL") as? String)
         .flatMap { $0.isEmpty ? nil : URL(string: $0) }
     private var cachedURL: URL { Engine.supportDir.appendingPathComponent("profiles.json") }
     private var profiles: [Int: GameProfile]?

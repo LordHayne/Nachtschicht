@@ -1,4 +1,4 @@
-// Keeps Steam's own processes out of the Dock when Nachtschicht runs it in the background.
+// Keeps Steam's own processes out of the Dock when Nightforge runs it in the background.
 //
 // Wine turns a process into a regular Dock app as soon as it shows any window. Steam's browser
 // (steamwebhelper) does that even with -silent, for tiny invisible menu windows. This library is
@@ -29,7 +29,7 @@ static BOOL isSteamProcess(void) {
 static BOOL (*originalSetActivationPolicy)(id, SEL, NSApplicationActivationPolicy);
 static BOOL wantsDock = NO;
 
-static BOOL nachtschichtSetActivationPolicy(id self, SEL _cmd, NSApplicationActivationPolicy policy) {
+static BOOL nightforgeSetActivationPolicy(id self, SEL _cmd, NSApplicationActivationPolicy policy) {
     if (policy == NSApplicationActivationPolicyRegular) {
         if (isSteamProcess()) policy = NSApplicationActivationPolicyAccessory;
         else wantsDock = YES;
@@ -40,7 +40,7 @@ static BOOL nachtschichtSetActivationPolicy(id self, SEL _cmd, NSApplicationActi
 __attribute__((constructor)) static void install(void) {
     Method method = class_getInstanceMethod([NSApplication class], @selector(setActivationPolicy:));
     if (!method) return;
-    originalSetActivationPolicy = (void *)method_setImplementation(method, (IMP)nachtschichtSetActivationPolicy);
+    originalSetActivationPolicy = (void *)method_setImplementation(method, (IMP)nightforgeSetActivationPolicy);
 
     // Started from the bundle, every Wine process – Steam, explorer.exe, services – would be a Dock
     // app from the start. Make them accessory apps until Wine itself asks for a Dock icon, which it

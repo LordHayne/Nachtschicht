@@ -7,10 +7,10 @@ struct SetupView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 26) {
             VStack(alignment: .leading, spacing: 14) {
-                Text(setup.phase == .idle ? L10n.t("Welcome to Nachtschicht") : L10n.t("Connecting Steam"))
+                Text(setup.phase == .idle ? L10n.t("Welcome to Nightforge") : L10n.t("Connecting Steam"))
                     .font(Theme.display(40))
                     .foregroundStyle(Theme.ink)
-                Text(L10n.t("Nachtschicht sets up everything your Windows games need – free, in the background, in a few minutes. You only sign in to Steam."))
+                Text(L10n.t("Nightforge sets up everything your Windows games need – free, in the background, in a few minutes. You only sign in to Steam."))
                     .font(.system(size: 15))
                     .foregroundStyle(Theme.muted)
                     .frame(maxWidth: 560, alignment: .leading)
@@ -39,7 +39,7 @@ struct SetupView: View {
             SetupButton(title: L10n.t("Install Rosetta"), symbol: "arrow.down.circle") { setup.installRosetta() }
 
         case .waitingForSignIn:
-            Note(L10n.t("Sign in in the Steam window – with the QR code from the Steam app on your phone or with your password. Nachtschicht never sees your login."))
+            Note(L10n.t("Sign in in the Steam window – with the QR code from the Steam app on your phone or with your password. Nightforge never sees your login."))
             Button(L10n.t("Show Steam window again")) { setup.reopenSteam() }
                 .buttonStyle(.bordered)
                 .controlSize(.large)

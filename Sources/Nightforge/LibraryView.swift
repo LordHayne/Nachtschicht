@@ -162,7 +162,7 @@ private struct TopBar: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            Text("Nachtschicht")
+            Text("Nightforge")
                 .font(Theme.display(15))
                 .foregroundStyle(Theme.ink)
             if !model.allGames.isEmpty {
@@ -700,7 +700,7 @@ private struct EmptyLibrary: View {
             Text(L10n.t("No games here yet"))
                 .font(Theme.display(36))
                 .foregroundStyle(Theme.ink)
-            Text(L10n.t("Nachtschicht shows the Steam games installed in your CrossOver bottles. Install Steam in a bottle, download a game there, then rescan your library."))
+            Text(L10n.t("Nightforge shows the Steam games installed in your CrossOver bottles. Install Steam in a bottle, download a game there, then rescan your library."))
                 .font(.system(size: 15))
                 .foregroundStyle(Theme.muted)
                 .frame(maxWidth: 560, alignment: .leading)

@@ -65,8 +65,8 @@ enum L10n {
         "Select": "Auswählen",
         "Launch Failed": "Start fehlgeschlagen",
         "No games here yet": "Noch keine Spiele hier",
-        "Nachtschicht shows the Steam games installed in your CrossOver bottles. Install Steam in a bottle, download a game there, then rescan your library.":
-            "Nachtschicht zeigt die Steam-Spiele, die in deinen CrossOver-Bottles installiert sind. Installiere Steam in einer Bottle, lade dort ein Spiel herunter und lies die Bibliothek dann neu ein.",
+        "Nightforge shows the Steam games installed in your CrossOver bottles. Install Steam in a bottle, download a game there, then rescan your library.":
+            "Nightforge zeigt die Steam-Spiele, die in deinen CrossOver-Bottles installiert sind. Installiere Steam in einer Bottle, lade dort ein Spiel herunter und lies die Bibliothek dann neu ein.",
         "Scanned: %@": "Durchsucht: %@",
         "Rescan": "Neu einlesen",
         "Choose Another Folder …": "Anderen Ordner wählen …",
@@ -98,8 +98,8 @@ enum L10n {
         "Quit launcher": "Launcher beenden",
         "Hide launcher": "Launcher ausblenden",
         "Keep open": "Offen lassen",
-        "Leave empty for CrossOver. For Whisky or your own Wine, enter the path to the wine binary; the bottle is then passed as WINEPREFIX. “Quit launcher” makes sure nothing from Nachtschicht keeps running while you play.":
-            "Leer lassen für CrossOver. Für Whisky oder ein eigenes Wine den Pfad zur wine-Datei eintragen, die Bottle wird dann als WINEPREFIX übergeben. „Launcher beenden“ sorgt dafür, dass beim Spielen nichts von Nachtschicht mitläuft.",
+        "Leave empty for CrossOver. For Whisky or your own Wine, enter the path to the wine binary; the bottle is then passed as WINEPREFIX. “Quit launcher” makes sure nothing from Nightforge keeps running while you play.":
+            "Leer lassen für CrossOver. Für Whisky oder ein eigenes Wine den Pfad zur wine-Datei eintragen, die Bottle wird dann als WINEPREFIX übergeben. „Launcher beenden“ sorgt dafür, dass beim Spielen nichts von Nightforge mitläuft.",
 
         // Setup
         "Preparing your Mac": "Mac wird vorbereitet",
@@ -107,16 +107,16 @@ enum L10n {
         "Setting up Windows environment": "Windows-Umgebung wird eingerichtet",
         "Installing Steam": "Steam wird installiert",
         "Signing in to Steam": "Bei Steam anmelden",
-        "Welcome to Nachtschicht": "Willkommen bei Nachtschicht",
+        "Welcome to Nightforge": "Willkommen bei Nightforge",
         "Connecting Steam": "Steam wird verbunden",
-        "Nachtschicht sets up everything your Windows games need – free, in the background, in a few minutes. You only sign in to Steam.":
-            "Nachtschicht richtet alles ein, was deine Windows-Spiele brauchen – kostenlos, im Hintergrund, in wenigen Minuten. Du meldest dich nur bei Steam an.",
+        "Nightforge sets up everything your Windows games need – free, in the background, in a few minutes. You only sign in to Steam.":
+            "Nightforge richtet alles ein, was deine Windows-Spiele brauchen – kostenlos, im Hintergrund, in wenigen Minuten. Du meldest dich nur bei Steam an.",
         "Connect Steam": "Mit Steam verbinden",
         "Windows games need Rosetta from Apple. macOS asks for your password once to install it; by installing you accept Apple's Rosetta license.":
             "Windows-Spiele brauchen Rosetta von Apple. macOS fragt einmal nach deinem Passwort, um es zu installieren; mit der Installation akzeptierst du Apples Rosetta-Lizenz.",
         "Install Rosetta": "Rosetta installieren",
-        "Sign in in the Steam window – with the QR code from the Steam app on your phone or with your password. Nachtschicht never sees your login.":
-            "Melde dich im Steam-Fenster an – mit dem QR-Code aus der Steam-App auf deinem Handy oder mit deinem Passwort. Nachtschicht sieht deine Anmeldedaten nie.",
+        "Sign in in the Steam window – with the QR code from the Steam app on your phone or with your password. Nightforge never sees your login.":
+            "Melde dich im Steam-Fenster an – mit dem QR-Code aus der Steam-App auf deinem Handy oder mit deinem Passwort. Nightforge sieht deine Anmeldedaten nie.",
         "Show Steam window again": "Steam-Fenster wieder zeigen",
         "Try again": "Erneut versuchen",
         "Steam is connected": "Steam ist verbunden",
@@ -189,7 +189,7 @@ enum L10n {
             "Gibt Spielen Vorrang bei CPU und Grafik und halbiert die Bluetooth-Latenz für Controller und Kopfhörer. Schalte ihn aus, wenn der Ton eines Spiels knackt.",
 
         // Errors
-        "Component list version %ld needs a newer Nachtschicht.": "Komponentenliste Version %ld braucht ein neueres Nachtschicht.",
+        "Component list version %ld needs a newer Nightforge.": "Komponentenliste Version %ld braucht ein neueres Nightforge.",
         "No component list available. Check your internet connection.": "Keine Komponentenliste verfügbar. Prüfe deine Internetverbindung.",
         "The download of %@ is damaged. Please try again.": "Der Download von %@ ist beschädigt. Bitte versuch es noch einmal.",
         "%@ could not be unpacked (tar exit %d).": "%@ konnte nicht entpackt werden (tar-Code %d).",

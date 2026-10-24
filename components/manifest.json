@@ -51,6 +51,16 @@
       "size": 830687,
       "license": "LGPL-2.1",
       "source": "https://github.com/Winetricks/winetricks"
+    },
+    {
+      "id": "cabextract",
+      "kind": "tool",
+      "version": "1.11-1",
+      "url": "https://github.com/LordHayne/Nachtschicht/releases/download/cabextract-1.11-1/nachtschicht-cabextract-1.11-1.tar.gz",
+      "sha256": "8815bfefbc775232fa844b3ed416dd82c1dcfa8a03f8ebb5e144a4be36234e10",
+      "size": 85622,
+      "license": "GPL-3.0-or-later",
+      "source": "https://github.com/LordHayne/Nachtschicht"
     }
   ]
 }

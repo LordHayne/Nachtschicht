@@ -45,6 +45,6 @@ jobs:
           name="nachtschicht-cabextract-$version.tar.gz"
           tar -czf "$name" -C tools cabextract
           gh release create "cabextract-$version" "$name" \
-            --repo "$GITHUB_REPOSITORY" \
+            --repo "$GITHUB_REPOSITORY" --latest=false \
             --title "cabextract $version" \
             --notes "cabextract $CABEXTRACT_VERSION for macOS (arm64 + x86_64), used by winetricks for Nachtschicht's per-game profiles. Licence: GPL-3.0-or-later. Source: https://www.cabextract.org.uk/cabextract-$CABEXTRACT_VERSION.tar.gz (unmodified), build steps in .github/workflows/tools.yml."

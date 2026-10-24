@@ -189,6 +189,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "graphics-${{ steps.assemble.outputs.version }}" "${{ steps.assemble.outputs.name }}" \
-            --repo "$GITHUB_REPOSITORY" \
+            --repo "$GITHUB_REPOSITORY" --latest=false \
             --title "Graphics ${{ steps.assemble.outputs.version }}" \
             --notes "DXMT $DXMT_VERSION with Nachtschicht's Wine 11 patches, and winemac.so from Wine $WINE_VERSION built with visible symbols. Licences: DXMT LGPL-2.1-or-later, Wine LGPL-2.1-or-later; sources: https://github.com/3Shain/dxmt, https://gitlab.winehq.org/wine/wine, patches in engine/patches."

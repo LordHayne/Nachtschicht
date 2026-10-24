@@ -22,6 +22,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   build:
@@ -54,6 +55,18 @@ jobs:
               assert game.get("graphics") in (None, "dxmt", "dxvk"), (app_id, game.get("graphics"))
           print("ok:", len(doc["games"]), "games")
           PY
+
+      # GitHub switches off scheduled workflows in public repos after 60 days without activity.
+      # Re-enabling them through the API counts as activity, so the nightly jobs keep running
+      # even when upstream has been quiet for a while.
+      - name: Keep nightly workflows enabled
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for workflow in profiles.yml components.yml; do
+            gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/enable"
+          done
 
       - name: Commit changes
         if: github.event_name != 'pull_request'

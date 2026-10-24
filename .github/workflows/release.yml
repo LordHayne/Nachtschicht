@@ -1,0 +1,70 @@
+name: Release app
+
+# Builds Nachtschicht.app and publishes it as a GitHub release (zip for the installer script,
+# DMG for people who download by hand). Triggered by pushing a tag like v0.1.0.
+# The app is ad-hoc signed (no paid Apple developer account): scripts/install.sh downloads it
+# without the quarantine flag, so macOS opens it straight away; the DMG needs one
+# "Open Anyway" in System Settings → Privacy & Security.
+
+on:
+  push:
+    tags: ["v*"]
+  # Dry run: builds and packages, uploads the files as a workflow artifact, publishes nothing.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then version="${GITHUB_REF_NAME#v}"; else version="0.0.0-test"; fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" Resources/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GITHUB_RUN_NUMBER" Resources/Info.plist
+
+      - name: Build
+        run: ./build.sh
+
+      - name: Package
+        run: |
+          app=build/Nachtschicht.app
+          codesign --verify --deep "$app"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "Nachtschicht-$VERSION.zip"
+          mkdir dmg
+          cp -R "$app" dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname Nachtschicht -srcfolder dmg -ov -format UDZO "Nachtschicht-$VERSION.dmg"
+          shasum -a 256 Nachtschicht-*
+
+      - name: Keep dry-run files
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nachtschicht-test-build
+          path: Nachtschicht-*
+
+      - name: Publish release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "Nachtschicht-$VERSION.zip" "Nachtschicht-$VERSION.dmg" \
+            --repo "$GITHUB_REPOSITORY" --latest --title "Nachtschicht $VERSION" --notes-file - <<NOTES
+          Free launcher for Windows Steam games on Apple silicon Macs (macOS 14 or newer).
+
+          **Install (recommended):** open Terminal and paste
+          \`\`\`
+          curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/scripts/install.sh | bash
+          \`\`\`
+          The same line updates an existing installation.
+
+          **Or by hand:** open the DMG and drag Nachtschicht into Applications. On first launch macOS says
+          it can't verify the app (it's free and not registered with Apple): open System Settings →
+          Privacy & Security, scroll down and click **Open Anyway**.
+          NOTES

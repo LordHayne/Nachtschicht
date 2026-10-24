@@ -18,7 +18,7 @@ enum Theme {
 
 enum Format {
     static func bytes(_ bytes: Int64) -> String {
-        bytes > 0 ? ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) : "–"
+        bytes > 0 ? bytes.formatted(.byteCount(style: .file).locale(L10n.locale)) : "–"
     }
 
     static func relative(_ date: Date) -> String {

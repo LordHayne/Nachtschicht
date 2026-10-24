@@ -36,6 +36,14 @@
       "kind": "tool",
       "repo": "Winetricks/winetricks",
       "file": "src/winetricks"
+    },
+    {
+      "id": "cabextract",
+      "kind": "tool",
+      "repo": "LordHayne/Nachtschicht",
+      "tagPrefix": "cabextract-",
+      "asset": "^nachtschicht-cabextract-.*\\.tar\\.gz$",
+      "license": "GPL-3.0-or-later"
     }
   ]
 }

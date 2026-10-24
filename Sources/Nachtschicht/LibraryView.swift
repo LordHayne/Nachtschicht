@@ -333,6 +333,7 @@ private struct GameDetail: View {
                            isUninstalling: model.uninstallingID == game.id,
                            isRunning: model.isRunning(game),
                            needsConfirmation: model.launchNeedsConfirmation,
+                           isPreparing: model.launchPreparing,
                            vrOnly: game.isVROnly && game.install == .notInstalled) {
                     model.primaryAction()
                 }
@@ -382,6 +383,7 @@ private struct PlayButton: View {
     var isUninstalling = false
     var isRunning = false
     var needsConfirmation = false
+    var isPreparing = false
     /// VR-only and not downloaded: nothing useful to do on a Mac.
     var vrOnly = false
     let action: () -> Void
@@ -394,6 +396,7 @@ private struct PlayButton: View {
     }
 
     private var title: String {
+        if isLaunching && isPreparing { return L10n.t("Setting up the game …") }
         if isLaunching { return needsConfirmation ? L10n.t("Confirm in the Steam window") : L10n.t("Launching …") }
         if isUninstalling { return L10n.t("Uninstalling …") }
         if isRunning { return L10n.t("Running – switch to game") }

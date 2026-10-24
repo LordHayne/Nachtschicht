@@ -59,7 +59,7 @@ enum Engine {
 
     /// Wine's builtin crypto avoids TLS failures in Steam's browser; the overlay DLL deadlocks games.
     /// Games inherit these from Steam, so DirectX goes to DXVK's DLLs in the prefix (native first).
-    /// The Direct3D choice itself lives in the registry (see `installDXVK` / `applyGraphics`): an
+    /// The Direct3D choice itself lives in the registry (see `installDXVK` / `applyGameSettings`): an
     /// override in this variable would beat the per-game AppDefaults.
     static let steamDLLOverrides = "bcrypt=b;ncrypt=b;gameoverlayrenderer,gameoverlayrenderer64=d"
 
@@ -364,7 +364,7 @@ enum Engine {
     private static let direct3DLibraries = ["dxgi", "d3d11", "d3d10core", "d3d9"]
 
     /// Copies DXVK's DLLs into the prefix (64-bit → system32, 32-bit → syswow64) and makes them the
-    /// default for every program; games set to DXMT override that in `applyGraphics`. Safe to repeat.
+    /// default for every program; games set to DXMT override that in `applyGameSettings`. Safe to repeat.
     static func installDXVK(_ dxvkDir: URL, wine: URL) throws {
         defer {
             let values = direct3DLibraries.map { "\"\($0)\"=\"native,builtin\"" }.joined(separator: "\n")
@@ -387,20 +387,124 @@ enum Engine {
         }
     }
 
-    /// Points one game's executables at DXMT or back to the DXVK default, via Wine's per-program
-    /// settings (HKCU\Software\Wine\AppDefaults\<name>.exe), which also apply when Steam starts it.
-    static func applyGraphics(_ choice: GraphicsLayer, installDir: URL, wine: URL) {
-        let layer = choice == .automatic ? defaultGraphics : choice
-        let exes = executables(in: installDir)
-        guard !exes.isEmpty else { return }
-        let sections = exes.map { exe -> String in
-            let key = "HKEY_CURRENT_USER\\Software\\Wine\\AppDefaults\\\(exe)\\DllOverrides"
-            guard layer == .dxmt else { return "[-\(key)]" }
-            // d3d9 stays with DXVK: DXMT only covers Direct3D 10/11.
-            let values = ["dxgi", "d3d11", "d3d10core"].map { "\"\($0)\"=\"builtin\"" }.joined(separator: "\n")
-            return "[\(key)]\n\(values)"
+    /// winetricks verbs that would change every game in the shared prefix, not just the one that
+    /// asks (Proton gives each game its own prefix; Nachtschicht has one for all).
+    private static let sharedPrefixUnsafeVerbs: Set<String> = ["dsound"]
+
+    /// The profile's winetricks verbs that aren't in the prefix yet (winetricks logs what it installed).
+    static func missingWinetricks(_ verbs: [String]) -> [String] {
+        let log = (try? String(contentsOf: prefix.appendingPathComponent("winetricks.log"), encoding: .utf8)) ?? ""
+        let installed = Set(log.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) })
+        return verbs.filter { !installed.contains($0) && !sharedPrefixUnsafeVerbs.contains($0) }
+    }
+
+    /// Installs winetricks verbs into the prefix (runtimes like vcrun2019, d3dcompiler_47). Needs the
+    /// winetricks and cabextract components; returns false when something was missing or failed –
+    /// the game is started anyway. Output goes to Logs/winetricks.log for troubleshooting.
+    @discardableResult
+    static func installWinetricks(_ verbs: [String], wine: URL) async -> Bool {
+        guard !verbs.isEmpty else { return true }
+        let store = ComponentStore.shared
+        guard let manifest = try? await store.manifest(),
+              let winetricksComponent = manifest.component("winetricks"),
+              let cabextractComponent = manifest.component("cabextract"),
+              let winetricksDir = try? await store.install(winetricksComponent),
+              let cabextractDir = try? await store.install(cabextractComponent)
+        else { return false }
+        let fm = FileManager.default
+        let script = winetricksDir.appendingPathComponent("winetricks")
+        let cabextract = (fm.enumerator(at: cabextractDir, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }.first { $0.lastPathComponent == "cabextract" })?.deletingLastPathComponent()
+        guard fm.isExecutableFile(atPath: script.path), let cabextract else { return false }
+
+        let logs = supportDir.appendingPathComponent("Logs", isDirectory: true)
+        try? fm.createDirectory(at: logs, withIntermediateDirectories: true)
+        let logFile = logs.appendingPathComponent("winetricks.log")
+        if !fm.fileExists(atPath: logFile.path) { fm.createFile(atPath: logFile.path, contents: nil) }
+        let log = try? FileHandle(forWritingTo: logFile)
+        _ = try? log?.seekToEnd()
+        log?.write(Data("\n== \(Date()) winetricks \(verbs.joined(separator: " "))\n".utf8))
+
+        var env = environment(wine: wine)
+        env["WINEDLLOVERRIDES"] = nil  // installers like dotnet need mscoree, which setup turns off
+        env["WINE"] = wine.path
+        env["WINESERVER"] = wine.deletingLastPathComponent().appendingPathComponent("wineserver").path
+        env["PATH"] = cabextract.path + ":" + (env["PATH"] ?? "/usr/bin:/bin")
+        env["WINETRICKS_LATEST_VERSION_CHECK"] = "disabled"
+        // Its download cache (XDG_CACHE_HOME/winetricks) belongs in the Mac's cache folder, not ~/.cache.
+        env["XDG_CACHE_HOME"] = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Nachtschicht", isDirectory: true).path
+
+        let process = Process()
+        process.executableURL = script
+        process.arguments = ["--unattended"] + verbs
+        process.environment = env
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = log ?? FileHandle.nullDevice
+        process.standardError = log ?? FileHandle.nullDevice
+        return await withCheckedContinuation { continuation in
+            process.terminationHandler = { finished in
+                try? log?.close()
+                continuation.resume(returning: finished.terminationStatus == 0)
+            }
+            if (try? process.run()) == nil {
+                try? log?.close()
+                continuation.resume(returning: false)
+            }
         }
+    }
+
+    /// Per-program settings for a game's executables (Wine's AppDefaults): the Direct3D layer, the
+    /// profile's DLL overrides and Windows version. Rewritten in full at every launch, so a changed
+    /// choice or profile never leaves stale entries. The profile's registry entries go in as well.
+    static func applyGameSettings(_ choice: GraphicsLayer, profile: GameProfile?, installDir: URL, wine: URL) {
+        let layer = choice == .automatic ? (profile?.graphics ?? defaultGraphics) : choice
+        let exes = executables(in: installDir)
+        var sections: [String] = []
+        for exe in exes {
+            let app = "HKEY_CURRENT_USER\\Software\\Wine\\AppDefaults\\\(exe)"
+            var overrides = profile?.dllOverrides ?? [:]
+            if layer == .dxmt {
+                // d3d9 stays with DXVK: DXMT only covers Direct3D 10/11.
+                for dll in ["dxgi", "d3d11", "d3d10core"] { overrides[dll] = "builtin" }
+            }
+            var section = "[-\(app)\\DllOverrides]"
+            if !overrides.isEmpty {
+                section += "\n[\(app)\\DllOverrides]\n" + overrides.sorted { $0.key < $1.key }
+                    .map { "\(regString($0.key))=\(regString($0.value))" }.joined(separator: "\n")
+            }
+            section += "\n[\(app)]\n\"Version\"=" + (profile?.windowsVersion.map(regString) ?? "-")
+            sections.append(section)
+        }
+        sections += (profile?.registry ?? []).compactMap(regSection)
+        guard !sections.isEmpty else { return }
         importRegistry(sections.joined(separator: "\n\n"), wine: wine)
+    }
+
+    /// A quoted .reg string.
+    private static func regString(_ text: String) -> String {
+        "\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+    }
+
+    /// One registry entry from a profile as a .reg section; nil for types it can't express safely.
+    private static func regSection(_ entry: GameProfile.RegistryEntry) -> String? {
+        let roots = ["HKLM": "HKEY_LOCAL_MACHINE", "HKCU": "HKEY_CURRENT_USER", "HKCR": "HKEY_CLASSES_ROOT"]
+        var key = entry.key
+        for (short, long) in roots where key.uppercased().hasPrefix(short + "\\") {
+            key = long + key.dropFirst(short.count)
+        }
+        guard key.hasPrefix("HKEY_") else { return nil }
+        let header = "[\(key)]"
+        guard let name = entry.name, let type = entry.type?.uppercased(), let value = entry.value else { return header }
+        let data: String
+        switch type {
+        case "REG_SZ": data = regString(value)
+        case "REG_DWORD":
+            guard let number = value.hasPrefix("0x") ? UInt32(value.dropFirst(2), radix: 16) : UInt32(value) else { return nil }
+            data = String(format: "dword:%08x", number)
+        default: return nil
+        }
+        return header + "\n" + regString(name) + "=" + data
     }
 
     /// Windows programs in a game folder (a few levels deep, where Unity/Unreal put them).

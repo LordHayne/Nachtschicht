@@ -195,7 +195,7 @@ enum Launcher {
         crossOverCandidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? crossOverCandidates[0]
     }
 
-    static func launch(_ game: Game, runnerPath: String, options: GameOptions) throws {
+    static func launch(_ game: Game, runnerPath: String, options: GameOptions, profile: GameProfile? = nil) throws {
         guard FileManager.default.isExecutableFile(atPath: runnerPath) else {
             throw LaunchError.runnerMissing(runnerPath)
         }
@@ -218,7 +218,7 @@ enum Launcher {
         }
         if game.bottle.isBuiltIn {
             Engine.writeGameConfig(installDir: game.installDir, options: options)
-            Engine.applyGraphics(options.graphics, installDir: game.installDir, wine: runner)
+            Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner)
         }
         // CrossOver bottles: the game inherits this process's environment. Nachtschicht's own
         // games get the HUD from the background Steam instead (Prefs.performanceHUD).
@@ -231,6 +231,7 @@ enum Launcher {
         arguments += ["-silent", "-applaunch", String(game.appID)]
         if game.bottle.isBuiltIn {
             arguments += SteamCatalog.antiCheatOffArguments(appID: game.appID, steamRoot: game.steamRoot)
+            arguments += profile?.arguments ?? []
         }
         arguments += splitArguments(options.extraArgs)
 

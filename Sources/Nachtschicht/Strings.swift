@@ -136,6 +136,7 @@ enum L10n {
         "Preparing download …": "Download wird vorbereitet …",
 
         "Confirm in the Steam window": "Bestätige im Steam-Fenster",
+        "Setting up the game …": "Spiel wird eingerichtet …",
         "Steam couldn't start %@.": "Steam konnte %@ nicht starten.",
 
         "VR only": "Nur VR",

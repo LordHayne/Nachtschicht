@@ -1,0 +1,70 @@
+name: Update game profiles
+
+# Rebuilds profiles/profiles.json every night from umu-protonfixes plus profiles/mac.json
+# (see scripts/build-profiles.py) and commits it when something changed. The app downloads it.
+
+on:
+  schedule:
+    - cron: "37 4 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "profiles/mac.json"
+      - "scripts/build-profiles.py"
+      - "tests/test_build_profiles.py"
+      - ".github/workflows/profiles.yml"
+  pull_request:
+    paths:
+      - "profiles/**"
+      - "scripts/build-profiles.py"
+      - "tests/test_build_profiles.py"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Test the profile builder
+        run: python3 -m unittest tests/test_build_profiles.py
+
+      - name: Fetch umu-protonfixes
+        run: git clone --depth 1 https://github.com/Open-Wine-Components/umu-protonfixes.git "$RUNNER_TEMP/umu-protonfixes"
+
+      - name: Build profiles
+        run: python3 -I scripts/build-profiles.py "$RUNNER_TEMP/umu-protonfixes"
+
+      - name: Validate
+        run: |
+          python3 -I - <<'PY'
+          import json
+          doc = json.load(open("profiles/profiles.json"))
+          assert doc["formatVersion"] == 1
+          assert len(doc["games"]) > 50, "suspiciously few games"
+          for app_id, game in doc["games"].items():
+              assert app_id.isdigit(), app_id
+              assert game.get("graphics") in (None, "dxmt", "dxvk"), (app_id, game.get("graphics"))
+          print("ok:", len(doc["games"]), "games")
+          PY
+
+      - name: Commit changes
+        if: github.event_name != 'pull_request'
+        run: |
+          if git diff --quiet profiles/profiles.json; then
+            echo "No profile changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add profiles/profiles.json
+          git commit -m "Update game profiles"
+          git pull --rebase
+          git push

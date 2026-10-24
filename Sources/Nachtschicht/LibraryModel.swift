@@ -21,6 +21,8 @@ final class LibraryModel: ObservableObject {
     @Published private(set) var launchingID: String?
     /// Steam is showing a question (licence, setup) for the game being launched.
     @Published private(set) var launchNeedsConfirmation = false
+    /// The game's profile is installing runtimes (winetricks) before its first start.
+    @Published private(set) var launchPreparing = false
     @Published var showingOptions = false
     /// Waiting for the user to confirm removing this game (or its download).
     @Published var pendingUninstall: Game?
@@ -157,6 +159,7 @@ final class LibraryModel: ObservableObject {
     func startBackgroundSteam() {
         // onAppear can fire more than once; one start per app run is enough.
         guard SetupModel.isComplete, steamStartup == nil else { return }
+        Task { await ProfileStore.shared.refresh() }
         steamStartup = Task {
             guard let wine = try? await Engine.ensureEngine() else { return }
             // Let the running-game check see the processes before deciding on a restart.
@@ -264,9 +267,17 @@ final class LibraryModel: ObservableObject {
         Task {
             if game.bottle.isBuiltIn { await steamStartup?.value }
             let runner = game.bottle.isBuiltIn ? await Engine.installedWine()?.path : Prefs.runnerPath
+            // Known fixes for this game (profiles/profiles.json); runtimes it needs come first.
+            let profile = game.bottle.isBuiltIn ? await ProfileStore.shared.profile(for: game.appID) : nil
+            let missing = Engine.missingWinetricks(profile?.winetricks ?? [])
+            if !missing.isEmpty, let runner {
+                launchPreparing = true
+                await Engine.installWinetricks(missing, wine: URL(fileURLWithPath: runner))
+                launchPreparing = false
+            }
             var watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
             do {
-                try Launcher.launch(game, runnerPath: runner ?? "", options: GameOptionsStore.load(game.appID))
+                try Launcher.launch(game, runnerPath: runner ?? "", options: GameOptionsStore.load(game.appID), profile: profile)
             } catch {
                 launchingID = nil
                 errorMessage = error.localizedDescription

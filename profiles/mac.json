@@ -1,0 +1,15 @@
+{
+ "about": "Nachtschicht's own per-game profiles, tested on Macs. They take precedence over umu-protonfixes. Fields: graphics (dxmt|dxvk), arguments, dllOverrides, registry, windowsVersion, winetricks, ignoreUpstream, note.",
+ "games": {
+  "251570": {
+   "name": "7 Days to Die",
+   "graphics": "dxmt",
+   "note": "Tested 2026-10-24 on M5: ~63 FPS with DXMT; with DXVK the game sees only 128 MB VRAM and drops to low textures and ~30 FPS. Steam's no-EAC launch option is picked automatically."
+  },
+  "3907790": {
+   "name": "OxyRail",
+   "graphics": "dxmt",
+   "note": "Tested 2026-10-24 on M5: ~75 FPS with DXMT vs 45-50 with DXVK on Extreme."
+  }
+ }
+}

@@ -1,0 +1,1671 @@
+{
+ "formatVersion": 1,
+ "sources": {
+  "umu-protonfixes": {
+   "url": "https://github.com/Open-Wine-Components/umu-protonfixes",
+   "commit": "96b9fc078958f11eeea80240f233c4b1639806a0",
+   "license": "BSD-2-Clause"
+  },
+  "mac": {
+   "url": "https://github.com/LordHayne/Nachtschicht/blob/main/profiles/mac.json"
+  }
+ },
+ "games": {
+  "1930": {
+   "name": "Two Worlds Epic Edition - ID 1930\nhttps://www.protondb.com/app/1930",
+   "winetricks": [
+    "xact",
+    "d3dx9"
+   ],
+   "source": "umu"
+  },
+  "3590": {
+   "name": "Plants vs. Zombies: Game of the Year\n\nFixes slowdown when Crazy Dave is on screen or when selecting plant loadout at start of level.\nThe fix replaces the incorrect game executable with the correct one from the prefix, which only appears after the main executable runs.\n\nYT Tutorial for slowdown fix: https://www.youtube.com/watch?v=EK1HyVGlHvY\nSource of previous changedir fix: https://github.com/JamesHealdUK/protonfixes/blob/master/fixes/3590.sh",
+   "arguments": [
+    "-changedir"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "4560": {
+   "name": "Transformers: War for Cybertron",
+   "winetricks": [
+    "physx"
+   ],
+   "source": "umu"
+  },
+  "4730": {
+   "name": "Outrun 2006: Coast 2 Coast",
+   "winetricks": [
+    "d3dx9"
+   ],
+   "source": "umu"
+  },
+  "6270": {
+   "name": "Ducati World Championship",
+   "winetricks": [
+    "icodecs"
+   ],
+   "source": "umu"
+  },
+  "6920": {
+   "name": "Deus Ex: Invisible War",
+   "winetricks": [
+    "dsound"
+   ],
+   "source": "umu"
+  },
+  "7850": {
+   "name": "Cryostasis",
+   "winetricks": [
+    "physx"
+   ],
+   "source": "umu"
+  },
+  "8190": {
+   "name": "Just Cause 2",
+   "winetricks": [
+    "d3dcompiler_43",
+    "d3dcompiler_47",
+    "d3dx10"
+   ],
+   "arguments": [
+    "-borderless"
+   ],
+   "source": "umu"
+  },
+  "9900": {
+   "name": "Star Trek Online launcher",
+   "winetricks": [
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "10220": {
+   "name": "Postal III",
+   "winetricks": [
+    "lucida",
+    "courier",
+    "verdana",
+    "trebuchet",
+    "arial",
+    "tahoma"
+   ],
+   "source": "umu"
+  },
+  "12810": {
+   "name": "Overlord II",
+   "winetricks": [
+    "physx"
+   ],
+   "source": "umu"
+  },
+  "12840": {
+   "name": "Dirt 2",
+   "winetricks": [
+    "xliveless"
+   ],
+   "source": "umu"
+  },
+  "15130": {
+   "name": "Beyond Good and Evil",
+   "winetricks": [
+    "dsound",
+    "d3dx9",
+    "arial",
+    "d3dcompiler_47"
+   ],
+   "registry": [
+    {
+     "key": "HKLM\\Software\\Wow6432Node\\Ubisoft"
+    },
+    {
+     "key": "HKLM\\Software\\Wow6432Node\\Ubisoft\\Beyond Good & Evil",
+     "name": "InstallLanguage",
+     "type": "REG_DWORD",
+     "value": "1"
+    }
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "15750": {
+   "name": "Oddworld: Stranger's Wrath HD",
+   "winetricks": [
+    "mfc90"
+   ],
+   "source": "umu"
+  },
+  "16700": {
+   "name": "Stronghold Crusader Extreme HD\nFixes Multiplayer",
+   "winetricks": [
+    "directplay"
+   ],
+   "source": "umu"
+  },
+  "16730": {
+   "name": "Legendary",
+   "windowsVersion": "winxp",
+   "source": "umu"
+  },
+  "16810": {
+   "name": "Civilization IV: Colonization",
+   "winetricks": [
+    "oleaut32",
+    "msxml3",
+    "corefonts"
+   ],
+   "source": "umu"
+  },
+  "21680": {
+   "name": "Bionic Commander Rearmed",
+   "winetricks": [
+    "physx"
+   ],
+   "source": "umu"
+  },
+  "23300": {
+   "name": "Yosumin",
+   "winetricks": [
+    "d3dx9"
+   ],
+   "source": "umu"
+  },
+  "23460": {
+   "name": "Ceville\nWorks with dotnet35sp1 only, now without needing Proton5\nVideos still don't work.",
+   "winetricks": [
+    "dotnet35sp1"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "33390": {
+   "name": "Zeit²",
+   "winetricks": [
+    "dotnet48"
+   ],
+   "source": "umu"
+  },
+  "34330": {
+   "name": "Total War: Shogun 2",
+   "winetricks": [
+    "d3dcompiler_43"
+   ],
+   "source": "umu"
+  },
+  "35000": {
+   "name": "Mini Ninjas",
+   "winetricks": [
+    "openal"
+   ],
+   "source": "umu"
+  },
+  "39190": {
+   "name": "Dungeon Siege",
+   "arguments": [
+    "Zonematch=true"
+   ],
+   "winetricks": [
+    "directplay"
+   ],
+   "source": "umu"
+  },
+  "39200": {
+   "name": "Dungeon Siege II",
+   "winetricks": [
+    "directplay"
+   ],
+   "source": "umu"
+  },
+  "39510": {
+   "name": "Gothic 1 Classic\nGame fix for Gothic II: Gold Classic\nGame fix for The Chronicles Of Myrtana: Archolos (mod of Gothic II: Gold Classic)",
+   "winetricks": [
+    "directmusic"
+   ],
+   "dllOverrides": {
+    "*dsound": "builtin",
+    "ddraw": "native,builtin",
+    "dinput": "native,builtin"
+   },
+   "partial": true,
+   "source": "umu"
+  },
+  "39540": {
+   "name": "SpellForce",
+   "winetricks": [
+    "directplay"
+   ],
+   "source": "umu"
+  },
+  "39550": {
+   "name": "SpellForce",
+   "winetricks": [
+    "directplay"
+   ],
+   "source": "umu"
+  },
+  "40800": {
+   "name": "Super Meat Boy",
+   "winetricks": [
+    "d3dcompiler_47",
+    "xact"
+   ],
+   "source": "umu"
+  },
+  "40950": {
+   "name": "Stronghold HD\nFixes Multiplayer",
+   "winetricks": [
+    "directplay"
+   ],
+   "source": "umu"
+  },
+  "40970": {
+   "name": "Stronghold Crusader HD\nFixes Multiplayer",
+   "winetricks": [
+    "directplay"
+   ],
+   "source": "umu"
+  },
+  "42890": {
+   "name": "Sword of the Stars",
+   "winetricks": [
+    "d3dcompiler_42",
+    "d3dx9_31",
+    "d3dx9_42"
+   ],
+   "source": "umu"
+  },
+  "43110": {
+   "name": "Metro 2033",
+   "winetricks": [
+    "d3dcompiler_42"
+   ],
+   "source": "umu"
+  },
+  "44690": {
+   "name": "GT Legends",
+   "winetricks": [
+    "mfc42"
+   ],
+   "source": "umu"
+  },
+  "45750": {
+   "name": "Lost Planet 2 (2010)\nThis game requires two fixes to work:\n1. A mocked xlive.dll for GFWL (multiplayer will not work, but the single player does)\n2. No more than 12 CPU cores (on PCGamingWiki is described as 6, but on my personal test I was able to set until 12 of 16) [source: https://www.pcgamingwiki.com/wiki/Lost_Planet_2#Alternate_solution_for_high_core_CPUs]",
+   "winetricks": [
+    "xliveless"
+   ],
+   "source": "umu"
+  },
+  "48190": {
+   "name": "Assassin's Creed: Brotherhood\n\nGame uses an old customized Ubisoft launcher that's currently not working with Proton.",
+   "arguments": [
+    "-playoffline"
+   ],
+   "source": "umu"
+  },
+  "49520": {
+   "name": "Borderlands 2",
+   "arguments": [
+    "-NoSplash"
+   ],
+   "winetricks": [
+    "physx"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "49900": {
+   "name": "Plain Sight",
+   "winetricks": [
+    "xna31"
+   ],
+   "source": "umu"
+  },
+  "50620": {
+   "name": "Darksiders",
+   "winetricks": [
+    "d3dcompiler_42",
+    "d3dcompiler_43",
+    "d3dcompiler_46",
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "61500": {
+   "name": "Age of Wonders",
+   "winetricks": [
+    "icodecs"
+   ],
+   "source": "umu"
+  },
+  "63110": {
+   "name": "Alter Ego\nLauncher crashes immediately without displaying any windows",
+   "arguments": [
+    "AlterEgo.ebr"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "63700": {
+   "name": "BIT.TRIP BEAT",
+   "winetricks": [
+    "d3dcompiler_43",
+    "d3dx9_43"
+   ],
+   "source": "umu"
+  },
+  "63710": {
+   "name": "BIT.TRIP RUNNER",
+   "winetricks": [
+    "openal",
+    "d3dcompiler_43",
+    "d3dx9_43"
+   ],
+   "dllOverrides": {
+    "d3dx9_43": "native",
+    "d3dcompiler_43": "native"
+   },
+   "source": "umu"
+  },
+  "65530": {
+   "name": "SpellForce",
+   "winetricks": [
+    "directplay"
+   ],
+   "source": "umu"
+  },
+  "65540": {
+   "name": "Gothic 1 Classic\nGame fix for Gothic II: Gold Classic\nGame fix for The Chronicles Of Myrtana: Archolos (mod of Gothic II: Gold Classic)",
+   "winetricks": [
+    "directmusic"
+   ],
+   "dllOverrides": {
+    "*dsound": "builtin",
+    "ddraw": "native,builtin",
+    "dinput": "native,builtin"
+   },
+   "partial": true,
+   "source": "umu"
+  },
+  "70400": {
+   "name": "Recettear: An Item Shop's Tale",
+   "winetricks": [
+    "dmime",
+    "dmloader",
+    "dmsynth",
+    "dmusic",
+    "dsound",
+    "dswave"
+   ],
+   "dllOverrides": {
+    "streamci": "native"
+   },
+   "partial": true,
+   "source": "umu"
+  },
+  "70420": {
+   "name": "Chantelise - A Tale of Two Sisters",
+   "winetricks": [
+    "dmime",
+    "dmloader",
+    "dmsynth",
+    "dmusic",
+    "dsound",
+    "dswave"
+   ],
+   "dllOverrides": {
+    "streamci": "native"
+   },
+   "partial": true,
+   "source": "umu"
+  },
+  "70650": {
+   "name": "Worms: Blast",
+   "winetricks": [
+    "directmusic"
+   ],
+   "source": "umu"
+  },
+  "105400": {
+   "name": "Fable III",
+   "winetricks": [
+    "xliveless"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "105450": {
+   "name": "Age Of Empire 3: Complete Collection",
+   "winetricks": [
+    "mfc42",
+    "l3codecx",
+    "corefonts"
+   ],
+   "windowsVersion": "winxp",
+   "source": "umu"
+  },
+  "108710": {
+   "name": "Alan Wake",
+   "winetricks": [
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "110800": {
+   "name": "L.A. Noire",
+   "winetricks": [
+    "d3dx9_43",
+    "d3dcompiler_43",
+    "d3dx11_43",
+    "d3dcompiler_47"
+   ],
+   "arguments": [
+    "-dx11"
+   ],
+   "source": "umu"
+  },
+  "200940": {
+   "name": "Sonic CD",
+   "winetricks": [
+    "d3dcompiler_43",
+    "d3dx9_43",
+    "mdx"
+   ],
+   "source": "umu"
+  },
+  "201480": {
+   "name": "Serious Sam: The Random Encounter",
+   "winetricks": [
+    "dmband",
+    "dmime",
+    "dmloader",
+    "dmsynth",
+    "dmstyle",
+    "dmusic",
+    "dsound",
+    "dswave",
+    "directplay"
+   ],
+   "dllOverrides": {
+    "streamci": "native"
+   },
+   "source": "umu"
+  },
+  "205650": {
+   "name": "The Testament of Sherlock Holmes",
+   "winetricks": [
+    "physx"
+   ],
+   "source": "umu"
+  },
+  "206480": {
+   "name": "Game fix Dungeons & Dragons Online",
+   "dllOverrides": {
+    "libglesv2": ""
+   },
+   "source": "umu"
+  },
+  "206500": {
+   "name": "AirMech Strike",
+   "arguments": [
+    "/dx11"
+   ],
+   "source": "umu"
+  },
+  "208650": {
+   "name": "Batman Arkham Knight",
+   "winetricks": [
+    "physx"
+   ],
+   "source": "umu"
+  },
+  "212500": {
+   "name": "Game fix The Lord of the Rings Online",
+   "dllOverrides": {
+    "libglesv2": ""
+   },
+   "source": "umu"
+  },
+  "213330": {
+   "name": "LEGO Batman 2: DC Super Heroes",
+   "winetricks": [
+    "d3dx9_41"
+   ],
+   "source": "umu"
+  },
+  "214510": {
+   "name": "LEGO The Lord of the Rings",
+   "winetricks": [
+    "d3dx9_41"
+   ],
+   "source": "umu"
+  },
+  "214950": {
+   "name": "Total War: Rome II",
+   "winetricks": [
+    "d3dcompiler_42",
+    "directplay"
+   ],
+   "source": "umu"
+  },
+  "215280": {
+   "name": "Secret World Legends",
+   "winetricks": [
+    "d3dx9_43",
+    "d3dx11_43",
+    "d3dcompiler_43"
+   ],
+   "source": "umu"
+  },
+  "219990": {
+   "name": "Grim Dawn",
+   "winetricks": [
+    "d3dcompiler_43"
+   ],
+   "source": "umu"
+  },
+  "223750": {
+   "name": "Fixes for DCS World Steam Edition",
+   "winetricks": [
+    "d3dx11_43",
+    "d3dcompiler_43",
+    "d3dcompiler_47"
+   ],
+   "dllOverrides": {
+    "wbemprox": "native"
+   },
+   "source": "umu"
+  },
+  "224960": {
+   "name": "Tomb Raider I",
+   "arguments": [
+    "-conf",
+    "glide_fix.conf"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "225640": {
+   "name": "Sacred 2 Gold",
+   "winetricks": [
+    "physx"
+   ],
+   "source": "umu"
+  },
+  "227320": {
+   "name": "You Need a Budget 4",
+   "winetricks": [
+    "corefonts"
+   ],
+   "source": "umu"
+  },
+  "228260": {
+   "name": "Fallen Enchantress: Legendary Heroes",
+   "winetricks": [
+    "usp10",
+    "vcrun2008",
+    "vcrun2015",
+    "d3dx9",
+    "d3dcompiler_43",
+    "d3dcompiler_47"
+   ],
+   "dllOverrides": {
+    "sdnxlfonts": ""
+   },
+   "source": "umu"
+  },
+  "231430": {
+   "name": "Company Of Heroes 2",
+   "winetricks": [
+    "ucrtbase2019"
+   ],
+   "source": "umu"
+  },
+  "231990": {
+   "name": "Spider-Man: Shattered Dimensions",
+   "winetricks": [
+    "d3dx9_43",
+    "xact"
+   ],
+   "source": "umu"
+  },
+  "240600": {
+   "name": "MotorGP",
+   "winetricks": [
+    "d3dcompiler_43",
+    "d3dx9_43"
+   ],
+   "source": "umu"
+  },
+  "241990": {
+   "name": "Sorcerer King",
+   "winetricks": [
+    "usp10",
+    "vcrun2008",
+    "vcrun2015",
+    "d3dx9",
+    "d3dcompiler_43",
+    "d3dcompiler_47"
+   ],
+   "dllOverrides": {
+    "sdnxlfonts": ""
+   },
+   "source": "umu"
+  },
+  "244210": {
+   "name": "Assetto Corsa",
+   "winetricks": [
+    "dotnet48",
+    "d3dx11_43",
+    "d3dcompiler_47"
+   ],
+   "dllOverrides": {
+    "dwrite": "native,builtin"
+   },
+   "windowsVersion": "win10",
+   "partial": true,
+   "source": "umu"
+  },
+  "244850": {
+   "name": "Space Engineers",
+   "winetricks": [
+    "xaudio29",
+    "dotnet48",
+    "vcrun2019"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "245050": {
+   "name": "SpellForce",
+   "winetricks": [
+    "directplay"
+   ],
+   "source": "umu"
+  },
+  "245450": {
+   "name": "Wizardry 8",
+   "winetricks": [
+    "mfc42"
+   ],
+   "source": "umu"
+  },
+  "251570": {
+   "name": "7 Days to Die",
+   "graphics": "dxmt",
+   "note": "Tested 2026-10-24 on M5: ~63 FPS with DXMT; with DXVK the game sees only 128 MB VRAM and drops to low textures and ~30 FPS. Steam's no-EAC launch option is picked automatically.",
+   "source": "mac"
+  },
+  "252430": {
+   "name": "Dusty Revenge: Co-Op Edition",
+   "winetricks": [
+    "vcrun2010",
+    "dsound"
+   ],
+   "source": "umu"
+  },
+  "252950": {
+   "name": "Rocket League",
+   "winetricks": [
+    "eossdk"
+   ],
+   "source": "umu"
+  },
+  "253430": {
+   "name": "CastleMiner Z",
+   "winetricks": [
+    "xna40"
+   ],
+   "source": "umu"
+  },
+  "254840": {
+   "name": "Ground Control 2",
+   "winetricks": [
+    "verdana"
+   ],
+   "source": "umu"
+  },
+  "256330": {
+   "name": "WRC 4",
+   "winetricks": [
+    "d3dx9_42",
+    "d3dx9_43",
+    "xact"
+   ],
+   "source": "umu"
+  },
+  "261510": {
+   "name": "Tesla Effect",
+   "winetricks": [
+    "corefonts"
+   ],
+   "source": "umu"
+  },
+  "261640": {
+   "name": "Borderlands: The Pre-Sequel",
+   "arguments": [
+    "-NoSplash"
+   ],
+   "winetricks": [
+    "physx"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "268050": {
+   "name": "The Evil Within(268050)",
+   "windowsVersion": "win7",
+   "partial": true,
+   "source": "umu"
+  },
+  "269330": {
+   "name": "Chronology",
+   "winetricks": [
+    "dotnet20",
+    "dotnet40"
+   ],
+   "source": "umu"
+  },
+  "281280": {
+   "name": "Mashed(281280)",
+   "windowsVersion": "winxp",
+   "arguments": [
+    "-VS0",
+    "-CS0"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "283310": {
+   "name": "Soulbringer",
+   "winetricks": [
+    "mfc42"
+   ],
+   "source": "umu"
+  },
+  "284160": {
+   "name": "BeamNG.drive",
+   "winetricks": [
+    "d3dx9_43",
+    "d3dcompiler_43",
+    "d3dx11_43",
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "287310": {
+   "name": "Re-Volt (287310)",
+   "dllOverrides": {
+    "ddraw": "native",
+    "dinput": "native"
+   },
+   "source": "umu"
+  },
+  "287450": {
+   "name": "Rise of Nations: Extended Edition\nSource: https://github.com/simons-public/protonfixes/issues/24#issue-372384148",
+   "winetricks": [
+    "crypt32",
+    "directmusic",
+    "directplay"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "289130": {
+   "name": "Endless Legend",
+   "arguments": [
+    "-useembedded"
+   ],
+   "source": "umu"
+  },
+  "292820": {
+   "name": "Pajama Sam 4: Life is Rough When you Lose your Stuff!",
+   "registry": [
+    {
+     "key": "HKLM\\System\\MountedDevices",
+     "name": "\\??\\Volume{00000000-0000-0000-0000-000000000052}",
+     "type": "REG_BINARY",
+     "value": "2f746d7000"
+    },
+    {
+     "key": "HKLM\\System\\MountedDevices",
+     "name": "\\DosDevices\\R:",
+     "type": "REG_BINARY",
+     "value": "5c005c002e005c0064003a000000"
+    }
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "294700": {
+   "name": "Putt-Putt: Pep's Birthday Surprise",
+   "registry": [
+    {
+     "key": "HKLM\\System\\MountedDevices",
+     "name": "\\??\\Volume{00000000-0000-0000-0000-000000000052}",
+     "type": "REG_BINARY",
+     "value": "2f746d7000"
+    },
+    {
+     "key": "HKLM\\System\\MountedDevices",
+     "name": "\\DosDevices\\R:",
+     "type": "REG_BINARY",
+     "value": "5c005c002e005c0064003a000000"
+    }
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "298030": {
+   "name": "Total Annihilation",
+   "winetricks": [
+    "directplay"
+   ],
+   "source": "umu"
+  },
+  "298110": {
+   "name": "FarCry 4",
+   "winetricks": [
+    "d3dcompiler_43",
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "307780": {
+   "name": "Mortal Kombat X",
+   "winetricks": [
+    "xact_x64"
+   ],
+   "source": "umu"
+  },
+  "311240": {
+   "name": "Zero Escape: Zero Time Dilemma",
+   "dllOverrides": {
+    "libglesv2": ""
+   },
+   "source": "umu"
+  },
+  "312450": {
+   "name": "Order of Battle: World War II\nStill missing intro video codecs",
+   "winetricks": [
+    "corefonts"
+   ],
+   "source": "umu"
+  },
+  "312670": {
+   "name": "Strange Brigade",
+   "arguments": [
+    "-skipdrivercheck",
+    "-noHDR"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "312780": {
+   "name": "Way of the Samurai 4",
+   "winetricks": [
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "321040": {
+   "name": "Dirt 3 Complete Edition",
+   "winetricks": [
+    "openal"
+   ],
+   "source": "umu"
+  },
+  "329380": {
+   "name": "Game fix Stealth Inc 2: A Game of Clones",
+   "winetricks": [
+    "dsound"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "356500": {
+   "name": "STAR WARS Galactic Battlegrounds Saga",
+   "winetricks": [
+    "icodecs",
+    "directplay"
+   ],
+   "source": "umu"
+  },
+  "366250": {
+   "name": "Metal Slug",
+   "winetricks": [
+    "d3dcompiler_46"
+   ],
+   "source": "umu"
+  },
+  "368500": {
+   "name": "Assassin's Creed: Syndicate",
+   "dllOverrides": {
+    "nvapi": "",
+    "nvapi64": "",
+    "nvcuda": "",
+    "nvcuvid": ""
+   },
+   "source": "umu"
+  },
+  "372000": {
+   "name": "Game fix Tree Of Savior",
+   "winetricks": [
+    "d3dcompiler_47",
+    "vcrun2013",
+    "vcrun2022"
+   ],
+   "source": "umu"
+  },
+  "379720": {
+   "name": "Doom 2016",
+   "arguments": [
+    "+r_renderAPI",
+    "1"
+   ],
+   "winetricks": [
+    "mfc140"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "390710": {
+   "name": "SUGURI 2",
+   "winetricks": [
+    "d3dxof"
+   ],
+   "source": "umu"
+  },
+  "397540": {
+   "name": "Borderlands 3",
+   "winetricks": [
+    "d3dcompiler_47",
+    "vcrun2022"
+   ],
+   "source": "umu"
+  },
+  "410900": {
+   "name": "Forts",
+   "winetricks": [
+    "ole32"
+   ],
+   "source": "umu"
+  },
+  "424840": {
+   "name": "Little Nightmares",
+   "arguments": [
+    "-onethread"
+   ],
+   "source": "umu"
+  },
+  "447040": {
+   "name": "Watch_Dogs 2",
+   "arguments": [
+    "-nosplash"
+   ],
+   "source": "umu"
+  },
+  "465280": {
+   "name": "Yesterday Origins",
+   "windowsVersion": "win7",
+   "source": "umu"
+  },
+  "465840": {
+   "name": "The Last Blade",
+   "winetricks": [
+    "d3dcompiler_46"
+   ],
+   "source": "umu"
+  },
+  "495420": {
+   "name": "State of Decay 2",
+   "winetricks": [
+    "d3dcompiler_47"
+   ],
+   "windowsVersion": "win7",
+   "source": "umu"
+  },
+  "497360": {
+   "name": "Gabriel Knight 3: Blood of the Sacred, Blood of the Damned\nFix for Insert CD\nFixes graphical issues\nWidescreen supported (16:9/21:9, 32:9 not tested)",
+   "registry": [
+    {
+     "key": "HKCU\\Software\\Sierra On-Line"
+    },
+    {
+     "key": "HKCU\\Software\\Sierra On-Line\\Gabriel Knight 3"
+    },
+    {
+     "key": "HKCU\\Software\\Sierra On-Line\\Gabriel Knight 3\\App",
+     "name": "Run Count",
+     "type": "REG_DWORD",
+     "value": "0x1"
+    },
+    {
+     "key": "HKCU\\Software\\Sierra On-Line\\Gabriel Knight 3\\Engine",
+     "name": "Full Screen",
+     "type": "REG_DWORD",
+     "value": "0x1"
+    },
+    {
+     "key": "HKCU\\Software\\Sierra On-Line\\Gabriel Knight 3\\Engine",
+     "name": "Monitor",
+     "type": "REG_DWORD",
+     "value": "0x0"
+    },
+    {
+     "key": "HKCU\\Software\\Sierra On-Line\\Gabriel Knight 3\\Engine",
+     "name": "Rasterizer",
+     "type": "REG_SZ",
+     "value": "detect"
+    },
+    {
+     "key": "HKCU\\Software\\Sierra On-Line\\Gabriel Knight 3\\Engine",
+     "name": "Rasterizer GUID",
+     "type": "REG_SZ",
+     "value": "{00000000-0000-0000-0000-000000000000}"
+    },
+    {
+     "key": "HKCU\\Software\\Sierra On-Line\\Gabriel Knight 3\\Engine",
+     "name": "Screen Height",
+     "type": "REG_DWORD",
+     "value": "0x300"
+    },
+    {
+     "key": "HKCU\\Software\\Sierra On-Line\\Gabriel Knight 3\\Engine\\Hardware",
+     "name": "Gamma",
+     "type": "REG_SZ",
+     "value": "1.5"
+    },
+    {
+     "key": "HKCU\\Software\\Sierra On-Line\\Gabriel Knight 3\\Engine\\Hardware",
+     "name": "Surface Quality",
+     "type": "REG_SZ",
+     "value": "High"
+    }
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "506510": {
+   "name": "Shadows of Adam",
+   "dllOverrides": {
+    "dcomp": ""
+   },
+   "source": "umu"
+  },
+  "518790": {
+   "name": "The Hunter: Call of the Wild",
+   "dllOverrides": {
+    "nvapi": "",
+    "nvapi64": "",
+    "nvcuda": "",
+    "nvcuvid": ""
+   },
+   "source": "umu"
+  },
+  "559620": {
+   "name": "Outlaws + A Handful of Missions",
+   "dllOverrides": {
+    "ddraw": "native,builtin",
+    "winmm": "native,builtin"
+   },
+   "source": "umu"
+  },
+  "570940": {
+   "name": "Game fix Dark Souls Remastered",
+   "winetricks": [
+    "vcrun2017"
+   ],
+   "source": "umu"
+  },
+  "593600": {
+   "name": "PixARK",
+   "dllOverrides": {
+    "mprapi": "native"
+   },
+   "source": "umu"
+  },
+  "601510": {
+   "name": "Yu-Gi-Oh Duel Links needs vcrun2019",
+   "winetricks": [
+    "vcrun2019"
+   ],
+   "source": "umu"
+  },
+  "627270": {
+   "name": "Game fix Injustice 2",
+   "winetricks": [
+    "vcrun2019"
+   ],
+   "source": "umu"
+  },
+  "633230": {
+   "name": "Naruto To Boruto",
+   "arguments": [
+    "-eac-nop-loaded"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "644930": {
+   "name": "They Are Billions",
+   "winetricks": [
+    "gdiplus"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "658150": {
+   "name": "Skeleton Boomerang",
+   "winetricks": [
+    "d3dcompiler_43"
+   ],
+   "source": "umu"
+  },
+  "678950": {
+   "name": "DRAGON BALL FighterZ",
+   "arguments": [
+    "-eac-nop-loaded"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "730830": {
+   "name": "Escape From Monkey Island\ndgvoodoo2 to force anti-aliasing and higher resolution",
+   "winetricks": [
+    "dgvoodoo2"
+   ],
+   "source": "umu"
+  },
+  "750920": {
+   "name": "Shadow of the Tomb Raider",
+   "winetricks": [
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "773370": {
+   "name": "Exo One",
+   "winetricks": [
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "782330": {
+   "name": "DOOM Eternal",
+   "arguments": [
+    "+com_skipSignInManager",
+    "1"
+   ],
+   "source": "umu"
+  },
+  "813780": {
+   "name": "Game fix Age of Empires II: DE",
+   "winetricks": [
+    "vcrun2019"
+   ],
+   "source": "umu"
+  },
+  "816020": {
+   "name": "JUMP FORCE",
+   "arguments": [
+    "-eac-nop-loaded"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "893180": {
+   "name": "Game fix Catherine Classic",
+   "winetricks": [
+    "d3dcompiler_43",
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "895870": {
+   "name": "Project Wingman",
+   "winetricks": [
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "906510": {
+   "name": "Conception PLUS: Maidens of the Twelve Stars",
+   "winetricks": [
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "910830": {
+   "name": "Rebel Galaxy Outlaw",
+   "winetricks": [
+    "mfc42"
+   ],
+   "source": "umu"
+  },
+  "955050": {
+   "name": "Bright Memory",
+   "dllOverrides": {
+    "nvapi": "",
+    "nvapi64": "",
+    "nvcuda": "",
+    "nvcuvid": ""
+   },
+   "source": "umu"
+  },
+  "963930": {
+   "name": "Contractors VR",
+   "winetricks": [
+    "vcrun2022"
+   ],
+   "source": "umu"
+  },
+  "968370": {
+   "name": "The Blind Prophet\ngarbled fonts & No cursive font (Segoe Script)",
+   "dllOverrides": {
+    "d3d9": ""
+   },
+   "winetricks": [
+    "segoe_script"
+   ],
+   "source": "umu"
+  },
+  "976310": {
+   "name": "Game fix Mortal Kombat 11",
+   "winetricks": [
+    "vcrun2019"
+   ],
+   "source": "umu"
+  },
+  "976730": {
+   "name": "Game fix Halo:MCC",
+   "winetricks": [
+    "vcrun2019"
+   ],
+   "source": "umu"
+  },
+  "997070": {
+   "name": "Game fix Marvel's Avengers",
+   "winetricks": [
+    "vcrun2019",
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "1017900": {
+   "name": "Age of Empires: DE",
+   "arguments": [
+    "-NoStartup"
+   ],
+   "source": "umu"
+  },
+  "1030830": {
+   "name": "Mafia II Definitive Edition",
+   "winetricks": [
+    "physx"
+   ],
+   "source": "umu"
+  },
+  "1062040": {
+   "name": "Dragon Star Varnir",
+   "dllOverrides": {
+    "xactengine3_7": "native"
+   },
+   "source": "umu"
+  },
+  "1112400": {
+   "name": "Project Torque",
+   "winetricks": [
+    "dotnet35sp1",
+    "dotnet40"
+   ],
+   "windowsVersion": "win10",
+   "partial": true,
+   "source": "umu"
+  },
+  "1144400": {
+   "name": "Senren*Banka",
+   "arguments": [
+    "-vomstyle=layer"
+   ],
+   "source": "umu"
+  },
+  "1151640": {
+   "name": "Horizon Zero Dawn",
+   "winetricks": [
+    "vcrun2019"
+   ],
+   "source": "umu"
+  },
+  "1174180": {
+   "name": "Red Dead Redemption 2",
+   "arguments": [
+    "-fullscreen",
+    "-vulkan"
+   ],
+   "source": "umu"
+  },
+  "1175730": {
+   "name": "Game fix Tree Of Savior",
+   "winetricks": [
+    "d3dcompiler_47",
+    "vcrun2013",
+    "vcrun2022"
+   ],
+   "source": "umu"
+  },
+  "1239520": {
+   "name": "Madden NFL 21 needs vcrun2019 for online mode to work",
+   "winetricks": [
+    "vcrun2019"
+   ],
+   "source": "umu"
+  },
+  "1240440": {
+   "name": "Halo Infinite needs vcrun2019",
+   "winetricks": [
+    "vcrun2019"
+   ],
+   "source": "umu"
+  },
+  "1250410": {
+   "name": "Flight Simulator 2020",
+   "arguments": [
+    "-FastLaunch"
+   ],
+   "source": "umu"
+  },
+  "1259970": {
+   "name": "Pes 2021",
+   "winetricks": [
+    "vcrun2019",
+    "allfonts",
+    "dotnet462"
+   ],
+   "source": "umu"
+  },
+  "1277510": {
+   "name": "Re:ZERO -Starting Life in Another World- The Prophecy of the Throne",
+   "winetricks": [
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "1284410": {
+   "name": "GWENT: The Witcher Card Game",
+   "winetricks": [
+    "mfc140"
+   ],
+   "source": "umu"
+  },
+  "1286880": {
+   "name": "Ship Graveyard Simulator",
+   "dllOverrides": {
+    "vulkan-1": "builtin"
+   },
+   "source": "umu"
+  },
+  "1293830": {
+   "name": "Forza Horizon 4",
+   "winetricks": [
+    "vcrun2019"
+   ],
+   "source": "umu"
+  },
+  "1346400": {
+   "name": "Battle Engine Aquila",
+   "winetricks": [
+    "dsound"
+   ],
+   "source": "umu"
+  },
+  "1361210": {
+   "name": "Warhammer 40,000: Darktide",
+   "arguments": [
+    "-eac-untrusted",
+    "--bundle-dir",
+    "../bundle",
+    "--ini",
+    "settings"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "1361510": {
+   "name": "Teenage Mutant Ninja Turtles Shredders Revenge",
+   "winetricks": [
+    "vcrun2017"
+   ],
+   "source": "umu"
+  },
+  "1392960": {
+   "name": "STORY OF SEASONS: Pioneers of Olive Town",
+   "winetricks": [
+    "d3dcompiler_43",
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "1434950": {
+   "name": "Game fix HighFleet",
+   "winetricks": [
+    "d3dx11_43",
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "1449110": {
+   "name": "The Outer Worlds 2",
+   "winetricks": [
+    "vcrun2022"
+   ],
+   "source": "umu"
+  },
+  "1467450": {
+   "name": "Gothic 1 Classic\nGame fix for Gothic II: Gold Classic\nGame fix for The Chronicles Of Myrtana: Archolos (mod of Gothic II: Gold Classic)",
+   "winetricks": [
+    "directmusic"
+   ],
+   "dllOverrides": {
+    "*dsound": "builtin",
+    "ddraw": "native,builtin",
+    "dinput": "native,builtin"
+   },
+   "partial": true,
+   "source": "umu"
+  },
+  "1500540": {
+   "name": "Hardwar",
+   "dllOverrides": {
+    "dinput": "native,builtin",
+    "winmm": "native,builtin"
+   },
+   "source": "umu"
+  },
+  "1532190": {
+   "name": "Halo CE mod tools",
+   "winetricks": [
+    "vcrun2019",
+    "d3dcompiler_47",
+    "msxml3"
+   ],
+   "source": "umu"
+  },
+  "1544020": {
+   "name": "The Callisto Protocol",
+   "winetricks": [
+    "vcrun2022"
+   ],
+   "source": "umu"
+  },
+  "1557480": {
+   "name": "Project MIKHAIL: A Muv-Luv War Story",
+   "winetricks": [
+    "d3dcompiler_47"
+   ],
+   "source": "umu"
+  },
+  "1613450": {
+   "name": "Halo 2 mod tools",
+   "winetricks": [
+    "vcrun2019",
+    "d3dcompiler_47",
+    "msxml3"
+   ],
+   "source": "umu"
+  },
+  "1662840": {
+   "name": "Parquet",
+   "arguments": [
+    "-vomstyle=layer"
+   ],
+   "source": "umu"
+  },
+  "1664350": {
+   "name": "Ship Graveyard Simulator Prologue",
+   "dllOverrides": {
+    "vulkan-1": "builtin"
+   },
+   "source": "umu"
+  },
+  "1677280": {
+   "name": "Company Of Heroes 3",
+   "winetricks": [
+    "ucrtbase2019"
+   ],
+   "source": "umu"
+  },
+  "1695791": {
+   "name": "Halo 3 mod tools",
+   "winetricks": [
+    "vcrun2019",
+    "d3dcompiler_47",
+    "msxml3"
+   ],
+   "source": "umu"
+  },
+  "1695793": {
+   "name": "the Halo Reach mod tools Foundation gamemode.\nStandalone and Sapien seem to work just fine without d3dcompiler_47 and msxml3, although might be required at some deeper level. I just playtested it.\n- Oro, @orowith2os",
+   "winetricks": [
+    "dotnet35",
+    "dotnet45"
+   ],
+   "source": "umu"
+  },
+  "1695794": {
+   "name": "Game fix Halo 3: ODST mod tools",
+   "winetricks": [
+    "vcrun2019",
+    "d3dcompiler_47",
+    "msxml3"
+   ],
+   "source": "umu"
+  },
+  "1711950": {
+   "name": "GWENT: Rogue Mage",
+   "winetricks": [
+    "mfc140"
+   ],
+   "source": "umu"
+  },
+  "1715130": {
+   "name": "Crysis Remastered",
+   "winetricks": [
+    "vcrun2019",
+    "d3dcompiler_43"
+   ],
+   "source": "umu"
+  },
+  "1876280": {
+   "name": "PAIcom",
+   "winetricks": [
+    "dotnet48"
+   ],
+   "source": "umu"
+  },
+  "2111630": {
+   "name": "JR East Train Simulator",
+   "winetricks": [
+    "d3dcompiler_43",
+    "vcrun2008"
+   ],
+   "source": "umu"
+  },
+  "2129370": {
+   "name": "Fix for S\\&box Editor",
+   "winetricks": [
+    "dotnetdesktop10"
+   ],
+   "source": "umu"
+  },
+  "2135150": {
+   "name": "Elin",
+   "dllOverrides": {
+    "winhttp": "native,builtin"
+   },
+   "source": "umu"
+  },
+  "2699660": {
+   "name": "PowerWash Adventure",
+   "winetricks": [
+    "vcrun2022"
+   ],
+   "source": "umu"
+  },
+  "3513350": {
+   "name": "Wuthering Waves - ID 3513350\nhttps://www.protondb.com/app/3513350",
+   "winetricks": [
+    "sourcehansans",
+    "fakechinese",
+    "corefonts"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "3556750": {
+   "name": "Warhammer 40,000: Dawn of War - Definitive Edition",
+   "winetricks": [
+    "ucrtbase2019"
+   ],
+   "source": "umu"
+  },
+  "3669060": {
+   "name": "Blade & Soul NEO",
+   "winetricks": [
+    "dotnet48"
+   ],
+   "source": "umu"
+  },
+  "3681810": {
+   "name": "Blue Protocol: Star Resonance",
+   "windowsVersion": "win7",
+   "source": "umu"
+  },
+  "3907790": {
+   "name": "OxyRail",
+   "graphics": "dxmt",
+   "note": "Tested 2026-10-24 on M5: ~75 FPS with DXMT vs 45-50 with DXVK on Extreme.",
+   "source": "mac"
+  },
+  "3932890": {
+   "name": "Escape From Tarkov\nInstall BattlEye Service - does not permit online play",
+   "winetricks": [
+    "dotnet48"
+   ],
+   "arguments": [
+    "--disable-software-rasterizer"
+   ],
+   "partial": true,
+   "source": "umu"
+  },
+  "3950020": {
+   "name": "Duet Night Abyss",
+   "dllOverrides": {
+    "dcomp": ""
+   },
+   "partial": true,
+   "source": "umu"
+  }
+ },
+ "generated": "2026-10-24T19:45:47Z"
+}

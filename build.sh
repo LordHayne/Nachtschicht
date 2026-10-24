@@ -24,6 +24,8 @@ cp "$BIN_DIR/$APP" "$OUT/Contents/MacOS/$APP"
 cp Resources/Info.plist "$OUT/Contents/Info.plist"
 # Offline fallback for the component list; the app prefers the online copy once it's published.
 cp components/manifest.json "$OUT/Contents/Resources/manifest.json"
+# Same for the per-game fixes (scripts/build-profiles.py).
+cp profiles/profiles.json "$OUT/Contents/Resources/profiles.json"
 
 # Steam's browser needs this wrapper under Wine (see wrapper/steamwebhelper-wrapper.c).
 # Rebuilt when mingw-w64 is installed, otherwise the checked-in build is used.

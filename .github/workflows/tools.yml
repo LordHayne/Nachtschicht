@@ -1,0 +1,50 @@
+name: Build tools package
+
+# cabextract for macOS (arm64 + x86_64): winetricks needs it to unpack Microsoft's runtime
+# installers (vcrun, d3dcompiler, xact, …) for the per-game profiles. Published as a release that
+# components/manifest.json points to (id "cabextract"). cabextract is GPL-3.0-or-later; the
+# release links its source.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tools.yml"
+
+permissions:
+  contents: write
+
+env:
+  CABEXTRACT_VERSION: "1.11"
+
+jobs:
+  cabextract:
+    runs-on: macos-15
+    steps:
+      - name: Build (universal)
+        run: |
+          curl -fsSLO "https://www.cabextract.org.uk/cabextract-$CABEXTRACT_VERSION.tar.gz"
+          tar -xzf "cabextract-$CABEXTRACT_VERSION.tar.gz"
+          for arch in arm64 x86_64; do
+            cp -R "cabextract-$CABEXTRACT_VERSION" "build-$arch"
+            (cd "build-$arch" && ./configure --host="$arch-apple-darwin" \
+               CC="clang -arch $arch" CFLAGS="-O2 -mmacosx-version-min=11.0" >/dev/null && make -j4 >/dev/null)
+          done
+          mkdir -p tools/cabextract/bin
+          lipo -create build-arm64/cabextract build-x86_64/cabextract -output tools/cabextract/bin/cabextract
+          cp "cabextract-$CABEXTRACT_VERSION/COPYING" tools/cabextract/COPYING
+          lipo -info tools/cabextract/bin/cabextract
+          tools/cabextract/bin/cabextract --version
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$CABEXTRACT_VERSION-$GITHUB_RUN_NUMBER"
+          name="nachtschicht-cabextract-$version.tar.gz"
+          tar -czf "$name" -C tools cabextract
+          gh release create "cabextract-$version" "$name" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "cabextract $version" \
+            --notes "cabextract $CABEXTRACT_VERSION for macOS (arm64 + x86_64), used by winetricks for Nachtschicht's per-game profiles. Licence: GPL-3.0-or-later. Source: https://www.cabextract.org.uk/cabextract-$CABEXTRACT_VERSION.tar.gz (unmodified), build steps in .github/workflows/tools.yml."

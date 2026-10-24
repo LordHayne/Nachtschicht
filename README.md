@@ -52,6 +52,10 @@ Nachtschicht is available in English and German. Pick the language under Setting
 - **Performance HUD:** sets `MTL_HUD_ENABLED=1` so you see FPS and frame times right in the game. Handy for comparing D3DMetal and DXVK in CrossOver.
 - **Launch options:** passed through to the game, e.g. `-dx11`.
 
+## Game profiles
+
+Known fixes are applied automatically when a game starts in Nachtschicht's own Steam: graphics layer, launch arguments, DLL overrides, Windows version, registry entries and runtimes installed with winetricks. They come from `profiles/profiles.json`, which a nightly workflow (`.github/workflows/profiles.yml`) builds from [umu-protonfixes](https://github.com/Open-Wine-Components/umu-protonfixes) (BSD-2-Clause) plus our own Mac-tested profiles in `profiles/mac.json`, which win over upstream. `scripts/build-profiles.py` reads the upstream fixes as syntax trees without running them and leaves out what only matters on Linux or would affect every game in the shared prefix. To add a Mac profile, edit `profiles/mac.json`.
+
 ## Whisky or your own Wine
 
 In Settings, enter the bottles folder (e.g. `~/Library/Containers/com.isaacmarovitz.Whisky/Bottles`) and the path to the `wine` binary. Without CrossOver, the bottle is passed as `WINEPREFIX`.

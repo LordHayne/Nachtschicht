@@ -40,9 +40,13 @@ curl -fsSL https://raw.githubusercontent.com/LordHayne/Nightforge/main/scripts/i
 
 That installs the newest version into Applications and opens it. Run the same line again to update.
 
-Prefer clicking? Download the DMG from the [latest release](https://github.com/LordHayne/Nightforge/releases/latest) and drag Nightforge into Applications. Nightforge is free and not registered with Apple, so on first launch macOS says it can't verify it: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. The Terminal line skips this step.
+Prefer clicking? Download the DMG from the [latest release](https://github.com/LordHayne/Nightforge/releases/latest), open it and drag Nightforge onto the Applications folder. Nightforge is free and not registered with Apple, so on first launch macOS says it can't verify it: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. The Terminal line skips this step.
 
 ## A look inside
+
+<p align="center">
+  <img src="docs/images/dmg.jpg" alt="The DMG window: drag Nightforge onto Applications" width="560">
+</p>
 
 <p align="center">
   <img src="docs/images/library.jpg" alt="The whole library: installed games first, then everything you own" width="900">

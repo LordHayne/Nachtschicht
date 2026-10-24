@@ -36,10 +36,10 @@ jobs:
           app=build/Nightforge.app
           codesign --verify --deep "$app"
           ditto -c -k --sequesterRsrc --keepParent "$app" "Nightforge-$VERSION.zip"
-          mkdir dmg
-          cp -R "$app" dmg/
-          ln -s /Applications dmg/Applications
-          hdiutil create -volname Nightforge -srcfolder dmg -ov -format UDZO "Nightforge-$VERSION.dmg"
+          # The drag-to-Applications window: background and icon positions in scripts/dmg-settings.py.
+          python3 -m pip install --quiet --break-system-packages dmgbuild==1.6.5
+          python3 -m dmgbuild -s scripts/dmg-settings.py -D app="$app" Nightforge "Nightforge-$VERSION.dmg"
+          hdiutil verify "Nightforge-$VERSION.dmg"
           shasum -a 256 Nightforge-*
 
       - name: Keep dry-run files

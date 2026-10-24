@@ -4,13 +4,21 @@ A free, lean game launcher for Windows games on the Mac. Press "Connect Steam" o
 
 Nachtschicht doesn't stay running while you play: by default the launcher quits 2.5 seconds after launch. No login, no telemetry, no background service.
 
-## Requirements
+## Install
 
-- Mac with Apple Silicon, macOS 14 or later
+You need a Mac with Apple silicon (M1 or newer) and macOS 14 or later. Open Terminal and paste:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/LordHayne/Nachtschicht/main/scripts/install.sh | bash
+```
+
+That installs the newest version into Applications and opens it; run it again to update. Everything else (game engine, Steam, Rosetta if missing) is set up from inside the app.
+
+Prefer clicking? Download the DMG from the [latest release](https://github.com/LordHayne/Nachtschicht/releases/latest) and drag Nachtschicht into Applications. Nachtschicht is free and not registered with Apple, so on first launch macOS says it can't verify it: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. The Terminal line above skips this step.
+
+## Build from source
+
 - Xcode or the Command Line Tools (`xcode-select --install`). The Command Line Tools lack SwiftUI's macro plugins for the macOS 27 SDK, so `build.sh` then builds against the macOS 26.5 SDK they also include.
-- Nothing else: the engine, Steam and Rosetta (if missing) are set up from inside the app. CrossOver is optional.
-
-## Build and install
 
 ```bash
 cd Nachtschicht
@@ -19,6 +27,8 @@ chmod +x build.sh
 ```
 
 The app ends up in `~/Applications/Nachtschicht.app` and starts right away. Without `--install` it only lives in `build/`.
+
+To publish a release, push a tag such as `v0.1.0`: `.github/workflows/release.yml` builds the app and attaches the zip (used by the installer) and the DMG.
 
 ## Controls
 

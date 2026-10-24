@@ -19,6 +19,12 @@ enum Prefs {
         static let bottlesRoot = "bottlesRoot"
         static let runnerPath = "runnerPath"
         static let afterLaunch = "afterLaunch"
+        static let performanceHUD = "performanceHUD"
+    }
+
+    /// FPS display in games run by Nachtschicht's own Steam (Metal HUD for DXMT, DXVK's for DXVK).
+    static var performanceHUD: Bool {
+        UserDefaults.standard.bool(forKey: Keys.performanceHUD)
     }
 
     static var bottlesRoot: URL {
@@ -204,7 +210,9 @@ enum Launcher {
             Engine.writeGameConfig(installDir: game.installDir, options: options)
             Engine.applyGraphics(options.graphics, installDir: game.installDir, wine: runner)
         }
-        if options.metalHUD {
+        // CrossOver bottles: the game inherits this process's environment. Nachtschicht's own
+        // games get the HUD from the background Steam instead (Prefs.performanceHUD).
+        if options.metalHUD && !game.bottle.isBuiltIn {
             environment["MTL_HUD_ENABLED"] = "1"
         }
 

@@ -7,8 +7,9 @@ enum Engine {
     /// Nachtschicht's own DXMT build for Wine 11 (with winemac.so); plain upstream DXMT as fallback.
     static let graphicsID = "graphics"
     static let upstreamGraphicsID = "dxmt"
-    /// What "Automatic" means until DXMT has proven itself across games.
-    static let defaultGraphics = GraphicsLayer.dxvk
+    /// What "Automatic" means: DXMT ran OxyRail better than DXVK (fewer layers, correct video
+    /// memory); games that don't work with it can be switched to DXVK in their options.
+    static let defaultGraphics = GraphicsLayer.dxmt
 
     static func graphicsComponent(in manifest: ComponentManifest) -> Component? {
         manifest.component(graphicsID) ?? manifest.component(upstreamGraphicsID)
@@ -28,10 +29,21 @@ enum Engine {
     /// Settings games inherit from the background Steam. Bump `steamConfigVersion` whenever this
     /// or `steamDLLOverrides` changes, so a running Steam gets restarted with them.
     static let steamConfigVersion = 5
-    static let gameEnvironment = [
-        // Compile shaders in the background instead of stalling the frame that first needs them.
-        "DXVK_ASYNC": "1",
-    ]
+    static var gameEnvironment: [String: String] {
+        var env = [
+            // Compile shaders in the background instead of stalling the frame that first needs them.
+            "DXVK_ASYNC": "1",
+        ]
+        // Apple's Metal HUD: DXMT draws with Metal directly, so this is its FPS display. Only an
+        // environment variable turns it on, and games get theirs from Steam, hence app-wide.
+        if Prefs.performanceHUD { env["MTL_HUD_ENABLED"] = "1" }
+        return env
+    }
+
+    /// Changes whenever the background Steam has to restart to hand games different settings.
+    static var steamConfigSignature: String {
+        "\(steamConfigVersion)-hud\(Prefs.performanceHUD ? 1 : 0)"
+    }
 
     /// Wine's builtin crypto avoids TLS failures in Steam's browser; the overlay DLL deadlocks games.
     /// Games inherit these from Steam, so DirectX goes to DXVK's DLLs in the prefix (native first).
@@ -371,15 +383,15 @@ enum Engine {
     /// Starts Steam hidden unless it's already running. Downloads and game launches go through it.
     /// A Steam started with older game settings is restarted, unless `busy` (a game is running).
     static func ensureSteamRunning(_ wine: URL, busy: Bool = false) async throws {
-        let key = "steamConfigVersion"
-        let current = UserDefaults.standard.integer(forKey: key) == steamConfigVersion
+        let key = "steamConfigSignature"
+        let current = UserDefaults.standard.string(forKey: key) == steamConfigSignature
         if isSteamRunning {
             guard !current, !busy else { return }
             try await restartSteamInBackground(wine)
         } else {
             try startSteam(wine, arguments: ["-silent"])
         }
-        UserDefaults.standard.set(steamConfigVersion, forKey: key)
+        UserDefaults.standard.set(steamConfigSignature, forKey: key)
     }
 
     /// DXVK settings also go into dxvk.conf in the game folder, which DXVK reads on its own –
@@ -393,7 +405,7 @@ enum Engine {
             "\(marker) before each start – changes here are overwritten.",
             "dxvk.enableAsync = True",
         ]
-        if options.metalHUD { lines.append("dxvk.hud = fps,frametimes,gpuload") }
+        if Prefs.performanceHUD { lines.append("dxvk.hud = fps,frametimes,gpuload") }
         try? (lines.joined(separator: "\n") + "\n").write(to: file, atomically: true, encoding: .utf8)
     }
 

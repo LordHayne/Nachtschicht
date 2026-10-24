@@ -135,6 +135,15 @@ final class LibraryModel: ObservableObject {
         }
     }
 
+    /// After a setting games get from Steam changed: restart it now if no game would be cut off.
+    func applySteamSettings() {
+        guard SetupModel.isComplete else { return }
+        Task {
+            guard let wine = await Engine.installedWine() else { return }
+            try? await Engine.ensureSteamRunning(wine, busy: !running.isEmpty)
+        }
+    }
+
     /// Keeps Nachtschicht's own Steam running hidden once it's set up.
     func startBackgroundSteam() {
         guard SetupModel.isComplete else { return }

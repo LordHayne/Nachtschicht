@@ -17,15 +17,17 @@ struct GameOptionsSheet: View {
                 .font(Theme.display(22))
                 .lineLimit(2)
 
-            Toggle(isOn: $options.metalHUD) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(L10n.t("Performance HUD in game"))
-                    Text(L10n.t("Shows frames per second, frame times and GPU load in the top left corner of the game."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            if !game.bottle.isBuiltIn {
+                Toggle(isOn: $options.metalHUD) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(L10n.t("Performance HUD in game"))
+                        Text(L10n.t("Shows frames per second, frame times and GPU load in the top left corner of the game."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                .toggleStyle(.switch)
             }
-            .toggleStyle(.switch)
 
             if game.bottle.isBuiltIn {
                 VStack(alignment: .leading, spacing: 6) {
@@ -70,6 +72,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.Keys.runnerPath) private var runnerPath = ""
     @AppStorage(Prefs.Keys.afterLaunch) private var afterLaunch = AfterLaunch.quit.rawValue
     @AppStorage(AppLanguage.storageKey) private var language = AppLanguage.system.rawValue
+    @AppStorage(Prefs.Keys.performanceHUD) private var performanceHUD = false
 
     var body: some View {
         Form {
@@ -79,6 +82,16 @@ struct SettingsView: View {
                         Text(option.label).tag(option.rawValue)
                     }
                 }
+                Toggle(isOn: $performanceHUD) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(L10n.t("Performance HUD in games"))
+                        Text(L10n.t("Shows frames per second and frame times while you play. Takes effect at the next game start."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .onChange(of: performanceHUD) { _, _ in model.applySteamSettings() }
             } header: {
                 Text(L10n.t("General"))
             }

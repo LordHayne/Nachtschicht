@@ -27,7 +27,7 @@ enum Engine {
     ]
     /// Settings games inherit from the background Steam. Bump `steamConfigVersion` whenever this
     /// or `steamDLLOverrides` changes, so a running Steam gets restarted with them.
-    static let steamConfigVersion = 4
+    static let steamConfigVersion = 5
     static let gameEnvironment = [
         // Compile shaders in the background instead of stalling the frame that first needs them.
         "DXVK_ASYNC": "1",

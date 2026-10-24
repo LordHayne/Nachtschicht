@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generated": "2026-10-23",
+  "generated": "2026-10-24",
   "components": [
     {
       "id": "wine",
@@ -21,6 +21,16 @@
       "size": 18681669,
       "license": "LGPL-2.1-or-later",
       "source": "https://github.com/3Shain/dxmt"
+    },
+    {
+      "id": "graphics",
+      "kind": "graphics",
+      "version": "11.18-dxmt0.80-2",
+      "url": "https://github.com/LordHayne/Nachtschicht/releases/download/graphics-11.18-dxmt0.80-2/nachtschicht-graphics-11.18-dxmt0.80-2.tar.gz",
+      "sha256": "37a270bb9955e7f37ab20d3623a704efdb291de794714ec15bae68b18fa51cdf",
+      "size": 19061506,
+      "license": "LGPL-2.1-or-later",
+      "source": "https://github.com/LordHayne/Nachtschicht"
     },
     {
       "id": "dxvk-macos",

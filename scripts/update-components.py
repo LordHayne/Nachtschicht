@@ -42,19 +42,22 @@ def hash_url(url: str) -> tuple[str, int]:
     return digest.hexdigest(), size
 
 
-def latest_release(repo: str) -> dict:
-    releases = get_json(f"https://api.github.com/repos/{repo}/releases?per_page=10")
+def latest_release(repo: str, tag_prefix: str = "") -> dict:
+    releases = get_json(f"https://api.github.com/repos/{repo}/releases?per_page=30")
     for release in releases:
-        if not release["draft"] and not release["prerelease"]:
+        if not release["draft"] and not release["prerelease"] and release["tag_name"].startswith(tag_prefix):
             return release
     sys.exit(f"{repo}: no stable release found")
 
 
 def build(source: dict) -> dict:
     repo = source["repo"]
-    release = get_json(f"https://api.github.com/repos/{repo}/releases/tags/{source['tag']}") if "tag" in source else latest_release(repo)
+    if "tag" in source:
+        release = get_json(f"https://api.github.com/repos/{repo}/releases/tags/{source['tag']}")
+    else:
+        release = latest_release(repo, source.get("tagPrefix", ""))
     license_id = source.get("license") or (get_json(f"https://api.github.com/repos/{repo}").get("license") or {}).get("spdx_id") or "NOASSERTION"
-    version = release["tag_name"].lstrip("v")
+    version = release["tag_name"].removeprefix(source.get("tagPrefix", "")).lstrip("v")
 
     if "file" in source:
         url = f"https://raw.githubusercontent.com/{repo}/{release['tag_name']}/{source['file']}"

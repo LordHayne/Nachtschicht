@@ -1,5 +1,5 @@
 {
-  "comment": "What scripts/update-components.py tracks. Each entry becomes one component in manifest.json, pinned to the newest stable GitHub release. 'license' overrides GitHub's detection when the repo has no recognisable LICENSE file. 'tag' pins a specific release (the later DXVK-macOS repack dropped dxgi.dll, which games need). The engine stays pinned to the Wine version .github/workflows/graphics.yml builds winemac.so for.",
+  "comment": "What scripts/update-components.py tracks. Each entry becomes one component in manifest.json, pinned to the newest stable GitHub release. 'license' overrides GitHub's detection when the repo has no recognisable LICENSE file. 'tag' pins a specific release (the later DXVK-macOS repack dropped dxgi.dll, which games need). The engine stays pinned to the Wine version .github/workflows/graphics.yml builds winemac.so for. 'tagPrefix' picks the newest release whose tag starts with it (our own graphics builds).",
   "sources": [
     {
       "id": "wine",
@@ -14,6 +14,14 @@
       "kind": "graphics",
       "repo": "3Shain/dxmt",
       "asset": "^dxmt-v[0-9.]+-builtin\\.tar\\.gz$",
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "id": "graphics",
+      "kind": "graphics",
+      "repo": "LordHayne/Nachtschicht",
+      "tagPrefix": "graphics-",
+      "asset": "^nachtschicht-graphics-.*\\.tar\\.gz$",
       "license": "LGPL-2.1-or-later"
     },
     {

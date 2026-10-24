@@ -68,7 +68,7 @@ struct LibraryView: View {
             }
         }
         .alert(
-            L10n.t("Launch Failed"),
+            L10n.t("Something went wrong"),
             isPresented: Binding(
                 get: { model.errorMessage != nil },
                 set: { if !$0 { model.errorMessage = nil } }
@@ -319,7 +319,9 @@ private struct GameDetail: View {
                 case .downloading:
                     Stat(label: L10n.t("Download"), value: Format.bytes(game.sizeOnDisk))
                 }
-                Stat(label: "Bottle", value: game.bottle.name)
+                if !game.bottle.isBuiltIn {  // only means something with several CrossOver bottles
+                    Stat(label: "Bottle", value: game.bottle.name)
+                }
             }
 
             if game.isVROnly {

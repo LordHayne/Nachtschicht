@@ -63,7 +63,7 @@ enum L10n {
         "Launching …": "Startet …",
         "Options": "Optionen",
         "Select": "Auswählen",
-        "Launch Failed": "Start fehlgeschlagen",
+        "Something went wrong": "Etwas ist schiefgelaufen",
         "No games here yet": "Noch keine Spiele hier",
         "Nightforge shows the Steam games installed in your CrossOver bottles. Install Steam in a bottle, download a game there, then rescan your library.":
             "Nightforge zeigt die Steam-Spiele, die in deinen CrossOver-Bottles installiert sind. Installiere Steam in einer Bottle, lade dort ein Spiel herunter und lies die Bibliothek dann neu ein.",

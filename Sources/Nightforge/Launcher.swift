@@ -167,7 +167,7 @@ struct LaunchWatcher {
 
         var event: Event?
         for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
-            guard line.contains("AppID \(appID)") else { continue }
+            guard mentionsApp(line) else { continue }
             if line.contains("Game process added") || line.contains("changed task to Completed") {
                 event = .running
             } else if line.contains("waiting for user response") {
@@ -181,6 +181,17 @@ struct LaunchWatcher {
             }
         }
         return event
+    }
+
+    /// "AppID 10" must not match "AppID 1000": the ID has to end there.
+    private func mentionsApp(_ line: Substring) -> Bool {
+        var rest = line[...]
+        while let range = rest.range(of: "AppID \(appID)") {
+            let next = rest[range.upperBound...].first
+            if next == nil || !next!.isNumber { return true }
+            rest = rest[range.upperBound...]
+        }
+        return false
     }
 }
 

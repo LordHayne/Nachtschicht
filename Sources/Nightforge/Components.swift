@@ -73,16 +73,27 @@ actor ComponentStore {
     }
 
     private var cachedManifestURL: URL { root.appendingPathComponent("manifest.json") }
+    /// The online list is fetched once per app run. Asking again for every engine lookup would
+    /// make each launch wait for the network – up to a minute when offline.
+    private var fetched: ComponentManifest?
+    private var triedRemote = false
+    private var installing: [String: Task<URL, Error>] = [:]
 
     func manifest() async throws -> ComponentManifest {
+        if let fetched { return fetched }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
 
-        if let remote = remoteManifestURL,
-           let (data, response) = try? await URLSession.shared.data(from: remote),
-           (response as? HTTPURLResponse)?.statusCode ?? 200 == 200,
-           let manifest = try? decode(data) {
-            try? data.write(to: cachedManifestURL, options: .atomic)
-            return manifest
+        if !triedRemote, let remote = remoteManifestURL {
+            triedRemote = true
+            var request = URLRequest(url: remote)
+            request.timeoutInterval = 15
+            if let (data, response) = try? await URLSession.shared.data(for: request),
+               (response as? HTTPURLResponse)?.statusCode ?? 200 == 200,
+               let manifest = try? decode(data) {
+                try? data.write(to: cachedManifestURL, options: .atomic)
+                fetched = manifest
+                return manifest
+            }
         }
         for local in [cachedManifestURL, bundledManifestURL].compactMap({ $0 }) {
             if let data = try? Data(contentsOf: local) {
@@ -109,8 +120,18 @@ actor ComponentStore {
     }
 
     /// Installs `component` unless it's already there. `progress` reports 0...1 while downloading.
+    /// A second request for the same component while it downloads waits for that download.
     func install(_ component: Component, progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws -> URL {
         if let dir = installedPath(for: component) { return dir }
+        let key = "\(component.id)@\(component.version)"
+        if let running = installing[key] { return try await running.value }
+        let task = Task { try await self.download(component, progress: progress) }
+        installing[key] = task
+        defer { installing[key] = nil }
+        return try await task.value
+    }
+
+    private func download(_ component: Component, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
 
         let fm = FileManager.default
         let downloads = root.appendingPathComponent(".downloads", isDirectory: true)

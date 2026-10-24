@@ -294,10 +294,13 @@ enum Engine {
         # Written by Nightforge on quit: ends the background Steam once nothing needs it.
         WINE="$1"; PREFIX="$2"
         STEAMAPPS="$PREFIX/drive_c/Program Files (x86)/Steam/steamapps"
+        # The process list is read before searching it, so the search never finds itself; -F
+        # because the Windows paths are full of backslashes, which grep would read as escapes.
+        has_process() { local list; list="$(ps -axo command)"; printf '%s\n' "$list" | grep -qiF -- "$1"; }
         reopened() { pgrep -qf "Nightforge.app/Contents/MacOS/Nightforge"; }
-        steam_running() { ps -axo command | grep -qi '\steam\steam.exe'; }
+        steam_running() { has_process '\steam\steam.exe'; }
         busy() {
-          ps -axo command | grep -qi '\steamapps\common\' && return 0   # a game
+          has_process '\steamapps\common\' && return 0   # a game
           find "$STEAMAPPS/downloading" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | grep -q . && return 0
           return 1
         }
@@ -649,20 +652,17 @@ enum Engine {
     /// Wine links the Windows user folders (Documents, Desktop, Downloads …) to the Mac's own. Run
     /// from the game bundle, that's a new app to macOS, and the first access waits on a privacy
     /// prompt – the whole Wine session hangs. Games also have no business in those folders, so they
-    /// get ordinary folders inside the prefix. "My Games" saves already in Documents come along.
+    /// get ordinary folders inside the prefix. Nothing in the Mac's folders is read here: even a
+    /// look would make macOS ask the user for access to Documents on every new Mac.
     static func detachUserFolders() {
         let fm = FileManager.default
         let users = prefix.appendingPathComponent("drive_c/users", isDirectory: true)
         for user in (try? fm.contentsOfDirectory(at: users, includingPropertiesForKeys: nil)) ?? [] {
             for name in ["Desktop", "Documents", "Downloads", "Music", "Pictures", "Videos", "Templates"] {
                 let folder = user.appendingPathComponent(name)
-                guard let target = try? fm.destinationOfSymbolicLink(atPath: folder.path) else { continue }
+                guard (try? fm.destinationOfSymbolicLink(atPath: folder.path)) != nil else { continue }
                 try? fm.removeItem(at: folder)
                 try? fm.createDirectory(at: folder, withIntermediateDirectories: true)
-                let saves = URL(fileURLWithPath: target).appendingPathComponent("My Games")
-                if name == "Documents", fm.fileExists(atPath: saves.path) {
-                    try? fm.copyItem(at: saves, to: folder.appendingPathComponent("My Games"))
-                }
             }
         }
     }

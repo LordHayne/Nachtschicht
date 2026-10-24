@@ -101,6 +101,7 @@ final class SetupModel: ObservableObject {
             if let dxvk = manifest.component(Engine.dxvkID) {
                 try Engine.installDXVK(try await ComponentStore.shared.install(dxvk), wine: wine)
             }
+            Engine.applyGameEnvironment(wine: wine)  // games started from the first Steam need it too
 
             step = .steam
             phase = .running(.steam)

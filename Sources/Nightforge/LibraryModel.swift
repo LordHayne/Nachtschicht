@@ -69,6 +69,10 @@ final class LibraryModel: ObservableObject {
                 )
                 let found = await Task.detached(priority: .utility) { Self.runningGames(folders) }.value
                 if found != running { running = found }
+                if restartSteamWhenIdle && found.isEmpty && launchingID == nil {
+                    restartSteamWhenIdle = false
+                    if let wine = await Engine.installedWine() { try? await Engine.restartSteamInBackground(wine) }
+                }
                 try? await Task.sleep(for: .seconds(3))
             }
         }
@@ -186,13 +190,21 @@ final class LibraryModel: ObservableObject {
         }
     }
 
+    /// A download Steam only picks up after a restart, which waits while a game runs: restarting
+    /// Steam then would end the game too.
+    private var restartSteamWhenIdle = false
+
     private func download(_ game: Game) {
         Task {
             do {
                 guard let wine = await Engine.installedWine() else { return }
                 try Engine.requestDownload(appID: game.appID, name: game.name, installDir: game.installDirName)
                 reload(quiet: true)
-                try await Engine.restartSteamInBackground(wine)
+                if running.isEmpty && launchingID == nil {
+                    try await Engine.restartSteamInBackground(wine)
+                } else {
+                    restartSteamWhenIdle = true
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -276,8 +288,13 @@ final class LibraryModel: ObservableObject {
                 launchPreparing = false
             }
             var watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
+            let options = GameOptionsStore.load(game.appID)
             do {
-                try Launcher.launch(game, runnerPath: runner ?? "", options: GameOptionsStore.load(game.appID), profile: profile)
+                // Off the main thread: it reads Steam's app catalog and writes the registry, which
+                // would freeze the window for a moment.
+                try await Task.detached(priority: .userInitiated) {
+                    try Launcher.launch(game, runnerPath: runner ?? "", options: options, profile: profile)
+                }.value
             } catch {
                 launchingID = nil
                 errorMessage = error.localizedDescription
@@ -348,9 +365,10 @@ final class LibraryModel: ObservableObject {
     // MARK: - Uninstall
 
     /// Only games in Nightforge's own Steam; CrossOver bottles are managed by their own Steam.
+    /// Uninstalling stops Steam for a moment, so not while any game runs or starts – it would go too.
     func canUninstall(_ game: Game) -> Bool {
         game.bottle.isBuiltIn && game.install != .notInstalled && uninstallingID == nil
-            && launchingID != game.id && !isRunning(game)
+            && launchingID == nil && running.isEmpty
     }
 
     func requestUninstall(_ game: Game? = nil) {

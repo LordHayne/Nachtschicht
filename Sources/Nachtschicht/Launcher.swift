@@ -20,6 +20,13 @@ enum Prefs {
         static let runnerPath = "runnerPath"
         static let afterLaunch = "afterLaunch"
         static let performanceHUD = "performanceHUD"
+        static let gameMode = "gameMode"
+    }
+
+    /// macOS Game Mode for games run by Nachtschicht's own Steam (see Engine.installGameBundle).
+    /// On by default; the switch is there for the rare game whose sound crackles with it.
+    static var gameMode: Bool {
+        UserDefaults.standard.object(forKey: Keys.gameMode) as? Bool ?? true
     }
 
     /// FPS display in games run by Nachtschicht's own Steam (Metal HUD for DXMT, DXVK's for DXVK).
@@ -225,7 +232,8 @@ enum Launcher {
         arguments += splitArguments(options.extraArgs)
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: runnerPath)
+        process.executableURL = game.bottle.isBuiltIn ? Engine.loader(for: runner) : runner
+        if process.executableURL != runner { environment["WINELOADER"] = process.executableURL?.path }
         process.arguments = arguments
         process.environment = environment
         process.standardInput = FileHandle.nullDevice

@@ -73,6 +73,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.Keys.afterLaunch) private var afterLaunch = AfterLaunch.quit.rawValue
     @AppStorage(AppLanguage.storageKey) private var language = AppLanguage.system.rawValue
     @AppStorage(Prefs.Keys.performanceHUD) private var performanceHUD = false
+    @AppStorage(Prefs.Keys.gameMode) private var gameMode = true
 
     var body: some View {
         Form {
@@ -92,6 +93,16 @@ struct SettingsView: View {
                 }
                 .toggleStyle(.switch)
                 .onChange(of: performanceHUD) { _, _ in model.applySteamSettings() }
+                Toggle(isOn: $gameMode) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(L10n.t("Game Mode"))
+                        Text(L10n.t("Gives games priority on the CPU and graphics and halves Bluetooth latency for controllers and headphones. Turn it off if a game's sound crackles."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .onChange(of: gameMode) { _, _ in model.applySteamSettings() }
             } header: {
                 Text(L10n.t("General"))
             }

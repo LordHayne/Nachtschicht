@@ -54,7 +54,7 @@ enum Engine {
 
     /// Changes whenever the background Steam has to restart to hand games different settings.
     static var steamConfigSignature: String {
-        "\(steamConfigVersion)-hud\(Prefs.performanceHUD ? 1 : 0)"
+        "\(steamConfigVersion)-hud\(Prefs.performanceHUD ? 1 : 0)-gamemode\(Prefs.gameMode ? 1 : 0)"
     }
 
     /// Wine's builtin crypto avoids TLS failures in Steam's browser; the overlay DLL deadlocks games.
@@ -113,16 +113,37 @@ enum Engine {
     }
 
     /// Whether Steam's main process is running (any prefix; good enough to notice a crash or restart).
+    /// Only Nachtschicht's own Steam counts – not one from a CrossOver bottle, and not a Steam left
+    /// behind without its wineserver (it can't do anything any more and would block a fresh start).
     static var isSteamRunning: Bool {
+        let ours = ownProcesses()
+        return ours.contains { $0.command.lowercased().contains(#"\steam\steam.exe"#) }
+            && ours.contains { $0.command.hasSuffix("/wineserver") || $0.command.contains("/wineserver ") }
+    }
+
+    /// Processes started from Nachtschicht's engine (executable inside its folder), with the command
+    /// line ps shows – Wine rewrites that to the Windows program.
+    static func ownProcesses() -> [(pid: pid_t, command: String)] {
         let ps = Process()
         let pipe = Pipe()
         ps.executableURL = URL(fileURLWithPath: "/bin/ps")
-        ps.arguments = ["-axo", "command"]
+        ps.arguments = ["-axo", "pid=,command="]
         ps.standardOutput = pipe
-        guard (try? ps.run()) != nil else { return false }
+        guard (try? ps.run()) != nil else { return [] }
         let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         ps.waitUntilExit()
-        return output.lowercased().contains(#"\steam\steam.exe"#)
+        let root = supportDir.resolvingSymlinksInPath().path
+        return output.split(separator: "\n").compactMap { line in
+            let parts = line.trimmingCharacters(in: .whitespaces).split(separator: " ", maxSplits: 1)
+            guard parts.count == 2, let pid = pid_t(parts[0]), executablePath(pid)?.hasPrefix(root) == true else { return nil }
+            return (pid, String(parts[1]))
+        }
+    }
+
+    private static func executablePath(_ pid: pid_t) -> String? {
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
+        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
+        return String(cString: buffer)
     }
 
     /// Ends every Windows process in Nachtschicht's prefix.
@@ -153,6 +174,9 @@ enum Engine {
             }
             if cwd.hasPrefix(root) { kill(pid, SIGKILL) }
         }
+        // Wine processes working somewhere else (Steam's own folder resolved differently, …)
+        // still run Nachtschicht's engine.
+        for process in ownProcesses() where process.pid != getpid() { kill(process.pid, SIGKILL) }
     }
 
     /// Puts the bundled steamwebhelper wrapper in place of Steam's own (which becomes
@@ -234,6 +258,9 @@ enum Engine {
             }
         }
         try installGraphics(graphicsDir, into: wine, matchesEngine: graphics.version.hasPrefix(engine.version + "-"))
+        installGameBundle(wine: wine)  // after the graphics: its links must point at the new files
+        detachUserFolders()
+        trimSteamLogs()
         applyGameEnvironment(wine: wine)
         if let dxvk = manifest.component(dxvkID) {
             try installDXVK(try await store.install(dxvk), wine: wine)
@@ -408,6 +435,140 @@ enum Engine {
         regedit.waitUntilExit()
     }
 
+    /// macOS only turns Game Mode on (CPU and GPU priority, lower Bluetooth latency) for apps whose
+    /// bundle says they're games. Wine's loader is a bare binary, so this builds a small "Nachtschicht
+    /// Game.app" next to it: the loader's folder hard-linked into Contents/MacOS, everything else it
+    /// finds relative to itself linked back to the engine. Wine starts every Windows program with
+    /// the loader it was started with, so Steam run from here hands it to its games.
+    /// Rebuilt when a file was replaced since (graphics), which breaks its hard link.
+    @discardableResult
+    static func installGameBundle(wine: URL) -> URL? {
+        let fm = FileManager.default
+        let root = wine.deletingLastPathComponent().deletingLastPathComponent()  // …/Resources/wine
+        let unix = root.appendingPathComponent("lib/wine/x86_64-unix", isDirectory: true)
+        let bundle = root.appendingPathComponent(gameBundleName, isDirectory: true)
+        let macOS = bundle.appendingPathComponent("Contents/MacOS", isDirectory: true)
+        let resources = bundle.appendingPathComponent("Contents/Resources", isDirectory: true)
+
+        func inode(_ path: String) -> Int? { (try? fm.attributesOfItem(atPath: path))?[.systemFileNumber] as? Int }
+        let files = (try? fm.contentsOfDirectory(atPath: unix.path)) ?? []
+        let vulkanDriver = resources.appendingPathComponent("vulkan/icd.d/MoltenVK_icd.json")
+        let current = fm.fileExists(atPath: vulkanDriver.path)
+            && files.allSatisfy { name in
+                let original = unix.appendingPathComponent(name).path
+                var isDirectory: ObjCBool = false
+                fm.fileExists(atPath: original, isDirectory: &isDirectory)
+                return isDirectory.boolValue || inode(original) == inode(macOS.appendingPathComponent(name).path)
+            }
+        // Steam may be running from it; leave a bundle that's still right alone.
+        if current { return macOS.appendingPathComponent("wine") }
+
+        do {
+            try? fm.removeItem(at: bundle)
+            try fm.createDirectory(at: macOS, withIntermediateDirectories: true)
+            try fm.createDirectory(at: resources, withIntermediateDirectories: true)
+            for file in try fm.contentsOfDirectory(at: unix, includingPropertiesForKeys: [.isDirectoryKey]) {
+                let name = file.lastPathComponent
+                let target = macOS.appendingPathComponent(name)
+                if (try? file.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                    try fm.createSymbolicLink(atPath: target.path, withDestinationPath: "../../../lib/wine/x86_64-unix/\(name)")
+                } else {
+                    try fm.linkItem(at: file, to: target)
+                }
+            }
+            // Wine looks for its other folders next to the loader's.
+            try fm.createSymbolicLink(atPath: macOS.appendingPathComponent("x86_64-unix").path, withDestinationPath: ".")
+            for arch in ["x86_64-windows", "i386-windows"] {
+                try fm.createSymbolicLink(atPath: macOS.appendingPathComponent(arch).path, withDestinationPath: "../../../lib/wine/\(arch)")
+            }
+            // Libraries are found at @loader_path/../../, i.e. the bundle folder itself.
+            for name in ["bin", "share"] {
+                try fm.createSymbolicLink(atPath: bundle.appendingPathComponent(name).path, withDestinationPath: "../\(name)")
+            }
+            for lib in try fm.contentsOfDirectory(atPath: root.appendingPathComponent("lib").path) where lib != "wine" {
+                try fm.createSymbolicLink(atPath: bundle.appendingPathComponent(lib).path, withDestinationPath: "../lib/\(lib)")
+            }
+            // Inside an app bundle the Vulkan loader looks for drivers in Contents/Resources only.
+            // Without MoltenVK there, Steam's browser loops on failing to draw and never takes
+            // a game launch.
+            try fm.createDirectory(at: vulkanDriver.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let driver: [String: Any] = [
+                "file_format_version": "1.0.0",
+                "ICD": [
+                    "library_path": root.appendingPathComponent("lib/libMoltenVK.dylib").path,
+                    "api_version": "1.4.0",
+                    "is_portability_driver": true,
+                ],
+            ]
+            try JSONSerialization.data(withJSONObject: driver, options: .prettyPrinted).write(to: vulkanDriver)
+            if let icon = Bundle.main.url(forResource: "AppIcon", withExtension: "icns") {
+                try fm.copyItem(at: icon, to: resources.appendingPathComponent("AppIcon.icns"))
+            }
+            let info: [String: Any] = [
+                "CFBundleExecutable": "wine",
+                "CFBundleIdentifier": "local.nachtschicht.game",
+                "CFBundleName": "Nachtschicht Game",
+                "CFBundleIconFile": "AppIcon",
+                "CFBundlePackageType": "APPL",
+                "LSApplicationCategoryType": "public.app-category.games",
+                "LSSupportsGameMode": true,
+                "NSHighResolutionCapable": true,
+            ]
+            let plist = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+            try plist.write(to: bundle.appendingPathComponent("Contents/Info.plist"))
+        } catch {
+            try? fm.removeItem(at: bundle)
+            return nil
+        }
+        // Let Launch Services read the game category now rather than whenever it gets round to it.
+        let register = Process()
+        register.executableURL = URL(fileURLWithPath:
+            "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister")
+        register.arguments = ["-f", bundle.path]
+        if (try? register.run()) != nil { register.waitUntilExit() }
+        return macOS.appendingPathComponent("wine")
+    }
+
+    private static let gameBundleName = "Nachtschicht Game.app"
+
+    /// Wine links the Windows user folders (Documents, Desktop, Downloads …) to the Mac's own. Run
+    /// from the game bundle, that's a new app to macOS, and the first access waits on a privacy
+    /// prompt – the whole Wine session hangs. Games also have no business in those folders, so they
+    /// get ordinary folders inside the prefix. "My Games" saves already in Documents come along.
+    static func detachUserFolders() {
+        let fm = FileManager.default
+        let users = prefix.appendingPathComponent("drive_c/users", isDirectory: true)
+        for user in (try? fm.contentsOfDirectory(at: users, includingPropertiesForKeys: nil)) ?? [] {
+            for name in ["Desktop", "Documents", "Downloads", "Music", "Pictures", "Videos", "Templates"] {
+                let folder = user.appendingPathComponent(name)
+                guard let target = try? fm.destinationOfSymbolicLink(atPath: folder.path) else { continue }
+                try? fm.removeItem(at: folder)
+                try? fm.createDirectory(at: folder, withIntermediateDirectories: true)
+                let saves = URL(fileURLWithPath: target).appendingPathComponent("My Games")
+                if name == "Documents", fm.fileExists(atPath: saves.path) {
+                    try? fm.copyItem(at: saves, to: folder.appendingPathComponent("My Games"))
+                }
+            }
+        }
+    }
+
+    /// Steam never limits its logs; under Wine its browser log alone can reach gigabytes.
+    static func trimSteamLogs() {
+        let logs = steamRoot.appendingPathComponent("logs", isDirectory: true)
+        let files = (try? FileManager.default.contentsOfDirectory(at: logs, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        for file in files where ((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) > 50_000_000 {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
+
+    /// The program to start Steam with: the Game Mode loader when that's on and built, else `wine`.
+    static func loader(for wine: URL) -> URL {
+        guard Prefs.gameMode else { return wine }
+        let loader = wine.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(gameBundleName).appendingPathComponent("Contents/MacOS/wine")
+        return FileManager.default.isExecutableFile(atPath: loader.path) ? loader : wine
+    }
+
     static func environment(wine: URL) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         // Keeps Steam's own processes out of the Dock (wrapper/hide-steam-dock.m); games are untouched.
@@ -478,6 +639,9 @@ enum Engine {
     static func ensureSteamRunning(_ wine: URL, busy: Bool = false) async throws {
         let key = "steamConfigSignature"
         let current = UserDefaults.standard.string(forKey: key) == steamConfigSignature
+        if !isSteamRunning, ownProcesses().contains(where: { $0.command.lowercased().contains("steam") }) {
+            stopAll(wine)  // a Steam whose wineserver is gone: clear it away before starting afresh
+        }
         if isSteamRunning {
             guard !current, !busy else { return }
             try await restartSteamInBackground(wine)
@@ -547,10 +711,12 @@ enum Engine {
     static func startSteam(_ wine: URL, arguments: [String] = [], extraEnvironment: [String: String] = [:]) throws {
         installWebHelperWrapper()
         let process = Process()
-        process.executableURL = wine
+        let loader = loader(for: wine)
+        process.executableURL = loader
         process.arguments = [steamExeWindowsPath] + steamArguments + arguments
         var env = environment(wine: wine).merging(gameEnvironment) { _, new in new }
         env["WINEDLLOVERRIDES"] = steamDLLOverrides
+        if loader != wine { env["WINELOADER"] = loader.path }
         process.environment = env.merging(extraEnvironment) { _, new in new }
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice

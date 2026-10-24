@@ -138,7 +138,11 @@ final class LibraryModel: ObservableObject {
     /// After a setting games get from Steam changed: restart it now if no game would be cut off.
     func applySteamSettings() {
         guard SetupModel.isComplete else { return }
-        Task {
+        // Queued behind any start still in progress: two Steam starts at once end up as two
+        // Steam instances fighting over the same prefix, and games no longer start.
+        let previous = steamStartup
+        steamStartup = Task {
+            await previous?.value
             guard let wine = await Engine.installedWine() else { return }
             Engine.applyGameEnvironment(wine: wine)
             try? await Engine.ensureSteamRunning(wine, busy: !running.isEmpty)
@@ -151,7 +155,8 @@ final class LibraryModel: ObservableObject {
     private var steamStartup: Task<Void, Never>?
 
     func startBackgroundSteam() {
-        guard SetupModel.isComplete else { return }
+        // onAppear can fire more than once; one start per app run is enough.
+        guard SetupModel.isComplete, steamStartup == nil else { return }
         steamStartup = Task {
             guard let wine = try? await Engine.ensureEngine() else { return }
             // Let the running-game check see the processes before deciding on a restart.

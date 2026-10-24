@@ -95,6 +95,8 @@ final class SetupModel: ObservableObject {
                 try FileManager.default.createDirectory(at: Engine.prefix, withIntermediateDirectories: true)
                 guard try await Engine.run(wine, ["wineboot", "--init"]) == 0 else { throw SetupError.environmentFailed }
             }
+            Engine.installGameBundle(wine: wine)
+            Engine.detachUserFolders()
 
             if let dxvk = manifest.component(Engine.dxvkID) {
                 try Engine.installDXVK(try await ComponentStore.shared.install(dxvk), wine: wine)

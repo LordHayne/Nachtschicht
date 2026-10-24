@@ -183,6 +183,10 @@ enum L10n {
         "Shows frames per second and frame times while you play. Takes effect at the next game start.":
             "Zeigt Bilder pro Sekunde und Frametimes beim Spielen. Gilt ab dem nächsten Spielstart.",
 
+        "Game Mode": "Spielmodus",
+        "Gives games priority on the CPU and graphics and halves Bluetooth latency for controllers and headphones. Turn it off if a game's sound crackles.":
+            "Gibt Spielen Vorrang bei CPU und Grafik und halbiert die Bluetooth-Latenz für Controller und Kopfhörer. Schalte ihn aus, wenn der Ton eines Spiels knackt.",
+
         // Errors
         "Component list version %ld needs a newer Nachtschicht.": "Komponentenliste Version %ld braucht ein neueres Nachtschicht.",
         "No component list available. Check your internet connection.": "Keine Komponentenliste verfügbar. Prüfe deine Internetverbindung.",

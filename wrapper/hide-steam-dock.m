@@ -6,6 +6,10 @@
 // app – only for Steam's processes, so its dialogs still appear but no Dock icon does. Games keep
 // their normal Dock icon.
 //
+// With Game Mode on, Wine runs from an app bundle (see Engine.installGameBundle), and macOS makes every
+// process started from a bundle a Dock app right away, without asking setActivationPolicy:. So
+// all of them start as accessory apps, and only a process that shows a window (a game) gets one.
+//
 // Build (x86_64, like Wine): clang -arch x86_64 -dynamiclib -framework AppKit -o hide-steam-dock.dylib hide-steam-dock.m
 
 #import <AppKit/AppKit.h>
@@ -23,10 +27,12 @@ static BOOL isSteamProcess(void) {
 }
 
 static BOOL (*originalSetActivationPolicy)(id, SEL, NSApplicationActivationPolicy);
+static BOOL wantsDock = NO;
 
 static BOOL nachtschichtSetActivationPolicy(id self, SEL _cmd, NSApplicationActivationPolicy policy) {
-    if (policy == NSApplicationActivationPolicyRegular && isSteamProcess()) {
-        policy = NSApplicationActivationPolicyAccessory;
+    if (policy == NSApplicationActivationPolicyRegular) {
+        if (isSteamProcess()) policy = NSApplicationActivationPolicyAccessory;
+        else wantsDock = YES;
     }
     return originalSetActivationPolicy(self, _cmd, policy);
 }
@@ -35,4 +41,15 @@ __attribute__((constructor)) static void install(void) {
     Method method = class_getInstanceMethod([NSApplication class], @selector(setActivationPolicy:));
     if (!method) return;
     originalSetActivationPolicy = (void *)method_setImplementation(method, (IMP)nachtschichtSetActivationPolicy);
+
+    // Started from the bundle, every Wine process – Steam, explorer.exe, services – would be a Dock
+    // app from the start. Make them accessory apps until Wine itself asks for a Dock icon, which it
+    // does when a game shows its window (Steam's requests are turned down above).
+    for (NSNotificationName name in @[NSApplicationWillFinishLaunchingNotification, NSApplicationDidFinishLaunchingNotification]) {
+        [[NSNotificationCenter defaultCenter] addObserverForName:name object:nil queue:nil usingBlock:^(NSNotification *note) {
+            if (!wantsDock && [NSApp activationPolicy] == NSApplicationActivationPolicyRegular) {
+                originalSetActivationPolicy(NSApp, @selector(setActivationPolicy:), NSApplicationActivationPolicyAccessory);
+            }
+        }];
+    }
 }

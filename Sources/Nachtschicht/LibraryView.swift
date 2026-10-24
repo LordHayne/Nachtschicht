@@ -445,7 +445,7 @@ private struct PlayButton: View {
             .animation(.easeOut(duration: 0.4), value: install)
         }
         .buttonStyle(.plain)
-        .disabled(busy)
+        .disabled(busy && !(isLaunching && needsConfirmation))  // then it brings Steam's window up
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.15), value: hovering)
     }

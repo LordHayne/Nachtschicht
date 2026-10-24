@@ -707,6 +707,15 @@ enum Engine {
         }
     }
 
+    /// Opens Steam's main window. Questions Steam asks before a launch (licence agreement, which
+    /// version to start) appear in it, and with -silent it stays hidden. Returns the processes
+    /// that draw Steam's windows, so the caller can bring them to the front.
+    @discardableResult
+    static func showSteamWindow(_ wine: URL) -> [pid_t] {
+        try? startSteam(wine)
+        return ownProcesses().filter { $0.command.lowercased().contains("steamwebhelper") }.map(\.pid)
+    }
+
     /// Starts Steam without waiting; used for signing in and for launching games.
     static func startSteam(_ wine: URL, arguments: [String] = [], extraEnvironment: [String: String] = [:]) throws {
         installWebHelperWrapper()

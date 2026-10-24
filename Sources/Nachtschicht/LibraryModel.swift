@@ -168,6 +168,10 @@ final class LibraryModel: ObservableObject {
     /// The big button: play when installed, otherwise ask Steam to download it.
     func primaryAction() {
         guard let game = selected, uninstallingID != game.id else { return }
+        if launchingID == game.id {
+            if launchNeedsConfirmation && game.bottle.isBuiltIn { showSteamWindow() }
+            return
+        }
         if isRunning(game) {
             switchToGame(game)
             return
@@ -274,6 +278,7 @@ final class LibraryModel: ObservableObject {
             var quietSeconds = 0
             var totalSeconds = 0
             var started = false
+            var askingSince: Int?
             while quietSeconds < 120 && totalSeconds < 900 {
                 try? await Task.sleep(for: .seconds(1))
                 totalSeconds += 1
@@ -282,10 +287,12 @@ final class LibraryModel: ObservableObject {
                     started = true
                 case .needsConfirmation?:
                     launchNeedsConfirmation = true
+                    askingSince = askingSince ?? totalSeconds
                     quietSeconds = 0
                     continue
                 case .continued?:
                     launchNeedsConfirmation = false
+                    askingSince = nil
                     quietSeconds = 0
                     continue
                 case .cancelled?:
@@ -294,6 +301,11 @@ final class LibraryModel: ObservableObject {
                     errorMessage = L10n.t("Steam couldn't start %@.", game.name)
                 case nil:
                     if !launchNeedsConfirmation { quietSeconds += 1 }
+                    // Routine steps are answered within a second; a real question waits for the
+                    // player in Steam's window, which runs hidden – so show it.
+                    if let since = askingSince, totalSeconds - since == 3, game.bottle.isBuiltIn {
+                        showSteamWindow()
+                    }
                     continue
                 }
                 break
@@ -306,6 +318,18 @@ final class LibraryModel: ObservableObject {
             case .quit: NSApp.terminate(nil)
             case .hide: NSApp.hide(nil)
             case .stay: break
+            }
+        }
+    }
+
+    /// Brings Steam's main window, with the question it's waiting on, in front of Nachtschicht.
+    func showSteamWindow() {
+        Task {
+            guard let wine = await Engine.installedWine() else { return }
+            let windows = Engine.showSteamWindow(wine)
+            try? await Task.sleep(for: .seconds(2))  // the window needs a moment to appear
+            for pid in windows {
+                NSRunningApplication(processIdentifier: pid)?.activate(options: .activateAllWindows)
             }
         }
     }

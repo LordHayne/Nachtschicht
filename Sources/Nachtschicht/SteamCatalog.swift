@@ -37,6 +37,74 @@ enum SteamCatalog {
         return games
     }
 
+    // MARK: - Launch options
+
+    /// Easy Anti-Cheat and BattlEye don't run under Wine on a Mac, so a game that offers a Windows
+    /// launch option without them (7 Days to Die: "Launch game without EAC") should use it. Returns
+    /// what that option adds to the default one; Steam appends extra -applaunch arguments to the
+    /// default option, which gives the same command line. Empty when there's no such option.
+    static func antiCheatOffArguments(appID: Int, steamRoot: URL) -> [String] {
+        guard let bytes = try? Data(contentsOf: steamRoot.appendingPathComponent("appcache/appinfo.vdf")),
+              let info = appInfo(Array(bytes), appID: appID),
+              let launch = info["config"]?.object?["launch"]?.object
+        else { return [] }
+
+        let windows = launch
+            .compactMap { key, value -> (index: Int, option: [String: BinaryKV])? in
+                guard let index = Int(key), let option = value.object else { return nil }
+                let os = option["config"]?.object?["oslist"]?.string ?? ""
+                return os.isEmpty || os.contains("windows") ? (index, option) : nil
+            }
+            .sorted { $0.index < $1.index }
+        guard let standard = windows.first?.option else { return [] }
+
+        func words(_ option: [String: BinaryKV]) -> [String] {
+            (option["arguments"]?.string ?? "").split(separator: " ").map(String.init)
+        }
+        let markers = ["-noeac", "-forceeac off", "-nobattleye", "-noanticheat", "-no-anticheat"]
+        let candidate = windows.dropFirst().map(\.option).first { option in
+            let arguments = (option["arguments"]?.string ?? "").lowercased()
+            let description = (option["description"]?.string ?? "").lowercased()
+            let mentionsAntiCheat = ["eac", "anti-cheat", "anticheat", "battleye"].contains { description.contains($0) }
+            let saysWithout = ["without", "no eac", "no anti", "no battleye", "disable", "ohne"].contains { description.contains($0) }
+            return markers.contains { arguments.contains($0) } || (mentionsAntiCheat && saysWithout)
+        }
+        guard let candidate,
+              candidate["executable"]?.string?.lowercased() == standard["executable"]?.string?.lowercased()
+        else { return [] }
+        let base = words(standard)
+        let extra = words(candidate)
+        guard extra.starts(with: base) else {
+            return extra.filter { !base.contains($0) }
+        }
+        return Array(extra.dropFirst(base.count))
+    }
+
+    /// The "appinfo" section of one app in appinfo.vdf.
+    private static func appInfo(_ bytes: [UInt8], appID wanted: Int) -> [String: BinaryKV]? {
+        var reader = ByteReader(bytes)
+        guard let magic = reader.u32(), reader.u32() != nil else { return nil }
+        var strings: [String]?
+        if magic == 0x0756_4429 {
+            guard let tableOffset = reader.i64(), tableOffset > 0, Int(tableOffset) < bytes.count else { return nil }
+            var table = ByteReader(bytes, at: Int(tableOffset))
+            let count = table.u32() ?? 0
+            strings = (0..<count).compactMap { _ in table.cString() }
+        } else if magic != 0x0756_4428 && magic != 0x0756_4427 {
+            return nil
+        }
+        let headerSkip = 4 + 4 + 8 + 20 + 4 + (magic >= 0x0756_4428 ? 20 : 0)
+        while let appID = reader.u32(), appID != 0, let size = reader.u32() {
+            let end = reader.position + Int(size)
+            if appID == wanted {
+                reader.skip(headerSkip)
+                return BinaryKV.parse(&reader, strings: strings)?["appinfo"]?.object
+            }
+            reader.position = end
+        }
+        return nil
+    }
+
     // MARK: - packageinfo.vdf
 
     private static func ownedAppIDs(_ bytes: [UInt8]) -> Set<Int> {

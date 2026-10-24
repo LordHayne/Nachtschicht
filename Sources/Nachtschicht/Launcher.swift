@@ -229,6 +229,9 @@ enum Launcher {
         arguments += [game.steamExeWindowsPath]
         if game.bottle.isBuiltIn { arguments += Engine.steamArguments }
         arguments += ["-silent", "-applaunch", String(game.appID)]
+        if game.bottle.isBuiltIn {
+            arguments += SteamCatalog.antiCheatOffArguments(appID: game.appID, steamRoot: game.steamRoot)
+        }
         arguments += splitArguments(options.extraArgs)
 
         let process = Process()

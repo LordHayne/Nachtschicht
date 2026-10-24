@@ -174,6 +174,11 @@ enum L10n {
         "Running – switch to game": "Läuft – zum Spiel wechseln",
         "Switch to Game": "Zum Spiel wechseln",
 
+        "Automatic": "Automatisch",
+        "Graphics": "Grafik",
+        "How DirectX 10/11 reaches the Mac's graphics. DXMT translates straight to Metal and is usually faster; DXVK takes a detour through Vulkan and works with more games.":
+            "Wie DirectX 10/11 zur Grafik des Mac kommt. DXMT übersetzt direkt nach Metal und ist meist schneller; DXVK nimmt den Umweg über Vulkan und läuft mit mehr Spielen.",
+
         // Errors
         "Component list version %ld needs a newer Nachtschicht.": "Komponentenliste Version %ld braucht ein neueres Nachtschicht.",
         "No component list available. Check your internet connection.": "Keine Komponentenliste verfügbar. Prüfe deine Internetverbindung.",

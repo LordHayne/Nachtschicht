@@ -38,9 +38,40 @@ enum Prefs {
     }
 }
 
+/// Which translation layer runs a game's Direct3D 10/11.
+enum GraphicsLayer: String, Codable, CaseIterable, Identifiable {
+    /// Nachtschicht's default (see Engine.defaultGraphics).
+    case automatic
+    /// DXMT: Direct3D straight to Metal.
+    case dxmt
+    /// DXVK: Direct3D → Vulkan → MoltenVK → Metal.
+    case dxvk
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .automatic: return L10n.t("Automatic")
+        case .dxmt: return "DXMT (Metal)"
+        case .dxvk: return "DXVK (Vulkan)"
+        }
+    }
+}
+
 struct GameOptions: Codable, Equatable {
     var metalHUD = false
     var extraArgs = ""
+    var graphics = GraphicsLayer.automatic
+
+    init() {}
+
+    // Options saved before a field existed decode with that field's default.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        metalHUD = try c.decodeIfPresent(Bool.self, forKey: .metalHUD) ?? false
+        extraArgs = try c.decodeIfPresent(String.self, forKey: .extraArgs) ?? ""
+        graphics = try c.decodeIfPresent(GraphicsLayer.self, forKey: .graphics) ?? .automatic
+    }
 }
 
 enum GameOptionsStore {
@@ -171,6 +202,7 @@ enum Launcher {
         }
         if game.bottle.isBuiltIn {
             Engine.writeGameConfig(installDir: game.installDir, options: options)
+            Engine.applyGraphics(options.graphics, installDir: game.installDir, wine: runner)
         }
         if options.metalHUD {
             environment["MTL_HUD_ENABLED"] = "1"

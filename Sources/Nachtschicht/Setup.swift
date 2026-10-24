@@ -73,7 +73,7 @@ final class SetupModel: ObservableObject {
             phase = .running(.engine)
             let manifest = try await ComponentStore.shared.manifest()
             guard let engineComponent = manifest.component(Engine.engineID),
-                  let graphicsComponent = manifest.component(Engine.graphicsID)
+                  let graphicsComponent = Engine.graphicsComponent(in: manifest)
             else { throw ComponentError.noManifest }
 
             let total = Double(engineComponent.size + graphicsComponent.size)
@@ -86,7 +86,8 @@ final class SetupModel: ObservableObject {
             }
             progress = nil
             guard let wine = Engine.wineBinary(in: engineDir) else { throw SetupError.engineBroken }
-            try Engine.installGraphics(graphicsDir, into: wine)
+            try Engine.installGraphics(graphicsDir, into: wine,
+                                       matchesEngine: graphicsComponent.version.hasPrefix(engineComponent.version + "-"))
 
             step = .environment
             phase = .running(.environment)
@@ -96,7 +97,7 @@ final class SetupModel: ObservableObject {
             }
 
             if let dxvk = manifest.component(Engine.dxvkID) {
-                try Engine.installDXVK(try await ComponentStore.shared.install(dxvk))
+                try Engine.installDXVK(try await ComponentStore.shared.install(dxvk), wine: wine)
             }
 
             step = .steam

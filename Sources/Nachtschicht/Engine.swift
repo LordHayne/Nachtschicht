@@ -4,7 +4,15 @@ import Foundation
 /// and the Windows Steam client inside it. Used when CrossOver isn't the chosen runner.
 enum Engine {
     static let engineID = "wine"
-    static let graphicsID = "dxmt"
+    /// Nachtschicht's own DXMT build for Wine 11 (with winemac.so); plain upstream DXMT as fallback.
+    static let graphicsID = "graphics"
+    static let upstreamGraphicsID = "dxmt"
+    /// What "Automatic" means until DXMT has proven itself across games.
+    static let defaultGraphics = GraphicsLayer.dxvk
+
+    static func graphicsComponent(in manifest: ComponentManifest) -> Component? {
+        manifest.component(graphicsID) ?? manifest.component(upstreamGraphicsID)
+    }
     /// DirectX 9–11 → Vulkan → Metal. Draws reliably on Wine 11 today, while DXMT can't attach to
     /// Wine 11's windows yet (that needs a patched DXMT build).
     static let dxvkID = "dxvk-macos"
@@ -19,7 +27,7 @@ enum Engine {
     ]
     /// Settings games inherit from the background Steam. Bump `steamConfigVersion` whenever this
     /// or `steamDLLOverrides` changes, so a running Steam gets restarted with them.
-    static let steamConfigVersion = 3
+    static let steamConfigVersion = 4
     static let gameEnvironment = [
         // Compile shaders in the background instead of stalling the frame that first needs them.
         "DXVK_ASYNC": "1",
@@ -27,7 +35,9 @@ enum Engine {
 
     /// Wine's builtin crypto avoids TLS failures in Steam's browser; the overlay DLL deadlocks games.
     /// Games inherit these from Steam, so DirectX goes to DXVK's DLLs in the prefix (native first).
-    static let steamDLLOverrides = "dxgi,d3d11,d3d10core,d3d9=n,b;bcrypt=b;ncrypt=b;gameoverlayrenderer,gameoverlayrenderer64=d"
+    /// The Direct3D choice itself lives in the registry (see `installDXVK` / `applyGraphics`): an
+    /// override in this variable would beat the per-game AppDefaults.
+    static let steamDLLOverrides = "bcrypt=b;ncrypt=b;gameoverlayrenderer,gameoverlayrenderer64=d"
 
     static var supportDir: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -158,7 +168,7 @@ enum Engine {
     static func ensureEngine() async throws -> URL {
         let store = ComponentStore.shared
         let manifest = try await store.manifest()
-        guard let engine = manifest.component(engineID), let graphics = manifest.component(graphicsID) else {
+        guard let engine = manifest.component(engineID), let graphics = graphicsComponent(in: manifest) else {
             throw ComponentError.noManifest
         }
         let fresh = await store.installedPath(for: engine) == nil
@@ -179,9 +189,9 @@ enum Engine {
                 }
             }
         }
-        try installGraphics(graphicsDir, into: wine)
+        try installGraphics(graphicsDir, into: wine, matchesEngine: graphics.version.hasPrefix(engine.version + "-"))
         if let dxvk = manifest.component(dxvkID) {
-            try installDXVK(try await store.install(dxvk))
+            try installDXVK(try await store.install(dxvk), wine: wine)
         }
         return wine
     }
@@ -196,7 +206,9 @@ enum Engine {
     }
 
     /// Copies DXMT (Direct3D 10/11 → Metal) into the engine's builtin DLL folders. Safe to repeat.
-    static func installGraphics(_ dxmtDir: URL, into wine: URL) throws {
+    /// Nachtschicht's package also carries winemac.so built for one Wine version; it's only used
+    /// when that matches the engine (`matchesEngine`), since a mismatched driver breaks every window.
+    static func installGraphics(_ dxmtDir: URL, into wine: URL, matchesEngine: Bool = false) throws {
         let fm = FileManager.default
         let lib = wine.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib/wine", isDirectory: true)
         // The archive has one versioned top folder: v0.80/{x86_64-windows,i386-windows,x86_64-unix}
@@ -208,6 +220,7 @@ enum Engine {
             let target = lib.appendingPathComponent(arch, isDirectory: true)
             guard let files = try? fm.contentsOfDirectory(at: source, includingPropertiesForKeys: nil) else { continue }
             for file in files {
+                if file.lastPathComponent == "winemac.so" && !matchesEngine { continue }
                 let destination = target.appendingPathComponent(file.lastPathComponent)
                 try? fm.removeItem(at: destination)
                 try fm.copyItem(at: file, to: destination)
@@ -215,8 +228,16 @@ enum Engine {
         }
     }
 
-    /// Copies DXVK's DLLs into the prefix (64-bit → system32, 32-bit → syswow64). Safe to repeat.
-    static func installDXVK(_ dxvkDir: URL) throws {
+    /// Direct3D DLLs a game can take from DXVK (native, in the prefix) or DXMT (builtin, in the engine).
+    private static let direct3DLibraries = ["dxgi", "d3d11", "d3d10core", "d3d9"]
+
+    /// Copies DXVK's DLLs into the prefix (64-bit → system32, 32-bit → syswow64) and makes them the
+    /// default for every program; games set to DXMT override that in `applyGraphics`. Safe to repeat.
+    static func installDXVK(_ dxvkDir: URL, wine: URL) throws {
+        defer {
+            let values = direct3DLibraries.map { "\"\($0)\"=\"native,builtin\"" }.joined(separator: "\n")
+            importRegistry("[HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides]\n\(values)", wine: wine)
+        }
         let fm = FileManager.default
         let top = (try fm.contentsOfDirectory(at: dxvkDir, includingPropertiesForKeys: nil))
             .first { fm.fileExists(atPath: $0.appendingPathComponent("x64").path) } ?? dxvkDir
@@ -232,6 +253,54 @@ enum Engine {
                 try fm.copyItem(at: file, to: destination)
             }
         }
+    }
+
+    /// Points one game's executables at DXMT or back to the DXVK default, via Wine's per-program
+    /// settings (HKCU\Software\Wine\AppDefaults\<name>.exe), which also apply when Steam starts it.
+    static func applyGraphics(_ choice: GraphicsLayer, installDir: URL, wine: URL) {
+        let layer = choice == .automatic ? defaultGraphics : choice
+        let exes = executables(in: installDir)
+        guard !exes.isEmpty else { return }
+        let sections = exes.map { exe -> String in
+            let key = "HKEY_CURRENT_USER\\Software\\Wine\\AppDefaults\\\(exe)\\DllOverrides"
+            guard layer == .dxmt else { return "[-\(key)]" }
+            // d3d9 stays with DXVK: DXMT only covers Direct3D 10/11.
+            let values = ["dxgi", "d3d11", "d3d10core"].map { "\"\($0)\"=\"builtin\"" }.joined(separator: "\n")
+            return "[\(key)]\n\(values)"
+        }
+        importRegistry(sections.joined(separator: "\n\n"), wine: wine)
+    }
+
+    /// Windows programs in a game folder (a few levels deep, where Unity/Unreal put them).
+    private static func executables(in dir: URL) -> [String] {
+        guard let files = FileManager.default.enumerator(
+            at: dir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return [] }
+        var names = Set<String>()
+        for case let file as URL in files {
+            if files.level > 3 { files.skipDescendants(); continue }
+            if file.pathExtension.lowercased() == "exe" { names.insert(file.lastPathComponent) }
+        }
+        return names.sorted()
+    }
+
+    /// Imports registry settings into the prefix and waits only for regedit itself (not for the
+    /// wineserver, which keeps running as long as Steam does).
+    static func importRegistry(_ body: String, wine: URL) {
+        let temp = prefix.appendingPathComponent("drive_c/windows/temp", isDirectory: true)
+        try? FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        let file = temp.appendingPathComponent("nachtschicht-\(UUID().uuidString).reg")
+        guard (try? ("REGEDIT4\n\n" + body + "\n").write(to: file, atomically: true, encoding: .utf8)) != nil else { return }
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        let regedit = Process()
+        regedit.executableURL = wine
+        regedit.arguments = ["regedit", "/S", #"C:\windows\temp\"# + file.lastPathComponent]
+        regedit.environment = environment(wine: wine)
+        regedit.standardOutput = FileHandle.nullDevice
+        regedit.standardError = FileHandle.nullDevice
+        guard (try? regedit.run()) != nil else { return }
+        regedit.waitUntilExit()
     }
 
     static func environment(wine: URL) -> [String: String] {

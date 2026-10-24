@@ -27,6 +27,18 @@ struct GameOptionsSheet: View {
             }
             .toggleStyle(.switch)
 
+            if game.bottle.isBuiltIn {
+                VStack(alignment: .leading, spacing: 6) {
+                    Picker(L10n.t("Graphics"), selection: $options.graphics) {
+                        ForEach(GraphicsLayer.allCases) { Text($0.label).tag($0) }
+                    }
+                    Text(L10n.t("How DirectX 10/11 reaches the Mac's graphics. DXMT translates straight to Metal and is usually faster; DXVK takes a detour through Vulkan and works with more games."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             VStack(alignment: .leading, spacing: 6) {
                 Text(L10n.t("Launch Options"))
                 TextField(L10n.t("e.g. -dx11 -skipintro"), text: $options.extraArgs)

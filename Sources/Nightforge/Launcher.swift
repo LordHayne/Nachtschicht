@@ -75,6 +75,12 @@ struct GameOptions: Codable, Equatable {
     var metalHUD = false
     var extraArgs = ""
     var graphics = GraphicsLayer.automatic
+    /// Frames per second the game is held to (0 = no limit). Paced by Metal with DXMT.
+    var frameLimit = 0
+    /// MetalFX spatial upscaling of the game's picture (DXMT only).
+    var upscaling = false
+
+    static let frameLimits = [0, 30, 40, 60, 120]
 
     init() {}
 
@@ -84,6 +90,8 @@ struct GameOptions: Codable, Equatable {
         metalHUD = try c.decodeIfPresent(Bool.self, forKey: .metalHUD) ?? false
         extraArgs = try c.decodeIfPresent(String.self, forKey: .extraArgs) ?? ""
         graphics = try c.decodeIfPresent(GraphicsLayer.self, forKey: .graphics) ?? .automatic
+        frameLimit = try c.decodeIfPresent(Int.self, forKey: .frameLimit) ?? 0
+        upscaling = try c.decodeIfPresent(Bool.self, forKey: .upscaling) ?? false
     }
 }
 
@@ -228,7 +236,7 @@ enum Launcher {
             environment["WINEPREFIX"] = game.bottle.url.path
         }
         if game.bottle.isBuiltIn {
-            Engine.writeGameConfig(installDir: game.installDir, options: options)
+            Engine.writeGameConfigs(installDir: game.installDir, options: options)
             Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner)
         }
         // CrossOver bottles: the game inherits this process's environment. Nightforge's own

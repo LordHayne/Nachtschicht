@@ -261,6 +261,7 @@ enum Engine {
         installGameBundle(wine: wine)  // after the graphics: its links must point at the new files
         detachUserFolders()
         trimSteamLogs()
+        excludeGamesFromBackup()
         applyGameEnvironment(wine: wine)
         if let dxvk = manifest.component(dxvkID) {
             try installDXVK(try await store.install(dxvk), wine: wine)
@@ -512,15 +513,19 @@ enum Engine {
 
     /// Windows programs in a game folder (a few levels deep, where Unity/Unreal put them).
     private static func executables(in dir: URL) -> [String] {
+        Set(executableFiles(in: dir).map(\.lastPathComponent)).sorted()
+    }
+
+    private static func executableFiles(in dir: URL) -> [URL] {
         guard let files = FileManager.default.enumerator(
             at: dir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles, .skipsPackageDescendants]
         ) else { return [] }
-        var names = Set<String>()
+        var found: [URL] = []
         for case let file as URL in files {
             if files.level > 3 { files.skipDescendants(); continue }
-            if file.pathExtension.lowercased() == "exe" { names.insert(file.lastPathComponent) }
+            if file.pathExtension.lowercased() == "exe" { found.append(file) }
         }
-        return names.sorted()
+        return found
     }
 
     /// Imports registry settings into the prefix and waits only for regedit itself (not for the
@@ -766,20 +771,52 @@ enum Engine {
         UserDefaults.standard.set(steamConfigSignature, forKey: key)
     }
 
-    /// DXVK settings also go into dxvk.conf in the game folder, which DXVK reads on its own –
-    /// the game is started by the already running Steam, so environment variables may not reach it.
-    static func writeGameConfig(installDir: URL, options: GameOptions) {
-        let file = installDir.appendingPathComponent("dxvk.conf")
+    /// Settings for the graphics layers go into dxvk.conf and dxmt.conf, which DXVK and DXMT read
+    /// from the game's working folder – the game is started by the already running Steam, so
+    /// environment variables don't reach it. Written next to every program of the game, since some
+    /// start from a subfolder; a config the game ships itself is left alone.
+    static func writeGameConfigs(installDir: URL, options: GameOptions) {
+        var dxvk = ["dxvk.enableAsync = True"]
+        if Prefs.performanceHUD { dxvk.append("dxvk.hud = fps,frametimes,gpuload") }
+        var dxmt: [String] = []
+        if options.frameLimit > 0 {
+            dxvk.append("dxgi.maxFrameRate = \(options.frameLimit)")
+            dxmt.append("d3d11.preferredMaxFrameRate = \(options.frameLimit)")  // paced by Metal
+        }
+        if options.upscaling {
+            dxmt.append("d3d11.metalSpatialUpscale = True")  // engine/patches/dxmt-0.80-metalfx-config.patch
+            dxmt.append("d3d11.metalSpatialUpscaleFactor = 2.0")
+        }
+        var folders = Set([installDir.standardizedFileURL])
+        for exe in executableFiles(in: installDir) { folders.insert(exe.deletingLastPathComponent().standardizedFileURL) }
+        for folder in folders {
+            writeConfig(folder.appendingPathComponent("dxvk.conf"), lines: dxvk)
+            writeConfig(folder.appendingPathComponent("dxmt.conf"), lines: dxmt)
+        }
+    }
+
+    private static func writeConfig(_ file: URL, lines: [String]) {
         let marker = "# Written by Nightforge"
         let existing = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
         let ours = existing.hasPrefix(marker) || existing.hasPrefix("# Written by Nachtschicht")  // the old name
         guard ours || !FileManager.default.fileExists(atPath: file.path) else { return }  // the game ships its own
-        var lines = [
-            "\(marker) before each start – changes here are overwritten.",
-            "dxvk.enableAsync = True",
-        ]
-        if Prefs.performanceHUD { lines.append("dxvk.hud = fps,frametimes,gpuload") }
-        try? (lines.joined(separator: "\n") + "\n").write(to: file, atomically: true, encoding: .utf8)
+        let text = (["\(marker) before each start – changes here are overwritten."] + lines).joined(separator: "\n")
+        try? (text + "\n").write(to: file, atomically: true, encoding: .utf8)
+    }
+
+    /// Game files can be downloaded again any time; backing up tens of gigabytes of them would
+    /// only make Time Machine busy (and the disk with it) while you play. Saves live elsewhere.
+    static func excludeGamesFromBackup() {
+        let steamapps = steamRoot.appendingPathComponent("steamapps", isDirectory: true)
+        for name in ["common", "downloading", "shadercache", "temp"] {
+            var folder = steamapps.appendingPathComponent(name, isDirectory: true)
+            guard FileManager.default.fileExists(atPath: folder.path),
+                  (try? folder.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup) != true
+            else { continue }
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            try? folder.setResourceValues(values)
+        }
     }
 
     /// Quits Steam politely (so it saves its state) and starts it again hidden.

@@ -71,6 +71,17 @@ enum L10n {
         "Price": "Preis",
         "Free": "Kostenlos",
         "Coming soon": "Demnächst",
+
+        // Performance
+        "Frame limit": "FPS-Limit",
+        "Off": "Aus",
+        "Holds the game to an even frame rate that fits the display. Smoother, and a MacBook stays cooler, so it holds its speed longer.":
+            "Hält das Spiel auf einer gleichmäßigen Bildrate, die zum Bildschirm passt. Wirkt flüssiger, und ein MacBook bleibt kühler und hält sein Tempo länger.",
+        "MetalFX upscaling": "MetalFX-Hochskalierung",
+        "Apple's upscaler doubles the game's resolution on the way to the screen. Set a lower resolution in the game for more FPS and still get a sharp picture. DXMT only.":
+            "Apples Hochskalierer verdoppelt die Auflösung des Spiels auf dem Weg zum Bildschirm. Stell im Spiel eine niedrigere Auflösung ein: mehr FPS bei trotzdem scharfem Bild. Nur mit DXMT.",
+        "Low Power Mode is on – games run much slower with it.": "Der Stromsparmodus ist an – Spiele laufen damit deutlich langsamer.",
+        "Battery Settings": "Batterie-Einstellungen",
         "Steam also has a Mac version": "Steam hat auch eine Mac-Version",
         "Steam also has a Mac version of this game. It often runs better than the Windows version, but older Mac versions sometimes don't start on current Macs.":
             "Steam hat dieses Spiel auch als Mac-Version. Sie läuft oft besser als die Windows-Version, ältere Mac-Versionen starten auf aktuellen Macs aber manchmal nicht.",

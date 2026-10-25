@@ -40,6 +40,8 @@ final class LibraryModel: ObservableObject {
     @Published private(set) var running: [String: pid_t] = [:]
     @Published var errorMessage: String?
     @Published var controllerConnected = false
+    /// macOS Low Power Mode: CPU and graphics run much slower, and so do games.
+    @Published private(set) var lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
 
     /// First-run "Connect Steam" flow for Nightforge's own engine.
     let setup = SetupModel()
@@ -63,6 +65,9 @@ final class LibraryModel: ObservableObject {
         inputStarted = true
         input.start(model: self)
         watchRunningGames()
+        NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled }
+        }
         // Back from buying in the browser (or from Steam): pick up newly owned games.
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.reload(quiet: true) }

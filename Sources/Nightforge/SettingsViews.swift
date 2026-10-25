@@ -39,6 +39,30 @@ struct GameOptionsSheet: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Picker(L10n.t("Frame limit"), selection: $options.frameLimit) {
+                        ForEach(GameOptions.frameLimits, id: \.self) { limit in
+                            Text(limit == 0 ? L10n.t("Off") : "\(limit) FPS").tag(limit)
+                        }
+                    }
+                    Text(L10n.t("Holds the game to an even frame rate that fits the display. Smoother, and a MacBook stays cooler, so it holds its speed longer."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Toggle(isOn: $options.upscaling) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(L10n.t("MetalFX upscaling"))
+                        Text(L10n.t("Apple's upscaler doubles the game's resolution on the way to the screen. Set a lower resolution in the game for more FPS and still get a sharp picture. DXMT only."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .toggleStyle(.switch)
+                .disabled(options.graphics == .dxvk)
             }
 
             VStack(alignment: .leading, spacing: 6) {

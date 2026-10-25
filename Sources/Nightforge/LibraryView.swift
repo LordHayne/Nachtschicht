@@ -337,6 +337,18 @@ private struct GameDetail: View {
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Theme.muted)
             }
+            if model.lowPowerMode && game.install != .inStore {
+                HStack(spacing: 10) {
+                    Label(L10n.t("Low Power Mode is on – games run much slower with it."), systemImage: "battery.25percent")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.sodium)
+                    Button(L10n.t("Battery Settings")) {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension")!)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
             if game.macNative {
                 Label(L10n.t("Steam also has a Mac version of this game. It often runs better than the Windows version, but older Mac versions sometimes don't start on current Macs."),
                       systemImage: "laptopcomputer")

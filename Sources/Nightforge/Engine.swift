@@ -784,8 +784,9 @@ enum Engine {
             dxmt.append("d3d11.preferredMaxFrameRate = \(frameLimit)")  // paced by Metal
         }
         if upscaling {
-            dxmt.append("d3d11.metalSpatialUpscale = True")  // engine/patches/dxmt-0.80-metalfx-config.patch
-            dxmt.append("d3d11.metalSpatialUpscaleFactor = 2.0")
+            // engine/patches/dxmt-0.80-metalfx-*.patch: switched on per game, and without a fixed
+            // factor DXMT upscales to exactly the window's Retina pixels.
+            dxmt.append("d3d11.metalSpatialUpscale = True")
         }
         var folders = Set([installDir.standardizedFileURL])
         for exe in executableFiles(in: installDir) { folders.insert(exe.deletingLastPathComponent().standardizedFileURL) }

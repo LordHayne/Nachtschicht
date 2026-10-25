@@ -81,6 +81,19 @@ enum L10n {
         "Automatic follows “Sharp & smooth” in Settings. The frame limit keeps frames even; MetalFX (DXMT only) upscales the picture to full Retina sharpness – set a lower resolution in the game for more FPS.":
             "Automatisch folgt „Schön & flüssig“ in den Einstellungen. Das FPS-Limit hält die Bilder gleichmäßig; MetalFX (nur DXMT) skaliert das Bild auf volle Retina-Schärfe hoch – für mehr FPS im Spiel eine niedrigere Auflösung wählen.",
         "Sharp & smooth": "Schön & flüssig",
+        "Update to %@": "Auf %@ aktualisieren",
+        "Updating …": "Wird aktualisiert …",
+        "Installs the new version and restarts Nightforge. Your games and settings stay.":
+            "Installiert die neue Version und startet Nightforge neu. Deine Spiele und Einstellungen bleiben.",
+        "The update could not be downloaded. Check your internet connection.":
+            "Das Update konnte nicht geladen werden. Prüfe deine Internetverbindung.",
+        "The update download is damaged. Please try again.": "Der Update-Download ist beschädigt. Bitte versuch es noch einmal.",
+        "The update isn't signed correctly, so it wasn't installed.":
+            "Das Update ist nicht korrekt signiert und wurde deshalb nicht installiert.",
+        "Nightforge can't replace itself in this folder. Download the update from the release page instead.":
+            "Nightforge kann sich in diesem Ordner nicht selbst ersetzen. Lade das Update stattdessen von der Release-Seite.",
+        "This game didn't start with DXMT, so Nightforge uses DXVK for it automatically.":
+            "Dieses Spiel lief mit DXMT nicht an, deshalb nutzt Nightforge dafür automatisch DXVK.",
         "Advanced": "Erweitert",
         "CrossOver, Whisky and your own Wine": "CrossOver, Whisky und eigenes Wine",
         "Nightforge brings everything it needs. Fill this in only to also show games from CrossOver or Whisky bottles: leave Wine empty for CrossOver, or enter the path to the wine binary of Whisky or your own Wine.":

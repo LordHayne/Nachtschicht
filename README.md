@@ -113,7 +113,7 @@ Got a game running better with a specific setting? Add it to `profiles/mac.json`
 }
 ```
 
-Fields: `graphics` (`dxmt` or `dxvk`), `arguments`, `dllOverrides`, `registry`, `windowsVersion`, `winetricks`.
+Fields: `graphics` (`dxmt` or `dxvk`), `arguments`, `dllOverrides`, `registry`, `windowsVersion`, `winetricks`, `metalFX` (`false` keeps MetalFX off for a game it doesn't suit) and `frameLimit` (the game's automatic FPS limit).
 
 ## Build from source
 

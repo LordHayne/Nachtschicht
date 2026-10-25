@@ -53,6 +53,8 @@ jobs:
           for app_id, game in doc["games"].items():
               assert app_id.isdigit(), app_id
               assert game.get("graphics") in (None, "dxmt", "dxvk"), (app_id, game.get("graphics"))
+              assert game.get("metalFX") in (None, True, False), (app_id, game.get("metalFX"))
+              assert game.get("frameLimit") is None or isinstance(game["frameLimit"], int), (app_id, game.get("frameLimit"))
           print("ok:", len(doc["games"]), "games")
           PY
 

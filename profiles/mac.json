@@ -1,5 +1,5 @@
 {
- "about": "Nightforge's own per-game profiles, tested on Macs. They take precedence over umu-protonfixes. Fields: graphics (dxmt|dxvk), arguments, dllOverrides, registry, windowsVersion, winetricks, ignoreUpstream, note.",
+ "about": "Nightforge's own per-game profiles, tested on Macs. They take precedence over umu-protonfixes. Fields: graphics (dxmt|dxvk), arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX (false = keep MetalFX off), frameLimit (automatic FPS limit), ignoreUpstream, note.",
  "games": {
   "251570": {
    "name": "7 Days to Die",

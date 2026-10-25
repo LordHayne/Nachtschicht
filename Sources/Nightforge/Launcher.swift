@@ -126,17 +126,21 @@ struct GameOptions: Codable, Equatable {
     /// The frame limit actually used: the game's own choice, or with "Sharp & smooth" half the
     /// display's refresh rate on fast displays (60 on 120 Hz) and the refresh rate on 60 Hz ones,
     /// so every frame lasts the same number of screen refreshes.
-    func effectiveFrameLimit(displayRefreshRate: Int) -> Int {
+    /// A game profile (profiles/profiles.json) can set its own automatic limit.
+    func effectiveFrameLimit(displayRefreshRate: Int, profile: GameProfile? = nil) -> Int {
         if let frameLimit { return frameLimit }
-        guard Prefs.sharpAndSmooth, displayRefreshRate > 0 else { return 0 }
+        guard Prefs.sharpAndSmooth else { return 0 }
+        if let fromProfile = profile?.frameLimit { return fromProfile }
+        guard displayRefreshRate > 0 else { return 0 }
         return displayRefreshRate >= 100 ? displayRefreshRate / 2 : displayRefreshRate
     }
 
-    var effectiveUpscaling: Bool {
+    /// A game profile can rule MetalFX out for games it doesn't suit.
+    func effectiveUpscaling(profile: GameProfile? = nil) -> Bool {
         switch upscaling {
         case .on: return true
         case .off: return false
-        case .automatic: return Prefs.sharpAndSmooth
+        case .automatic: return Prefs.sharpAndSmooth && profile?.metalFX != false
         }
     }
 }
@@ -284,8 +288,8 @@ enum Launcher {
         }
         if game.bottle.isBuiltIn {
             Engine.writeGameConfigs(installDir: game.installDir,
-                                    frameLimit: options.effectiveFrameLimit(displayRefreshRate: displayRefreshRate),
-                                    upscaling: options.effectiveUpscaling)
+                                    frameLimit: options.effectiveFrameLimit(displayRefreshRate: displayRefreshRate, profile: profile),
+                                    upscaling: options.effectiveUpscaling(profile: profile))
             Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner)
         }
         // CrossOver bottles: the game inherits this process's environment. Nightforge's own

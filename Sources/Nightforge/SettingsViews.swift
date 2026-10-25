@@ -5,6 +5,8 @@ struct GameOptionsSheet: View {
     let game: Game
     @Environment(\.dismiss) private var dismiss
     @State private var options: GameOptions
+    /// Known fixes for the game, so "Automatic" shows what it will really do.
+    @State private var profile: GameProfile?
 
     init(game: Game) {
         self.game = game
@@ -32,7 +34,13 @@ struct GameOptionsSheet: View {
             if game.bottle.isBuiltIn {
                 VStack(alignment: .leading, spacing: 6) {
                     Picker(L10n.t("Graphics"), selection: $options.graphics) {
-                        ForEach(GraphicsLayer.allCases) { Text($0.label).tag($0) }
+                        ForEach(GraphicsLayer.allCases) { layer in
+                            if layer == .automatic && GraphicsHealth.dxmtFailed(game.appID) {
+                                Text(L10n.t("Automatic (%@)", "DXVK")).tag(layer)
+                            } else {
+                                Text(layer.label).tag(layer)
+                            }
+                        }
                     }
                     Text(L10n.t("How DirectX 10/11 reaches the Mac's graphics. DXMT translates straight to Metal and is usually faster; DXVK takes a detour through Vulkan and works with more games."))
                         .font(.caption)
@@ -42,14 +50,14 @@ struct GameOptionsSheet: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Picker(L10n.t("Frame limit"), selection: $options.frameLimit) {
-                        Text(automaticLabel(GameOptions().effectiveFrameLimit(displayRefreshRate: refreshRate).fpsLabel))
+                        Text(automaticLabel(GameOptions().effectiveFrameLimit(displayRefreshRate: refreshRate, profile: profile).fpsLabel))
                             .tag(Int?.none)
                         ForEach(GameOptions.frameLimits, id: \.self) { limit in
                             Text(limit.fpsLabel).tag(Int?.some(limit))
                         }
                     }
                     Picker(L10n.t("MetalFX upscaling"), selection: $options.upscaling) {
-                        Text(automaticLabel(Prefs.sharpAndSmooth ? L10n.t("On") : L10n.t("Off"))).tag(Choice.automatic)
+                        Text(automaticLabel(GameOptions().effectiveUpscaling(profile: profile) ? L10n.t("On") : L10n.t("Off"))).tag(Choice.automatic)
                         Text(L10n.t("On")).tag(Choice.on)
                         Text(L10n.t("Off")).tag(Choice.off)
                     }
@@ -75,6 +83,8 @@ struct GameOptionsSheet: View {
                 Button(L10n.t("Cancel")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button(L10n.t("Save")) {
+                    // Picking a layer by hand overrides what self-healing learned.
+                    if options.graphics != .automatic { GraphicsHealth.reset(game.appID) }
                     GameOptionsStore.save(options, for: game.appID)
                     dismiss()
                 }
@@ -83,6 +93,7 @@ struct GameOptionsSheet: View {
         }
         .padding(28)
         .frame(width: 470)
+        .task { if game.bottle.isBuiltIn { profile = await ProfileStore.shared.profile(for: game.appID) } }
     }
 }
 

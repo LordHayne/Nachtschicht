@@ -15,6 +15,10 @@ struct GameProfile: Decodable, Equatable {
     var windowsVersion: String?
     /// winetricks verbs installed into the prefix before the first start.
     var winetricks: [String]?
+    /// false: MetalFX upscaling misbehaves in this game, so "Automatic" leaves it off.
+    var metalFX: Bool?
+    /// Frame limit "Automatic" uses for this game instead of the display-based one.
+    var frameLimit: Int?
 
     struct RegistryEntry: Decodable, Equatable {
         let key: String
@@ -24,7 +28,7 @@ struct GameProfile: Decodable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case name, graphics, arguments, dllOverrides, registry, windowsVersion, winetricks
+        case name, graphics, arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX, frameLimit
     }
 
     init(from decoder: Decoder) throws {
@@ -37,6 +41,8 @@ struct GameProfile: Decodable, Equatable {
         registry = try? container.decodeIfPresent([RegistryEntry].self, forKey: .registry)
         windowsVersion = try? container.decodeIfPresent(String.self, forKey: .windowsVersion)
         winetricks = try? container.decodeIfPresent([String].self, forKey: .winetricks)
+        metalFX = try? container.decodeIfPresent(Bool.self, forKey: .metalFX)
+        frameLimit = try? container.decodeIfPresent(Int.self, forKey: .frameLimit)
     }
 }
 

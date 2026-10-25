@@ -40,6 +40,9 @@ final class LibraryModel: ObservableObject {
     @Published private(set) var running: [String: pid_t] = [:]
     @Published var errorMessage: String?
     @Published var controllerConnected = false
+    /// A newer Nightforge release, offered with one click in the top bar.
+    @Published private(set) var availableUpdate: AppUpdate?
+    @Published private(set) var updating = false
     /// macOS Low Power Mode: CPU and graphics run much slower, and so do games.
     @Published private(set) var lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
 
@@ -67,6 +70,10 @@ final class LibraryModel: ObservableObject {
         watchRunningGames()
         NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled }
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(3))  // after the window and Steam got going
+            availableUpdate = await Updater.check()
         }
         // Back from buying in the browser (or from Steam): pick up newly owned games.
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
@@ -214,6 +221,20 @@ final class LibraryModel: ObservableObject {
     func openStorePage(_ game: Game) {
         guard let url = URL(string: "https://store.steampowered.com/app/\(game.appID)") else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    func installUpdate() {
+        guard let update = availableUpdate, !updating else { return }
+        updating = true
+        Task {
+            do {
+                try await Updater.install(update)  // quits and restarts Nightforge when done
+            } catch {
+                updating = false
+                if case Updater.Failure.notWritable = error { NSWorkspace.shared.open(update.page) }
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 
     // MARK: - Steam store search
@@ -368,7 +389,17 @@ final class LibraryModel: ObservableObject {
                 launchPreparing = false
             }
             var watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
-            let options = GameOptionsStore.load(game.appID)
+            var options = GameOptionsStore.load(game.appID)
+            if game.bottle.isBuiltIn && options.graphics == .automatic
+                && (profile?.graphics ?? Engine.defaultGraphics) == .dxmt {
+                // Self-healing: did the last start with DXMT end within seconds? Then DXVK from now on.
+                _ = GraphicsHealth.reviewLastDXMTLaunch(game.appID, steamRoot: game.steamRoot)
+                if GraphicsHealth.dxmtFailed(game.appID) {
+                    options.graphics = .dxvk
+                } else {
+                    GraphicsHealth.recordDXMTLaunch(game.appID)
+                }
+            }
             let refreshRate = NSScreen.main?.maximumFramesPerSecond ?? 60  // the game opens on the main display
             do {
                 // Off the main thread: it reads Steam's app catalog and writes the registry, which

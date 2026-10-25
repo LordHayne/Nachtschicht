@@ -173,6 +173,29 @@ private struct TopBar: View {
 
             Spacer()
 
+            if let update = model.availableUpdate {
+                Button {
+                    model.installUpdate()
+                } label: {
+                    HStack(spacing: 7) {
+                        if model.updating {
+                            ProgressView().controlSize(.small).environment(\.colorScheme, .light)
+                        } else {
+                            Image(systemName: "arrow.down.circle.fill")
+                        }
+                        Text(model.updating ? L10n.t("Updating …") : L10n.t("Update to %@", update.version))
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.night)
+                    .padding(.horizontal, 14)
+                    .frame(height: 34)
+                    .background(Theme.sodium, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(model.updating)
+                .help(L10n.t("Installs the new version and restarts Nightforge. Your games and settings stay."))
+            }
+
             if !model.allGames.isEmpty {
                 SearchField()
                 RoundIconButton(
@@ -334,6 +357,13 @@ private struct GameDetail: View {
 
             if game.isVROnly {
                 Label(L10n.t("Needs a VR headset – this game can't be played on a Mac."), systemImage: "visionpro")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+            }
+            if game.bottle.isBuiltIn && GraphicsHealth.dxmtFailed(game.appID)
+                && GameOptionsStore.load(game.appID).graphics == .automatic {
+                Label(L10n.t("This game didn't start with DXMT, so Nightforge uses DXVK for it automatically."),
+                      systemImage: "wand.and.stars")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Theme.muted)
             }

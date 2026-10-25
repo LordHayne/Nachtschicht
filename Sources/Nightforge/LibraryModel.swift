@@ -455,11 +455,30 @@ final class LibraryModel: ObservableObject {
             launchNeedsConfirmation = false
             guard started else { return }
 
+            await bringToFront(game)
             switch behavior {
             case .quit: NSApp.terminate(nil)
             case .hide: NSApp.hide(nil)
             case .stay: break
             }
+        }
+    }
+
+    /// Steam starts the game in the background, and since macOS 14 an app can't push itself to
+    /// the front. Nightforge is the active app at this point, so it hands activation over as soon
+    /// as the game shows its window (Wine makes it a regular app then) – before quitting or hiding.
+    private func bringToFront(_ game: Game) async {
+        let folders = ["\\steamapps\\common\\\(game.installDirName.lowercased())\\": game.id]
+        for _ in 0..<60 {
+            let pid = await Task.detached(priority: .utility) { Self.runningGames(folders)[game.id] }.value
+            if let pid, let app = NSRunningApplication(processIdentifier: pid), app.activationPolicy == .regular {
+                guard NSApp.isActive else { return }  // the player has moved on to something else
+                NSApp.yieldActivation(to: app)
+                app.activate(from: .current, options: [])
+                try? await Task.sleep(for: .milliseconds(600))
+                if app.isActive { return }
+            }
+            try? await Task.sleep(for: .seconds(1))
         }
     }
 

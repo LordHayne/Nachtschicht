@@ -40,7 +40,7 @@ You need a Mac with Apple silicon (M1 or newer) and macOS 14 or later. Open **Te
 curl -fsSL https://raw.githubusercontent.com/LordHayne/Nightforge/main/scripts/install.sh | bash
 ```
 
-That installs the newest version into Applications and opens it. Run the same line again to update.
+That installs the newest version into Applications and opens it. From version 0.2 on, Nightforge also updates itself: when a new release is out, an "Update" button appears at the top – one click, and it restarts with the new version.
 
 Prefer clicking? Download the DMG from the [latest release](https://github.com/LordHayne/Nightforge/releases/latest), open it and drag Nightforge onto the Applications folder. Nightforge is free and not registered with Apple, so on first launch macOS says it can't verify it: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. The Terminal line skips this step.
 

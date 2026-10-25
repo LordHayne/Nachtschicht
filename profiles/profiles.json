@@ -3,7 +3,7 @@
  "sources": {
   "umu-protonfixes": {
    "url": "https://github.com/Open-Wine-Components/umu-protonfixes",
-   "commit": "96b9fc078958f11eeea80240f233c4b1639806a0",
+   "commit": "4500d09ff2af530afd400962f8fa5a40a888a7f3",
    "license": "BSD-2-Clause"
   },
   "mac": {
@@ -1667,5 +1667,5 @@
    "source": "umu"
   }
  },
- "generated": "2026-10-24T20:15:03Z"
+ "generated": "2026-10-25T09:22:13Z"
 }

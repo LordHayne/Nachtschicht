@@ -32,6 +32,8 @@ final class LibraryModel: ObservableObject {
     @Published private(set) var launchNeedsConfirmation = false
     /// The game's profile is installing runtimes (winetricks) before its first start.
     @Published private(set) var launchPreparing = false
+    /// Steam didn't take the launch request, so it's being restarted.
+    @Published private(set) var launchRestartingSteam = false
     @Published var showingOptions = false
     /// Waiting for the user to confirm removing this game (or its download).
     @Published var pendingUninstall: Game?
@@ -194,7 +196,38 @@ final class LibraryModel: ObservableObject {
             // Let the running-game check see the processes before deciding on a restart.
             try? await Task.sleep(for: .seconds(4))
             try? await Engine.ensureSteamRunning(wine, busy: !running.isEmpty)
+            Task { await self.watchSteamStart(wine) }
         }
+    }
+
+    /// Steam hangs now and then while starting under Wine (see Engine.steamLooksStuck), and one
+    /// restart fixes it. Watched for the first two minutes, ideally before anyone presses Play.
+    private func watchSteamStart(_ wine: URL) async {
+        for _ in 0..<24 {
+            try? await Task.sleep(for: .seconds(5))
+            if Engine.steamSignedIn { return }
+            if launchingID == nil, running.isEmpty, Engine.steamLooksStuck(quietFor: 45) {
+                _ = await restartStuckSteam(wine)
+                return
+            }
+        }
+    }
+
+    /// Restarts a hung Steam, queued like any other Steam start so a launch waits for it.
+    /// True once it has signed in again (up to 90 s).
+    private func restartStuckSteam(_ wine: URL) async -> Bool {
+        let previous = steamStartup
+        let restart = Task {
+            await previous?.value
+            try? await Engine.restartSteamInBackground(wine)
+        }
+        steamStartup = restart
+        await restart.value
+        for _ in 0..<90 {
+            if Engine.steamSignedIn { return true }
+            try? await Task.sleep(for: .seconds(1))
+        }
+        return false
     }
 
     /// The big button: play when installed, otherwise ask Steam to download it.
@@ -420,6 +453,7 @@ final class LibraryModel: ObservableObject {
             var totalSeconds = 0
             var started = false
             var askingSince: Int?
+            var retriedAfterRestart = false
             while quietSeconds < 120 && totalSeconds < 900 {
                 try? await Task.sleep(for: .seconds(1))
                 totalSeconds += 1
@@ -427,7 +461,6 @@ final class LibraryModel: ObservableObject {
                 case .running?:
                     started = true
                 case .needsConfirmation?:
-                    launchNeedsConfirmation = true
                     askingSince = askingSince ?? totalSeconds
                     quietSeconds = 0
                     continue
@@ -441,11 +474,33 @@ final class LibraryModel: ObservableObject {
                 case .failed?:
                     errorMessage = L10n.t("Steam couldn't start %@.", game.name)
                 case nil:
-                    if !launchNeedsConfirmation { quietSeconds += 1 }
-                    // Routine steps are answered within a second; a real question waits for the
-                    // player in Steam's window, which runs hidden – so show it.
-                    if let since = askingSince, totalSeconds - since == 3, game.bottle.isBuiltIn {
-                        showSteamWindow()
+                    // Steam never took the request and has gone silent: it hung while starting.
+                    // Restart it once and ask again.
+                    if game.bottle.isBuiltIn, !watcher.steamReceivedLaunch, !retriedAfterRestart,
+                       totalSeconds % 5 == 0, running.isEmpty, let runner, Engine.steamLooksStuck(quietFor: 30) {
+                        retriedAfterRestart = true
+                        launchRestartingSteam = true
+                        if await restartStuckSteam(URL(fileURLWithPath: runner)) {
+                            watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
+                            try? await Task.detached(priority: .userInitiated) {
+                                try Launcher.launch(game, runnerPath: runner, options: options, profile: profile,
+                                                    displayRefreshRate: refreshRate)
+                            }.value
+                        }
+                        launchRestartingSteam = false
+                        quietSeconds = 0
+                        continue
+                    }
+                    guard let since = askingSince else {
+                        quietSeconds += 1
+                        continue
+                    }
+                    // Steam logs routine steps as questions too and answers them within a second;
+                    // a real question waits for the player in Steam's window, which runs hidden –
+                    // so only then say so and show it.
+                    if totalSeconds - since >= 3, !launchNeedsConfirmation {
+                        launchNeedsConfirmation = true
+                        if game.bottle.isBuiltIn { showSteamWindow() }
                     }
                     continue
                 }

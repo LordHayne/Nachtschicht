@@ -861,6 +861,31 @@ enum Engine {
         }
     }
 
+    /// Under Wine, Steam now and then hangs while starting: it never signs in, stops writing its
+    /// logs and swallows every launch request. Signed out *and* silent for `seconds` is that state;
+    /// a Steam that is merely slow (first start, client update) keeps logging.
+    static func steamLooksStuck(quietFor seconds: TimeInterval) -> Bool {
+        let logs = steamRoot.appendingPathComponent("logs", isDirectory: true)
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: logs, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        let newest = files.compactMap { try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate }.max()
+        guard let newest, Date().timeIntervalSince(newest) >= seconds else { return false }
+        return !steamSignedIn
+    }
+
+    /// Whether the Steam started last has signed in: connection_log tags its lines with the
+    /// connection state, and "Client version" opens each start.
+    static var steamSignedIn: Bool {
+        let log = steamRoot.appendingPathComponent("logs/connection_log.txt")
+        guard let handle = try? FileHandle(forReadingFrom: log) else { return false }
+        defer { try? handle.close() }
+        let size = (try? handle.seekToEnd()) ?? 0
+        try? handle.seek(toOffset: size > 65_536 ? size - 65_536 : 0)
+        let tail = String(decoding: (try? handle.readToEnd()) ?? Data(), as: UTF8.self)
+        let start = tail.range(of: "Client version:", options: .backwards)?.upperBound ?? tail.startIndex
+        return tail[start...].contains("[Logged On")
+    }
+
     /// Opens Steam's main window. Questions Steam asks before a launch (licence agreement, which
     /// version to start) appear in it, and with -silent it stays hidden. Returns the processes
     /// that draw Steam's windows, so the caller can bring them to the front.

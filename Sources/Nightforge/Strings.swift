@@ -174,6 +174,7 @@ enum L10n {
 
         "Confirm in the Steam window": "Bestätige im Steam-Fenster",
         "Setting up the game …": "Spiel wird eingerichtet …",
+        "Restarting Steam …": "Steam wird neu gestartet …",
         "Steam couldn't start %@.": "Steam konnte %@ nicht starten.",
 
         "VR only": "Nur VR",

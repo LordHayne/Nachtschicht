@@ -190,6 +190,8 @@ struct LaunchWatcher {
     private let log: URL
     private let appID: Int
     private var offset: UInt64
+    /// Steam logged the "-applaunch" request, i.e. it's alive and took it.
+    private(set) var steamReceivedLaunch = false
     /// Steam was already waiting on a question for this game before the launch (e.g. an earlier
     /// attempt); the new request just queues behind it.
     private var openQuestion = false
@@ -225,6 +227,9 @@ struct LaunchWatcher {
 
         var event: Event?
         for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
+            if line.contains("ExecCommandLine"), line.hasSuffix("-applaunch \(appID)\"") || line.contains("-applaunch \(appID) ") {
+                steamReceivedLaunch = true
+            }
             guard mentionsApp(line) else { continue }
             if line.contains("Game process added") || line.contains("changed task to Completed") {
                 event = .running

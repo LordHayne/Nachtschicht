@@ -664,24 +664,29 @@ enum Engine {
         let folder = resources.appendingPathComponent("vulkan/implicit_layer.d", isDirectory: true)
         let installed = folder.appendingPathComponent(library.lastPathComponent)
         let manifest = folder.appendingPathComponent("nightforge.json")
-        if fm.fileExists(atPath: manifest.path), fm.contentsEqual(atPath: library.path, andPath: installed.path) { return }
-        let layer: [String: Any] = [
-            "file_format_version": "1.2.0",
-            "layer": [
-                "name": "VK_LAYER_NIGHTFORGE_compat",
-                "type": "GLOBAL",
-                "library_path": "./\(library.lastPathComponent)",
-                "api_version": "1.4.323",
-                "implementation_version": "1",
-                "description": "Nightforge: lets Windows games start on MoltenVK",
-                "disable_environment": ["DISABLE_NIGHTFORGE_VULKAN_LAYER": "1"],
-            ],
-        ]
+        // Written as text: the loader counts every key after "layer" as another layer and then
+        // drops the file, so "layer" has to come last.
+        let layer = Data("""
+            {
+                "file_format_version": "1.2.0",
+                "layer": {
+                    "name": "VK_LAYER_NIGHTFORGE_compat",
+                    "type": "GLOBAL",
+                    "library_path": "./\(library.lastPathComponent)",
+                    "api_version": "1.4.323",
+                    "implementation_version": "1",
+                    "description": "Nightforge: lets Windows games start on MoltenVK",
+                    "disable_environment": { "DISABLE_NIGHTFORGE_VULKAN_LAYER": "1" }
+                }
+            }
+
+            """.utf8)
+        if (try? Data(contentsOf: manifest)) == layer, fm.contentsEqual(atPath: library.path, andPath: installed.path) { return }
         do {
             try fm.createDirectory(at: folder, withIntermediateDirectories: true)
             try? fm.removeItem(at: installed)
             try fm.copyItem(at: library, to: installed)
-            try JSONSerialization.data(withJSONObject: layer, options: [.prettyPrinted, .withoutEscapingSlashes]).write(to: manifest)
+            try layer.write(to: manifest)
         } catch {
             try? fm.removeItem(at: manifest)
         }

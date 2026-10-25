@@ -22,6 +22,7 @@ Nightforge sets up everything a Windows game needs on your Mac and then gets out
 ## Why Nightforge
 
 - **One button setup.** The game engine, a Windows environment, Steam and Rosetta (if missing) are set up for you in a few minutes. You only sign in to Steam, in Steam's own window; Nightforge never sees your login.
+- **Sharp & smooth, automatically.** Every game gets Apple's MetalFX upscaling to full Retina sharpness and an even frame rate that fits your display (60 FPS on a 120 Hz screen). Nothing to set up; each game can still be tuned in its options.
 - **Fast graphics.** DirectX 10/11 goes straight to Metal through DXMT. On an M5, OxyRail runs at about 75 FPS instead of 45–50, and 7 Days to Die at about 63 instead of 30, compared with the Vulkan route.
 - **macOS Game Mode.** Games get priority on the CPU and graphics, and controllers and headphones get half the Bluetooth latency.
 - **Fixes that arrive by themselves.** A game database is rebuilt every night from the community fixes behind Proton, plus our own profiles tested on Macs. Nightforge applies the right one silently when a game starts.
@@ -75,10 +76,14 @@ Clicking a cover selects it; a second click launches the game.
 
 ## Settings
 
-- **Language:** English or German, or follow macOS (Settings → General).
-- **Performance HUD:** frames per second and frame times in every game.
+Nightforge is meant to be switched on and enjoyed; the defaults give the best result your Mac can deliver.
+
+- **Sharp & smooth:** on by default (see above).
 - **Game Mode:** on by default. Turn it off if a game's sound crackles.
-- **Per game (O):** graphics layer (Automatic, DXMT or DXVK) and launch options.
+- **Performance HUD:** frames per second and frame times in every game.
+- **Language:** English or German, or follow macOS.
+- **Per game (O):** graphics layer, frame limit, MetalFX and launch options, all on "Automatic" unless you change them.
+- **Advanced:** CrossOver and Whisky bottles or your own Wine, folded away until you need them.
 
 ## Good to know
 

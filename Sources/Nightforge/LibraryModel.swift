@@ -369,11 +369,13 @@ final class LibraryModel: ObservableObject {
             }
             var watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
             let options = GameOptionsStore.load(game.appID)
+            let refreshRate = NSScreen.main?.maximumFramesPerSecond ?? 60  // the game opens on the main display
             do {
                 // Off the main thread: it reads Steam's app catalog and writes the registry, which
                 // would freeze the window for a moment.
                 try await Task.detached(priority: .userInitiated) {
-                    try Launcher.launch(game, runnerPath: runner ?? "", options: options, profile: profile)
+                    try Launcher.launch(game, runnerPath: runner ?? "", options: options, profile: profile,
+                                        displayRefreshRate: refreshRate)
                 }.value
             } catch {
                 launchingID = nil

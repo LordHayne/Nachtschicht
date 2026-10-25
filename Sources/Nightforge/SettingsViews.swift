@@ -42,27 +42,23 @@ struct GameOptionsSheet: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Picker(L10n.t("Frame limit"), selection: $options.frameLimit) {
+                        Text(automaticLabel(GameOptions().effectiveFrameLimit(displayRefreshRate: refreshRate).fpsLabel))
+                            .tag(Int?.none)
                         ForEach(GameOptions.frameLimits, id: \.self) { limit in
-                            Text(limit == 0 ? L10n.t("Off") : "\(limit) FPS").tag(limit)
+                            Text(limit.fpsLabel).tag(Int?.some(limit))
                         }
                     }
-                    Text(L10n.t("Holds the game to an even frame rate that fits the display. Smoother, and a MacBook stays cooler, so it holds its speed longer."))
+                    Picker(L10n.t("MetalFX upscaling"), selection: $options.upscaling) {
+                        Text(automaticLabel(Prefs.sharpAndSmooth ? L10n.t("On") : L10n.t("Off"))).tag(Choice.automatic)
+                        Text(L10n.t("On")).tag(Choice.on)
+                        Text(L10n.t("Off")).tag(Choice.off)
+                    }
+                    .disabled(options.graphics == .dxvk)
+                    Text(L10n.t("Automatic follows “Sharp & smooth” in Settings. The frame limit keeps frames even; MetalFX (DXMT only) upscales the picture to full Retina sharpness – set a lower resolution in the game for more FPS."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-
-                Toggle(isOn: $options.upscaling) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(L10n.t("MetalFX upscaling"))
-                        Text(L10n.t("Apple's upscaler doubles the game's resolution on the way to the screen. Set a lower resolution in the game for more FPS and still get a sharp picture. DXMT only."))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .toggleStyle(.switch)
-                .disabled(options.graphics == .dxvk)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -90,6 +86,16 @@ struct GameOptionsSheet: View {
     }
 }
 
+private extension GameOptionsSheet {
+    var refreshRate: Int { NSScreen.main?.maximumFramesPerSecond ?? 60 }
+
+    func automaticLabel(_ value: String) -> String { L10n.t("Automatic (%@)", value) }
+}
+
+private extension Int {
+    var fpsLabel: String { self == 0 ? L10n.t("Off") : "\(self) FPS" }
+}
+
 struct SettingsView: View {
     @EnvironmentObject private var model: LibraryModel
     @AppStorage(Prefs.Keys.bottlesRoot) private var bottlesRoot = ""
@@ -98,6 +104,8 @@ struct SettingsView: View {
     @AppStorage(AppLanguage.storageKey) private var language = AppLanguage.system.rawValue
     @AppStorage(Prefs.Keys.performanceHUD) private var performanceHUD = false
     @AppStorage(Prefs.Keys.gameMode) private var gameMode = true
+    @AppStorage(Prefs.Keys.sharpAndSmooth) private var sharpAndSmooth = true
+    @State private var showAdvanced = false
 
     var body: some View {
         Form {
@@ -107,16 +115,15 @@ struct SettingsView: View {
                         Text(option.label).tag(option.rawValue)
                     }
                 }
-                Toggle(isOn: $performanceHUD) {
+                Toggle(isOn: $sharpAndSmooth) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(L10n.t("Performance HUD in games"))
-                        Text(L10n.t("Shows frames per second and frame times while you play. Takes effect at the next game start."))
+                        Text(L10n.t("Sharp & smooth"))
+                        Text(L10n.t("Every game gets Apple's MetalFX upscaling to full Retina sharpness and an even frame rate that fits your display (60 FPS on a 120 Hz screen). Change it per game in its options."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
                 .toggleStyle(.switch)
-                .onChange(of: performanceHUD) { _, _ in model.applySteamSettings() }
                 Toggle(isOn: $gameMode) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(L10n.t("Game Mode"))
@@ -127,41 +134,47 @@ struct SettingsView: View {
                 }
                 .toggleStyle(.switch)
                 .onChange(of: gameMode) { _, _ in model.applySteamSettings() }
-            } header: {
-                Text(L10n.t("General"))
-            }
-
-            Section {
-                LabeledContent(L10n.t("Bottles Folder")) {
-                    HStack {
-                        TextField("", text: $bottlesRoot, prompt: Text(LibraryScanner.defaultBottlesRoot().path))
-                            .labelsHidden()
-                        Button(L10n.t("Choose …")) { model.chooseBottlesFolder() }
+                Toggle(isOn: $performanceHUD) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(L10n.t("Performance HUD in games"))
+                        Text(L10n.t("Shows frames per second and frame times while you play. Takes effect at the next game start."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
-                Button(L10n.t("Rescan Library")) { model.reload() }
-            } header: {
-                Text(L10n.t("Library"))
-            } footer: {
-                Text(L10n.t("Leave empty to use the default CrossOver folder."))
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                LabeledContent("Wine") {
-                    TextField("", text: $runnerPath, prompt: Text(Launcher.detectRunner()))
-                        .labelsHidden()
-                }
+                .toggleStyle(.switch)
+                .onChange(of: performanceHUD) { _, _ in model.applySteamSettings() }
                 Picker(L10n.t("After Launch"), selection: $afterLaunch) {
                     ForEach(AfterLaunch.allCases) { option in
                         Text(option.label).tag(option.rawValue)
                     }
                 }
             } header: {
-                Text(L10n.t("Launching"))
-            } footer: {
-                Text(L10n.t("Leave empty for CrossOver. For Whisky or your own Wine, enter the path to the wine binary; the bottle is then passed as WINEPREFIX. “Quit launcher” makes sure nothing from Nightforge keeps running while you play."))
-                    .foregroundStyle(.secondary)
+                Text(L10n.t("General"))
+            }
+
+            // Only for players who bring their own Wine setup; Nightforge needs none of it.
+            Section {
+                DisclosureGroup(L10n.t("CrossOver, Whisky and your own Wine"), isExpanded: $showAdvanced) {
+                    LabeledContent(L10n.t("Bottles Folder")) {
+                        HStack {
+                            TextField("", text: $bottlesRoot, prompt: Text(LibraryScanner.defaultBottlesRoot().path))
+                                .labelsHidden()
+                            Button(L10n.t("Choose …")) { model.chooseBottlesFolder() }
+                        }
+                    }
+                    LabeledContent("Wine") {
+                        TextField("", text: $runnerPath, prompt: Text(Launcher.detectRunner()))
+                            .labelsHidden()
+                    }
+                    Text(L10n.t("Nightforge brings everything it needs. Fill this in only to also show games from CrossOver or Whisky bottles: leave Wine empty for CrossOver, or enter the path to the wine binary of Whisky or your own Wine."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(L10n.t("Rescan Library")) { model.reload() }
+                }
+            } header: {
+                Text(L10n.t("Advanced"))
             }
         }
         .formStyle(.grouped)

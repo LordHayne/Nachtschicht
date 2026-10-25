@@ -775,15 +775,15 @@ enum Engine {
     /// from the game's working folder – the game is started by the already running Steam, so
     /// environment variables don't reach it. Written next to every program of the game, since some
     /// start from a subfolder; a config the game ships itself is left alone.
-    static func writeGameConfigs(installDir: URL, options: GameOptions) {
+    static func writeGameConfigs(installDir: URL, frameLimit: Int, upscaling: Bool) {
         var dxvk = ["dxvk.enableAsync = True"]
         if Prefs.performanceHUD { dxvk.append("dxvk.hud = fps,frametimes,gpuload") }
         var dxmt: [String] = []
-        if options.frameLimit > 0 {
-            dxvk.append("dxgi.maxFrameRate = \(options.frameLimit)")
-            dxmt.append("d3d11.preferredMaxFrameRate = \(options.frameLimit)")  // paced by Metal
+        if frameLimit > 0 {
+            dxvk.append("dxgi.maxFrameRate = \(frameLimit)")
+            dxmt.append("d3d11.preferredMaxFrameRate = \(frameLimit)")  // paced by Metal
         }
-        if options.upscaling {
+        if upscaling {
             dxmt.append("d3d11.metalSpatialUpscale = True")  // engine/patches/dxmt-0.80-metalfx-config.patch
             dxmt.append("d3d11.metalSpatialUpscaleFactor = 2.0")
         }

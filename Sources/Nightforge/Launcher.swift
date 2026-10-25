@@ -21,6 +21,13 @@ enum Prefs {
         static let afterLaunch = "afterLaunch"
         static let performanceHUD = "performanceHUD"
         static let gameMode = "gameMode"
+        static let sharpAndSmooth = "sharpAndSmooth"
+    }
+
+    /// "Sharp & smooth": MetalFX upscaling to full Retina sharpness and an even frame rate that
+    /// fits the display, for every game that doesn't choose otherwise. On by default.
+    static var sharpAndSmooth: Bool {
+        UserDefaults.standard.object(forKey: Keys.sharpAndSmooth) as? Bool ?? true
     }
 
     /// macOS Game Mode for games run by Nightforge's own Steam (see Engine.installGameBundle).
@@ -71,18 +78,29 @@ enum GraphicsLayer: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// Automatic follows the global "Sharp & smooth" setting; on and off override it for one game.
+enum Choice: String, Codable, CaseIterable {
+    case automatic, on, off
+}
+
 struct GameOptions: Codable, Equatable {
     var metalHUD = false
     var extraArgs = ""
     var graphics = GraphicsLayer.automatic
-    /// Frames per second the game is held to (0 = no limit). Paced by Metal with DXMT.
-    var frameLimit = 0
+    /// Frames per second the game is held to: nil = automatic ("Sharp & smooth"), 0 = no limit.
+    var frameLimit: Int?
     /// MetalFX spatial upscaling of the game's picture (DXMT only).
-    var upscaling = false
+    var upscaling = Choice.automatic
 
     static let frameLimits = [0, 30, 40, 60, 120]
 
     init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case metalHUD, extraArgs, graphics, fps, metalFX
+        // 0.1.4 stored these; their defaults (0, false) meant "untouched", so they read as automatic.
+        case frameLimit, upscaling
+    }
 
     // Options saved before a field existed decode with that field's default.
     init(from decoder: Decoder) throws {
@@ -90,8 +108,36 @@ struct GameOptions: Codable, Equatable {
         metalHUD = try c.decodeIfPresent(Bool.self, forKey: .metalHUD) ?? false
         extraArgs = try c.decodeIfPresent(String.self, forKey: .extraArgs) ?? ""
         graphics = try c.decodeIfPresent(GraphicsLayer.self, forKey: .graphics) ?? .automatic
-        frameLimit = try c.decodeIfPresent(Int.self, forKey: .frameLimit) ?? 0
-        upscaling = try c.decodeIfPresent(Bool.self, forKey: .upscaling) ?? false
+        let legacyLimit = try c.decodeIfPresent(Int.self, forKey: .frameLimit) ?? 0
+        frameLimit = try c.decodeIfPresent(Int.self, forKey: .fps) ?? (legacyLimit > 0 ? legacyLimit : nil)
+        let legacyUpscaling = try c.decodeIfPresent(Bool.self, forKey: .upscaling) ?? false
+        upscaling = try c.decodeIfPresent(Choice.self, forKey: .metalFX) ?? (legacyUpscaling ? .on : .automatic)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(metalHUD, forKey: .metalHUD)
+        try c.encode(extraArgs, forKey: .extraArgs)
+        try c.encode(graphics, forKey: .graphics)
+        try c.encodeIfPresent(frameLimit, forKey: .fps)
+        try c.encode(upscaling, forKey: .metalFX)
+    }
+
+    /// The frame limit actually used: the game's own choice, or with "Sharp & smooth" half the
+    /// display's refresh rate on fast displays (60 on 120 Hz) and the refresh rate on 60 Hz ones,
+    /// so every frame lasts the same number of screen refreshes.
+    func effectiveFrameLimit(displayRefreshRate: Int) -> Int {
+        if let frameLimit { return frameLimit }
+        guard Prefs.sharpAndSmooth, displayRefreshRate > 0 else { return 0 }
+        return displayRefreshRate >= 100 ? displayRefreshRate / 2 : displayRefreshRate
+    }
+
+    var effectiveUpscaling: Bool {
+        switch upscaling {
+        case .on: return true
+        case .off: return false
+        case .automatic: return Prefs.sharpAndSmooth
+        }
     }
 }
 
@@ -214,7 +260,8 @@ enum Launcher {
         crossOverCandidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? crossOverCandidates[0]
     }
 
-    static func launch(_ game: Game, runnerPath: String, options: GameOptions, profile: GameProfile? = nil) throws {
+    static func launch(_ game: Game, runnerPath: String, options: GameOptions, profile: GameProfile? = nil,
+                       displayRefreshRate: Int = 60) throws {
         guard FileManager.default.isExecutableFile(atPath: runnerPath) else {
             throw LaunchError.runnerMissing(runnerPath)
         }
@@ -236,7 +283,9 @@ enum Launcher {
             environment["WINEPREFIX"] = game.bottle.url.path
         }
         if game.bottle.isBuiltIn {
-            Engine.writeGameConfigs(installDir: game.installDir, options: options)
+            Engine.writeGameConfigs(installDir: game.installDir,
+                                    frameLimit: options.effectiveFrameLimit(displayRefreshRate: displayRefreshRate),
+                                    upscaling: options.effectiveUpscaling)
             Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner)
         }
         // CrossOver bottles: the game inherits this process's environment. Nightforge's own

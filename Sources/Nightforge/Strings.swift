@@ -75,11 +75,18 @@ enum L10n {
         // Performance
         "Frame limit": "FPS-Limit",
         "Off": "Aus",
-        "Holds the game to an even frame rate that fits the display. Smoother, and a MacBook stays cooler, so it holds its speed longer.":
-            "Hält das Spiel auf einer gleichmäßigen Bildrate, die zum Bildschirm passt. Wirkt flüssiger, und ein MacBook bleibt kühler und hält sein Tempo länger.",
         "MetalFX upscaling": "MetalFX-Hochskalierung",
-        "Apple's upscaler doubles the game's resolution on the way to the screen. Set a lower resolution in the game for more FPS and still get a sharp picture. DXMT only.":
-            "Apples Hochskalierer verdoppelt die Auflösung des Spiels auf dem Weg zum Bildschirm. Stell im Spiel eine niedrigere Auflösung ein: mehr FPS bei trotzdem scharfem Bild. Nur mit DXMT.",
+        "On": "An",
+        "Automatic (%@)": "Automatisch (%@)",
+        "Automatic follows “Sharp & smooth” in Settings. The frame limit keeps frames even; MetalFX (DXMT only) upscales the picture to full Retina sharpness – set a lower resolution in the game for more FPS.":
+            "Automatisch folgt „Schön & flüssig“ in den Einstellungen. Das FPS-Limit hält die Bilder gleichmäßig; MetalFX (nur DXMT) skaliert das Bild auf volle Retina-Schärfe hoch – für mehr FPS im Spiel eine niedrigere Auflösung wählen.",
+        "Sharp & smooth": "Schön & flüssig",
+        "Advanced": "Erweitert",
+        "CrossOver, Whisky and your own Wine": "CrossOver, Whisky und eigenes Wine",
+        "Nightforge brings everything it needs. Fill this in only to also show games from CrossOver or Whisky bottles: leave Wine empty for CrossOver, or enter the path to the wine binary of Whisky or your own Wine.":
+            "Nightforge bringt alles selbst mit. Nur ausfüllen, wenn auch Spiele aus CrossOver- oder Whisky-Bottles erscheinen sollen: Wine leer lassen für CrossOver, sonst den Pfad zur wine-Datei von Whisky oder deinem eigenen Wine eintragen.",
+        "Every game gets Apple's MetalFX upscaling to full Retina sharpness and an even frame rate that fits your display (60 FPS on a 120 Hz screen). Change it per game in its options.":
+            "Jedes Spiel bekommt Apples MetalFX-Hochskalierung auf volle Retina-Schärfe und eine gleichmäßige Bildrate passend zum Bildschirm (60 FPS auf einem 120-Hz-Display). Pro Spiel in dessen Optionen änderbar.",
         "Low Power Mode is on – games run much slower with it.": "Der Stromsparmodus ist an – Spiele laufen damit deutlich langsamer.",
         "Battery Settings": "Batterie-Einstellungen",
         "Steam also has a Mac version": "Steam hat auch eine Mac-Version",
@@ -113,14 +120,10 @@ enum L10n {
         "Library": "Bibliothek",
         "Bottles Folder": "Bottles-Ordner",
         "Choose …": "Wählen …",
-        "Leave empty to use the default CrossOver folder.": "Leer lassen für den CrossOver-Standardordner.",
-        "Launching": "Starten",
         "After Launch": "Nach dem Start",
         "Quit launcher": "Launcher beenden",
         "Hide launcher": "Launcher ausblenden",
         "Keep open": "Offen lassen",
-        "Leave empty for CrossOver. For Whisky or your own Wine, enter the path to the wine binary; the bottle is then passed as WINEPREFIX. “Quit launcher” makes sure nothing from Nightforge keeps running while you play.":
-            "Leer lassen für CrossOver. Für Whisky oder ein eigenes Wine den Pfad zur wine-Datei eintragen, die Bottle wird dann als WINEPREFIX übergeben. „Launcher beenden“ sorgt dafür, dass beim Spielen nichts von Nightforge mitläuft.",
 
         // Setup
         "Preparing your Mac": "Mac wird vorbereitet",

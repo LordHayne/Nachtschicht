@@ -88,6 +88,7 @@ actor ProfileStore {
         guard let remoteURL else { return }
         var request = URLRequest(url: remoteURL)
         request.timeoutInterval = 15
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let decoded = decode(data)

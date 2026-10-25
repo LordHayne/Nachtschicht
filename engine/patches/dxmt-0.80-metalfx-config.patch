@@ -1,0 +1,16 @@
+diff --git a/src/d3d11/d3d11_swapchain.cpp b/src/d3d11/d3d11_swapchain.cpp
+index 5e9404d..a2a4583 100644
+--- a/src/d3d11/d3d11_swapchain.cpp
++++ b/src/d3d11/d3d11_swapchain.cpp
+@@ -1113,7 +1113,10 @@ CreateSwapChain(
+       pDesc->BufferCount != 1) {
+     WARN("CreateSwapChain: unsupported swap effect ", pDesc->SwapEffect, " with backbuffer size ", pDesc->BufferCount);
+   }
+-  if (env::getEnvVar("DXMT_METALFX_SPATIAL_SWAPCHAIN") == "1") {
++  // Nightforge: MetalFX can also be switched on per game in dxmt.conf, since an environment
++  // variable reaches every game started from the same Steam.
++  if (env::getEnvVar("DXMT_METALFX_SPATIAL_SWAPCHAIN") == "1" ||
++      Config::getInstance().getOption<bool>("d3d11.metalSpatialUpscale", false)) {
+     if (pDevice->GetMTLDevice().supportsFXSpatialScaler()) {
+       *ppSwapChain = new MTLD3D11SwapChain<true>(
+           pFactory, pDevice, layer_factory.ptr(), hWnd, pDesc, pFullscreenDesc

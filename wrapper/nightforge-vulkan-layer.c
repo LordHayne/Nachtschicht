@@ -15,7 +15,8 @@
 // Nightforge before each start, like dxmt.conf):
 //         maxPerStageDescriptorSamplers = 64
 //         hdr = on
-// Each swapchain's size, format and colour space goes to stderr, i.e. Nightforge's wine.log.
+// Each swapchain's size, format and colour space goes to stderr, i.e. Nightforge's wine.log, and
+// so does the frame rate: every 10 s for the first two minutes, then every minute.
 //
 // Inside the "Nightforge Game" bundle the Vulkan loader finds it as an implicit layer in
 // Contents/Resources/vulkan/implicit_layer.d (see Engine.installVulkanLayer).
@@ -29,6 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <vulkan/vk_layer.h>
 
 #define EXPORT __attribute__((visibility("default")))
@@ -42,6 +44,7 @@ static PFN_vkGetPhysicalDeviceProperties2 next_properties2;
 static PFN_vkGetPhysicalDeviceSurfaceFormatsKHR next_surface_formats;
 static PFN_vkGetPhysicalDeviceSurfaceFormats2KHR next_surface_formats2;
 static PFN_vkCreateSwapchainKHR next_create_swapchain;
+static PFN_vkQueuePresentKHR next_queue_present;
 
 // MARK: - Configuration
 
@@ -189,6 +192,35 @@ static VKAPI_ATTR VkResult VKAPI_CALL CreateSwapchainKHR(VkDevice device, const 
     return next_create_swapchain(device, info, allocator, swapchain);
 }
 
+// MARK: - Frame rate
+
+static double now_seconds(void) {
+    struct timespec time;
+    clock_gettime(CLOCK_MONOTONIC, &time);
+    return time.tv_sec + time.tv_nsec / 1e9;
+}
+
+static VKAPI_ATTR VkResult VKAPI_CALL QueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *info) {
+    static double started, period_start, last;
+    static unsigned frames;
+    static double slowest;
+    double time = now_seconds();
+    if (started == 0) started = period_start = last = time;
+    if (time - last > slowest) slowest = time - last;
+    last = time;
+    frames++;
+    double period = time - started < 120 ? 10 : 60;
+    if (time - period_start >= period) {
+        double seconds = time - period_start;
+        fprintf(stderr, "[nightforge-vulkan] %.1f FPS, frames %.1f ms on average, slowest %.0f ms\n",
+                frames / seconds, seconds * 1000 / frames, slowest * 1000);
+        period_start = time;
+        frames = 0;
+        slowest = 0;
+    }
+    return next_queue_present(queue, info);
+}
+
 // MARK: - Instance and device
 
 static VKAPI_ATTR VkResult VKAPI_CALL CreateInstance(const VkInstanceCreateInfo *info,
@@ -267,6 +299,10 @@ static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL GetDeviceProcAddr(VkDevice devic
     if (theirs && !strcmp(name, "vkCreateSwapchainKHR")) {
         if (!next_create_swapchain) next_create_swapchain = (PFN_vkCreateSwapchainKHR)theirs;
         return (PFN_vkVoidFunction)CreateSwapchainKHR;
+    }
+    if (theirs && !strcmp(name, "vkQueuePresentKHR")) {
+        if (!next_queue_present) next_queue_present = (PFN_vkQueuePresentKHR)theirs;
+        return (PFN_vkVoidFunction)QueuePresentKHR;
     }
     return theirs;
 }

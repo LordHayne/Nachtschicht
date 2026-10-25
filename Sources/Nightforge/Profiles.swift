@@ -19,6 +19,9 @@ struct GameProfile: Decodable, Equatable {
     var metalFX: Bool?
     /// Frame limit "Automatic" uses for this game instead of the display-based one.
     var frameLimit: Int?
+    /// Vulkan games: samplers per shader stage reported to the game. MoltenVK says 16, which
+    /// stops some games at start; Metal's argument buffers hold more.
+    var vulkanSamplers: Int?
 
     struct RegistryEntry: Decodable, Equatable {
         let key: String
@@ -29,6 +32,7 @@ struct GameProfile: Decodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case name, graphics, arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX, frameLimit
+        case vulkanSamplers
     }
 
     init(from decoder: Decoder) throws {
@@ -43,6 +47,7 @@ struct GameProfile: Decodable, Equatable {
         winetricks = try? container.decodeIfPresent([String].self, forKey: .winetricks)
         metalFX = try? container.decodeIfPresent(Bool.self, forKey: .metalFX)
         frameLimit = try? container.decodeIfPresent(Int.self, forKey: .frameLimit)
+        vulkanSamplers = try? container.decodeIfPresent(Int.self, forKey: .vulkanSamplers)
     }
 }
 

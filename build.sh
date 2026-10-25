@@ -45,6 +45,10 @@ fi
 clang -arch x86_64 -mmacosx-version-min=11.0 -dynamiclib -framework AppKit -Wall \
   -o "$OUT/Contents/Resources/hide-steam-dock.dylib" wrapper/hide-steam-dock.m
 
+# Lets Windows games that render with Vulkan start on MoltenVK (x86_64, loaded by Wine's Vulkan loader).
+clang -arch x86_64 -mmacosx-version-min=11.0 -dynamiclib -fvisibility=hidden -O2 -Wall -I wrapper/vulkan-headers \
+  -o "$OUT/Contents/Resources/nightforge-vulkan-layer.dylib" wrapper/nightforge-vulkan-layer.c
+
 if [ -f Resources/AppIcon.png ]; then
   ICONSET="build/AppIcon.iconset"
   rm -rf "$ICONSET" && mkdir -p "$ICONSET"

@@ -766,6 +766,12 @@
    ],
    "source": "umu"
   },
+  "275850": {
+   "name": "No Man's Sky",
+   "vulkanSamplers": 32,
+   "note": "Tested 2026-10-25 on M5: the Windows version (Vulkan) starts on MoltenVK only with Nightforge's Vulkan layer, which drops wide lines and reports 32 samplers per stage (24 is still too few). Steam also sells a native Mac version.",
+   "source": "mac"
+  },
   "281280": {
    "name": "Mashed(281280)",
    "windowsVersion": "winxp",

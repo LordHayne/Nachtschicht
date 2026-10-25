@@ -294,7 +294,8 @@ enum Launcher {
         if game.bottle.isBuiltIn {
             Engine.writeGameConfigs(installDir: game.installDir,
                                     frameLimit: options.effectiveFrameLimit(displayRefreshRate: displayRefreshRate, profile: profile),
-                                    upscaling: options.effectiveUpscaling(profile: profile))
+                                    upscaling: options.effectiveUpscaling(profile: profile),
+                                    vulkanSamplers: profile?.vulkanSamplers)
             Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner)
         }
         // CrossOver bottles: the game inherits this process's environment. Nightforge's own

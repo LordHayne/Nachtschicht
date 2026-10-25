@@ -573,7 +573,10 @@ enum Engine {
                 return isDirectory.boolValue || inode(original) == inode(macOS.appendingPathComponent(name).path)
             }
         // Steam may be running from it; leave a bundle that's still right alone.
-        if current { return macOS.appendingPathComponent("wine") }
+        if current {
+            installVulkanLayer(resources: resources)
+            return macOS.appendingPathComponent("wine")
+        }
 
         // The bundle's name under Nightforge's old name; Launch Services should forget it too.
         let legacy = root.appendingPathComponent("Nachtschicht Game.app", isDirectory: true)
@@ -642,12 +645,46 @@ enum Engine {
             try? fm.removeItem(at: bundle)
             return nil
         }
+        installVulkanLayer(resources: resources)
         // Let Launch Services read the game category now rather than whenever it gets round to it.
         let register = Process()
         register.executableURL = lsregister
         register.arguments = ["-f", bundle.path]
         if (try? register.run()) != nil { register.waitUntilExit() }
         return macOS.appendingPathComponent("wine")
+    }
+
+    /// Games that draw with Vulkan themselves get Nightforge's layer (wrapper/nightforge-vulkan-layer.c)
+    /// between them and MoltenVK; the Vulkan loader in the bundle picks up implicit layers from
+    /// Contents/Resources. Copied rather than linked, so an app update can't pull it from under a
+    /// running game.
+    private static func installVulkanLayer(resources: URL) {
+        let fm = FileManager.default
+        guard let library = Bundle.main.url(forResource: "nightforge-vulkan-layer", withExtension: "dylib") else { return }
+        let folder = resources.appendingPathComponent("vulkan/implicit_layer.d", isDirectory: true)
+        let installed = folder.appendingPathComponent(library.lastPathComponent)
+        let manifest = folder.appendingPathComponent("nightforge.json")
+        if fm.fileExists(atPath: manifest.path), fm.contentsEqual(atPath: library.path, andPath: installed.path) { return }
+        let layer: [String: Any] = [
+            "file_format_version": "1.2.0",
+            "layer": [
+                "name": "VK_LAYER_NIGHTFORGE_compat",
+                "type": "GLOBAL",
+                "library_path": "./\(library.lastPathComponent)",
+                "api_version": "1.4.323",
+                "implementation_version": "1",
+                "description": "Nightforge: lets Windows games start on MoltenVK",
+                "disable_environment": ["DISABLE_NIGHTFORGE_VULKAN_LAYER": "1"],
+            ],
+        ]
+        do {
+            try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+            try? fm.removeItem(at: installed)
+            try fm.copyItem(at: library, to: installed)
+            try JSONSerialization.data(withJSONObject: layer, options: [.prettyPrinted, .withoutEscapingSlashes]).write(to: manifest)
+        } catch {
+            try? fm.removeItem(at: manifest)
+        }
     }
 
     private static let gameBundleName = "Nightforge Game.app"
@@ -775,7 +812,7 @@ enum Engine {
     /// from the game's working folder – the game is started by the already running Steam, so
     /// environment variables don't reach it. Written next to every program of the game, since some
     /// start from a subfolder; a config the game ships itself is left alone.
-    static func writeGameConfigs(installDir: URL, frameLimit: Int, upscaling: Bool) {
+    static func writeGameConfigs(installDir: URL, frameLimit: Int, upscaling: Bool, vulkanSamplers: Int? = nil) {
         var dxvk = ["dxvk.enableAsync = True"]
         if Prefs.performanceHUD { dxvk.append("dxvk.hud = fps,frametimes,gpuload") }
         var dxmt: [String] = []
@@ -788,19 +825,27 @@ enum Engine {
             // factor DXMT upscales to exactly the window's Retina pixels.
             dxmt.append("d3d11.metalSpatialUpscale = True")
         }
+        // Read by Nightforge's Vulkan layer (wrapper/nightforge-vulkan-layer.c); only games whose
+        // profile needs it get one.
+        let vulkan = vulkanSamplers.map { ["maxPerStageDescriptorSamplers = \($0)"] } ?? []
         var folders = Set([installDir.standardizedFileURL])
         for exe in executableFiles(in: installDir) { folders.insert(exe.deletingLastPathComponent().standardizedFileURL) }
         for folder in folders {
             writeConfig(folder.appendingPathComponent("dxvk.conf"), lines: dxvk)
             writeConfig(folder.appendingPathComponent("dxmt.conf"), lines: dxmt)
+            writeConfig(folder.appendingPathComponent("nightforge-vulkan.conf"), lines: vulkan, keepWhenEmpty: false)
         }
     }
 
-    private static func writeConfig(_ file: URL, lines: [String]) {
+    private static func writeConfig(_ file: URL, lines: [String], keepWhenEmpty: Bool = true) {
         let marker = "# Written by Nightforge"
         let existing = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
         let ours = existing.hasPrefix(marker) || existing.hasPrefix("# Written by Nachtschicht")  // the old name
         guard ours || !FileManager.default.fileExists(atPath: file.path) else { return }  // the game ships its own
+        if lines.isEmpty && !keepWhenEmpty {
+            if ours { try? FileManager.default.removeItem(at: file) }
+            return
+        }
         let text = (["\(marker) before each start – changes here are overwritten."] + lines).joined(separator: "\n")
         try? (text + "\n").write(to: file, atomically: true, encoding: .utf8)
     }

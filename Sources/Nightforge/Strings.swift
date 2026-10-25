@@ -92,8 +92,26 @@ enum L10n {
             "Das Update ist nicht korrekt signiert und wurde deshalb nicht installiert.",
         "Nightforge can't replace itself in this folder. Download the update from the release page instead.":
             "Nightforge kann sich in diesem Ordner nicht selbst ersetzen. Lade das Update stattdessen von der Release-Seite.",
-        "This game didn't start with DXMT, so Nightforge uses DXVK for it automatically.":
-            "Dieses Spiel lief mit DXMT nicht an, deshalb nutzt Nightforge dafür automatisch DXVK.",
+        "This game didn't start with %@, so Nightforge uses %@ for it automatically.":
+            "Mit %@ ist dieses Spiel nicht gestartet, deshalb nutzt Nightforge dafür automatisch %@.",
+        "Starting again with %@ …": "Neuer Start mit %@ …",
+        "%@ didn't start": "%@ ist nicht gestartet",
+        "Report problem": "Problem melden",
+        "Report problem …": "Problem melden …",
+        "It ended right after starting, with every way Nightforge knows: %@. A problem report helps get it running – it opens on GitHub, filled in with what Nightforge found.":
+            "Es hat sich direkt nach dem Start beendet, mit jedem Weg, den Nightforge kennt: %@. Eine Problemmeldung hilft, es zum Laufen zu bringen – sie öffnet sich auf GitHub, schon ausgefüllt mit dem, was Nightforge herausgefunden hat.",
+        "This game uses DirectX 12 only, which runs on a Mac in part at best.":
+            "Dieses Spiel nutzt nur DirectX 12, das auf dem Mac bestenfalls teilweise läuft.",
+        "Uses %@: online play with it doesn't work on a Mac, single player usually does.":
+            "Nutzt %@: Online-Spiel damit geht auf dem Mac nicht, Einzelspieler meistens schon.",
+        "Opens a problem report on GitHub, filled in with what Nightforge knows about the game. Nothing is sent until you submit it there.":
+            "Öffnet eine Problemmeldung auf GitHub, ausgefüllt mit dem, was Nightforge über das Spiel weiß. Gesendet wird erst, wenn du sie dort abschickst.",
+        "This game uses %@. DXMT translates DirectX 10/11 straight to Metal and is usually faster; DXVK takes a detour through Vulkan and works with more games. Automatic switches by itself if a game doesn't start.":
+            "Dieses Spiel nutzt %@. DXMT übersetzt DirectX 10/11 direkt in Metal und ist meist schneller; DXVK nimmt den Umweg über Vulkan und läuft mit mehr Spielen. Automatisch wechselt von selbst, wenn ein Spiel nicht startet.",
+        "This game uses %@. DXVK is usually faster; WineD3D runs some older games DXVK can't. Automatic switches by itself if a game doesn't start.":
+            "Dieses Spiel nutzt %@. DXVK ist meist schneller; WineD3D bringt manche ältere Spiele zum Laufen, die mit DXVK nicht gehen. Automatisch wechselt von selbst, wenn ein Spiel nicht startet.",
+        "This game uses %@ and draws without a DirectX layer, so there's nothing to choose here.":
+            "Dieses Spiel nutzt %@ und braucht keine DirectX-Übersetzung, hier gibt es also nichts auszuwählen.",
         "Advanced": "Erweitert",
         "CrossOver, Whisky and your own Wine": "CrossOver, Whisky und eigenes Wine",
         "Nightforge brings everything it needs. Fill this in only to also show games from CrossOver or Whisky bottles: leave Wine empty for CrossOver, or enter the path to the wine binary of Whisky or your own Wine.":

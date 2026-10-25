@@ -8,7 +8,10 @@ final class LibraryModel: ObservableObject {
     /// What's shown and navigated: `allGames` narrowed by the search.
     @Published private(set) var games: [Game] = []
     @Published var selectedIndex = 0 {
-        didSet { loadStoreDetailsIfNeeded() }
+        didSet {
+            loadStoreDetailsIfNeeded()
+            if let game = selected { Task { _ = await insight(of: game) } }
+        }
     }
     @Published var searchText = "" {
         didSet {
@@ -30,10 +33,13 @@ final class LibraryModel: ObservableObject {
     @Published private(set) var launchingID: String?
     /// Steam is showing a question (licence, setup) for the game being launched.
     @Published private(set) var launchNeedsConfirmation = false
-    /// The game's profile is installing runtimes (winetricks) before its first start.
-    @Published private(set) var launchPreparing = false
-    /// Steam didn't take the launch request, so it's being restarted.
-    @Published private(set) var launchRestartingSteam = false
+    /// What the launch is busy with when it's more than waiting for Steam ("Restarting Steam …").
+    @Published private(set) var launchStatus: String?
+    /// A game that ended right after starting with every way Nightforge knows.
+    @Published var failedLaunch: FailedLaunch?
+    /// What Nightforge knows about installed games before starting them, by app ID.
+    @Published private(set) var insights: [Int: GameInsight] = [:]
+    private var analyses: [Int: GameAnalysis] = [:]
     @Published var showingOptions = false
     /// Waiting for the user to confirm removing this game (or its download).
     @Published var pendingUninstall: Game?
@@ -409,108 +415,77 @@ final class LibraryModel: ObservableObject {
         guard let game = selected, game.isInstalled, launchingID == nil else { return }
         launchingID = game.id
         launchNeedsConfirmation = false
+        launchStatus = nil
         let behavior = Prefs.afterLaunch
         Task {
+            defer {
+                launchingID = nil
+                launchNeedsConfirmation = false
+                launchStatus = nil
+            }
             if game.bottle.isBuiltIn { await steamStartup?.value }
             let runner = game.bottle.isBuiltIn ? await Engine.installedWine()?.path : Prefs.runnerPath
-            // Known fixes for this game (profiles/profiles.json); runtimes it needs come first.
+            // Known fixes for this game (profiles/profiles.json) and what its files reveal.
             let profile = game.bottle.isBuiltIn ? await ProfileStore.shared.profile(for: game.appID) : nil
-            let missing = Engine.missingWinetricks(profile?.winetricks ?? [])
-            if !missing.isEmpty, let runner {
-                launchPreparing = true
-                await Engine.installWinetricks(missing, wine: URL(fileURLWithPath: runner))
-                launchPreparing = false
-            }
-            var watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
+            let insight = await insight(of: game)
+            let analysis = insight?.analysis
             var options = GameOptionsStore.load(game.appID)
-            if game.bottle.isBuiltIn && options.graphics == .automatic
-                && (profile?.graphics ?? Engine.defaultGraphics) == .dxmt {
-                // Self-healing: did the last start with DXMT end within seconds? Then DXVK from now on.
-                _ = GraphicsHealth.reviewLastDXMTLaunch(game.appID, steamRoot: game.steamRoot)
-                if GraphicsHealth.dxmtFailed(game.appID) {
-                    options.graphics = .dxvk
-                } else {
-                    GraphicsHealth.recordDXMTLaunch(game.appID)
-                }
-            }
+            let automatic = game.bottle.isBuiltIn && options.graphics == .automatic
+            let attempts = insight?.attempts ?? []
+            if automatic { LaunchHealth.review(game.appID, attempts, steamRoot: game.steamRoot) }
             let refreshRate = NSScreen.main?.maximumFramesPerSecond ?? 60  // the game opens on the main display
-            do {
-                // Off the main thread: it reads Steam's app catalog and writes the registry, which
-                // would freeze the window for a moment.
-                try await Task.detached(priority: .userInitiated) {
-                    try Launcher.launch(game, runnerPath: runner ?? "", options: options, profile: profile,
-                                        displayRefreshRate: refreshRate)
-                }.value
-            } catch {
+
+            while true {
+                // Runtimes the profile asks for, and those an earlier start turned out to need.
+                let missing = Engine.missingWinetricks((profile?.winetricks ?? []) + LearnedFixes.winetricks(game.appID))
+                if !missing.isEmpty, let runner {
+                    launchStatus = L10n.t("Setting up the game …")
+                    await Engine.installWinetricks(missing, wine: URL(fileURLWithPath: runner))
+                    launchStatus = nil
+                }
+                var arguments = analysis?.preferD3D11Arguments ?? []
+                var watchFirstSeconds = false
+                if automatic, !attempts.isEmpty {
+                    let (index, confirmed) = LaunchHealth.current(game.appID, attempts)
+                    options.graphics = attempts[index].graphics
+                    arguments = attempts[index].arguments
+                    watchFirstSeconds = !confirmed
+                    if watchFirstSeconds { LaunchHealth.recordStart(game.appID, attempts) }
+                }
+                let logMark = GameLog.mark()
+                LearnedFixes.setLastLaunch(game.appID, logMark: logMark)
+                guard await start(game, runner: runner, options: options, profile: profile,
+                                  arguments: arguments, refreshRate: refreshRate)
+                else { return }
                 launchingID = nil
-                errorMessage = error.localizedDescription
+                await bringToFront(game)
+                guard watchFirstSeconds else { break }
+
+                // The first start with this way: is the game still there after its first seconds?
+                if await survivesFirstSeconds(game) {
+                    LaunchHealth.confirm(game.appID, attempts)
+                    break
+                }
+                launchingID = game.id
+                NSApp.activate()
+                let needed = GameLog.missingRuntimes(since: logMark, gameFolder: game.installDirName)
+                    .filter { !LearnedFixes.winetricks(game.appID).contains($0) }
+                if !needed.isEmpty {
+                    // Wine said what's missing: install it and try the same way again.
+                    LearnedFixes.addWinetricks(needed, for: game.appID)
+                    continue
+                }
+                if LaunchHealth.advance(game.appID, attempts) {
+                    let next = attempts[LaunchHealth.current(game.appID, attempts).index]
+                    launchStatus = L10n.t("Starting again with %@ …", next.label)
+                    continue
+                }
+                // One way only (Vulkan, DirectX 12): what the game draws with says more than a layer.
+                let tried = attempts.count > 1 ? attempts.map(\.label) : [analysis?.summary ?? attempts.first?.label ?? ""]
+                failedLaunch = FailedLaunch(game: game, tried: tried)
                 return
             }
 
-            // Only get out of the way once the game is really running. A question from Steam can
-            // take as long as the player needs; a launch that shows no sign of life ends after 2 min.
-            var quietSeconds = 0
-            var totalSeconds = 0
-            var started = false
-            var askingSince: Int?
-            var retriedAfterRestart = false
-            while quietSeconds < 120 && totalSeconds < 900 {
-                try? await Task.sleep(for: .seconds(1))
-                totalSeconds += 1
-                switch watcher.poll() {
-                case .running?:
-                    started = true
-                case .needsConfirmation?:
-                    askingSince = askingSince ?? totalSeconds
-                    quietSeconds = 0
-                    continue
-                case .continued?:
-                    launchNeedsConfirmation = false
-                    askingSince = nil
-                    quietSeconds = 0
-                    continue
-                case .cancelled?:
-                    break
-                case .failed?:
-                    errorMessage = L10n.t("Steam couldn't start %@.", game.name)
-                case nil:
-                    // Steam never took the request and has gone silent: it hung while starting.
-                    // Restart it once and ask again.
-                    if game.bottle.isBuiltIn, !watcher.steamReceivedLaunch, !retriedAfterRestart,
-                       totalSeconds % 5 == 0, running.isEmpty, let runner, Engine.steamLooksStuck(quietFor: 30) {
-                        retriedAfterRestart = true
-                        launchRestartingSteam = true
-                        if await restartStuckSteam(URL(fileURLWithPath: runner)) {
-                            watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
-                            try? await Task.detached(priority: .userInitiated) {
-                                try Launcher.launch(game, runnerPath: runner, options: options, profile: profile,
-                                                    displayRefreshRate: refreshRate)
-                            }.value
-                        }
-                        launchRestartingSteam = false
-                        quietSeconds = 0
-                        continue
-                    }
-                    guard let since = askingSince else {
-                        quietSeconds += 1
-                        continue
-                    }
-                    // Steam logs routine steps as questions too and answers them within a second;
-                    // a real question waits for the player in Steam's window, which runs hidden –
-                    // so only then say so and show it.
-                    if totalSeconds - since >= 3, !launchNeedsConfirmation {
-                        launchNeedsConfirmation = true
-                        if game.bottle.isBuiltIn { showSteamWindow() }
-                    }
-                    continue
-                }
-                break
-            }
-            launchingID = nil
-            launchNeedsConfirmation = false
-            guard started else { return }
-
-            await bringToFront(game)
             switch behavior {
             case .quit: NSApp.terminate(nil)
             case .hide: NSApp.hide(nil)
@@ -519,13 +494,145 @@ final class LibraryModel: ObservableObject {
         }
     }
 
+    /// Hands the game to Steam and follows Steam's log until the game runs. True once it does; a
+    /// question from Steam can take as long as the player needs, no sign of life ends after 2 min.
+    private func start(_ game: Game, runner: String?, options: GameOptions, profile: GameProfile?,
+                       arguments: [String], refreshRate: Int) async -> Bool {
+        var watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
+        do {
+            // Off the main thread: it reads Steam's app catalog and writes the registry, which
+            // would freeze the window for a moment.
+            try await Task.detached(priority: .userInitiated) {
+                try Launcher.launch(game, runnerPath: runner ?? "", options: options, profile: profile,
+                                    displayRefreshRate: refreshRate, extraArguments: arguments)
+            }.value
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+
+        var quietSeconds = 0
+        var totalSeconds = 0
+        var askingSince: Int?
+        var retriedAfterRestart = false
+        var signedInSince: Int?
+        var resent = false
+        while quietSeconds < 120 && totalSeconds < 900 {
+            try? await Task.sleep(for: .seconds(1))
+            totalSeconds += 1
+            switch watcher.poll() {
+            case .running?:
+                launchNeedsConfirmation = false
+                return true
+            case .needsConfirmation?:
+                askingSince = askingSince ?? totalSeconds
+                quietSeconds = 0
+            case .continued?:
+                launchNeedsConfirmation = false
+                askingSince = nil
+                quietSeconds = 0
+            case .cancelled?:
+                return false
+            case .failed?:
+                errorMessage = L10n.t("Steam couldn't start %@.", game.name)
+                return false
+            case nil:
+                // A request that arrives while Steam is still starting can get lost. Once Steam has
+                // signed in and still hasn't logged it, ask once more.
+                if game.bottle.isBuiltIn, !watcher.steamReceivedLaunch, !resent {
+                    if signedInSince == nil, Engine.steamSignedIn { signedInSince = totalSeconds }
+                    if let since = signedInSince, totalSeconds - since >= 10 {
+                        resent = true
+                        try? await Task.detached(priority: .userInitiated) {
+                            try Launcher.launch(game, runnerPath: runner ?? "", options: options, profile: profile,
+                                                displayRefreshRate: refreshRate, extraArguments: arguments)
+                        }.value
+                        continue
+                    }
+                }
+                // Steam never took the request and has gone silent: it hung while starting.
+                // Restart it once and ask again.
+                if game.bottle.isBuiltIn, !watcher.steamReceivedLaunch, !retriedAfterRestart,
+                   totalSeconds % 5 == 0, running.isEmpty, let runner, Engine.steamLooksStuck(quietFor: 30) {
+                    retriedAfterRestart = true
+                    launchStatus = L10n.t("Restarting Steam …")
+                    if await restartStuckSteam(URL(fileURLWithPath: runner)) {
+                        watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
+                        try? await Task.detached(priority: .userInitiated) {
+                            try Launcher.launch(game, runnerPath: runner, options: options, profile: profile,
+                                                displayRefreshRate: refreshRate, extraArguments: arguments)
+                        }.value
+                    }
+                    launchStatus = nil
+                    quietSeconds = 0
+                    continue
+                }
+                guard let since = askingSince else {
+                    quietSeconds += 1
+                    continue
+                }
+                // Steam logs routine steps as questions too and answers them within a second;
+                // a real question waits for the player in Steam's window, which runs hidden –
+                // so only then say so and show it.
+                if totalSeconds - since >= 3, !launchNeedsConfirmation {
+                    launchNeedsConfirmation = true
+                    if game.bottle.isBuiltIn { showSteamWindow() }
+                }
+            }
+        }
+        return false
+    }
+
+    /// Whether the game is still running `LaunchHealth.failureWindow` seconds after it started.
+    /// A launcher handing over to the game leaves a gap of a few seconds, so only a longer absence
+    /// counts as the game having ended.
+    private func survivesFirstSeconds(_ game: Game) async -> Bool {
+        let folders = ["\\steamapps\\common\\\(game.installDirName.lowercased())\\": game.id]
+        let started = Date()
+        var absent = 0
+        while Date().timeIntervalSince(started) < LaunchHealth.failureWindow || (absent > 0 && absent < 10) {
+            try? await Task.sleep(for: .seconds(1))
+            let pid = await Task.detached(priority: .utility) { Self.runningGames(folders)[game.id] }.value
+            absent = pid == nil ? absent + 1 : 0
+            if absent >= 10 { return false }
+        }
+        return true
+    }
+
+    /// What a game's files reveal (read once per game and app run) and the ways to start it.
+    func insight(of game: Game) async -> GameInsight? {
+        guard game.bottle.isBuiltIn, game.isInstalled else { return nil }
+        let analysis: GameAnalysis
+        if let known = analyses[game.appID] {
+            analysis = known
+        } else {
+            analysis = await Task.detached(priority: .utility) {
+                GameAnalysis.analyze(installDir: game.installDir,
+                                     launchExecutable: SteamCatalog.launchExecutable(appID: game.appID, steamRoot: game.steamRoot))
+            }.value
+            analyses[game.appID] = analysis
+        }
+        let profile = await ProfileStore.shared.profile(for: game.appID)
+        let insight = GameInsight(analysis: analysis, attempts: LaunchHealth.attempts(for: analysis, profile: profile))
+        if insights[game.appID] != insight { insights[game.appID] = insight }
+        return insight
+    }
+
+    /// Opens a pre-filled problem report for the game in the browser.
+    func reportProblem(for game: Game) {
+        Task { ProblemReport.open(game: game, insight: await insight(of: game)) }
+    }
+
     /// Steam starts the game in the background, and since macOS 14 an app can't push itself to
     /// the front. Nightforge is the active app at this point, so it hands activation over as soon
     /// as the game shows its window (Wine makes it a regular app then) – before quitting or hiding.
     private func bringToFront(_ game: Game) async {
         let folders = ["\\steamapps\\common\\\(game.installDirName.lowercased())\\": game.id]
+        var absent = 0
         for _ in 0..<60 {
             let pid = await Task.detached(priority: .utility) { Self.runningGames(folders)[game.id] }.value
+            absent = pid == nil ? absent + 1 : 0
+            if absent >= 10 { return }  // gone again: it crashed before showing a window
             if let pid, let app = NSRunningApplication(processIdentifier: pid), app.activationPolicy == .regular {
                 guard NSApp.isActive else { return }  // the player has moved on to something else
                 NSApp.yieldActivation(to: app)

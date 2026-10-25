@@ -28,11 +28,17 @@ enum Engine {
     ]
     /// Settings games inherit from the background Steam. Bump `steamConfigVersion` whenever this
     /// or `steamDLLOverrides` changes, so a running Steam gets restarted with them.
-    static let steamConfigVersion = 5
+    static let steamConfigVersion = 7
     static var gameEnvironment: [String: String] {
         var env = [
             // Compile shaders in the background instead of stalling the frame that first needs them.
             "DXVK_ASYNC": "1",
+            // Into GameLog: libraries a game can't load, and MoltenVK's errors (not its chatter).
+            "WINEDEBUG": GameLog.wineDebug,
+            "MVK_CONFIG_LOG_LEVEL": "1",
+            // DXVK's warnings go there as well, instead of log files in the Windows user folder.
+            "DXVK_LOG_LEVEL": "warn",
+            "DXVK_LOG_PATH": "none",
         ]
         // Apple's Metal HUD: DXMT draws with Metal directly, so this is its FPS display. Only an
         // environment variable turns it on, and games get theirs from Steam, hence app-wide.
@@ -44,7 +50,7 @@ enum Engine {
     /// its own – so the game settings go into the user environment (HKCU\Environment) as well,
     /// where every Windows program, games included, picks them up at start.
     static func applyGameEnvironment(wine: URL) {
-        let managed = ["DXVK_ASYNC", "MTL_HUD_ENABLED"]
+        let managed = ["DXVK_ASYNC", "MTL_HUD_ENABLED", "WINEDEBUG", "MVK_CONFIG_LOG_LEVEL", "DXVK_LOG_LEVEL", "DXVK_LOG_PATH"]
         let current = gameEnvironment
         let values = managed.map { name in
             current[name].map { "\"\(name)\"=\"\($0)\"" } ?? "\"\(name)\"=-"
@@ -468,9 +474,15 @@ enum Engine {
         for exe in exes {
             let app = "HKEY_CURRENT_USER\\Software\\Wine\\AppDefaults\\\(exe)"
             var overrides = profile?.dllOverrides ?? [:]
-            if layer == .dxmt {
+            switch layer {
+            case .dxmt:
                 // d3d9 stays with DXVK: DXMT only covers Direct3D 10/11.
                 for dll in ["dxgi", "d3d11", "d3d10core"] { overrides[dll] = "builtin" }
+            case .wined3d:
+                // Wine's own Direct3D 9 (OpenGL) instead of DXVK's, for games DXVK can't run.
+                overrides["d3d9"] = "builtin"
+            case .dxvk, .automatic:
+                break
             }
             var section = "[-\(app)\\DllOverrides]"
             if !overrides.isEmpty {
@@ -955,10 +967,13 @@ enum Engine {
         var env = environment(wine: wine).merging(gameEnvironment) { _, new in new }
         env["WINEDLLOVERRIDES"] = steamDLLOverrides
         if loader != wine { env["WINELOADER"] = loader.path }
+        env["WINEDEBUG"] = GameLog.wineDebug
         process.environment = env.merging(extraEnvironment) { _, new in new }
         process.standardInput = FileHandle.nullDevice
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        // Its games inherit this, so their errors end up in the log too.
+        let log = GameLog.handleForSteam()
+        process.standardOutput = log ?? FileHandle.nullDevice
+        process.standardError = log ?? FileHandle.nullDevice
         try process.run()
     }
 }

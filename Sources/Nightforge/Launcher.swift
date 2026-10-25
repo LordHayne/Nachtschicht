@@ -66,6 +66,8 @@ enum GraphicsLayer: String, Codable, CaseIterable, Identifiable {
     case dxmt
     /// DXVK: Direct3D → Vulkan → MoltenVK → Metal.
     case dxvk
+    /// Wine's own Direct3D 9 on OpenGL, for older games DXVK can't run.
+    case wined3d
 
     var id: String { rawValue }
 
@@ -74,8 +76,22 @@ enum GraphicsLayer: String, Codable, CaseIterable, Identifiable {
         case .automatic: return L10n.t("Automatic")
         case .dxmt: return "DXMT (Metal)"
         case .dxvk: return "DXVK (Vulkan)"
+        case .wined3d: return "WineD3D (OpenGL)"
         }
     }
+
+    /// For "Automatic (DXMT)".
+    var shortLabel: String {
+        switch self {
+        case .automatic: return L10n.t("Automatic")
+        case .dxmt: return "DXMT"
+        case .dxvk: return "DXVK"
+        case .wined3d: return "WineD3D"
+        }
+    }
+
+    /// Only DXMT draws through Metal directly, which MetalFX needs.
+    var upscales: Bool { self == .dxmt || self == .automatic }
 }
 
 /// Automatic follows the global "Sharp & smooth" setting; on and off override it for one game.
@@ -177,6 +193,8 @@ enum LaunchError: LocalizedError {
 
 /// Follows Steam's console log after a launch request so Nightforge knows whether the game really
 /// started, or whether Steam is waiting on a question (licence, first-time setup) in its own window.
+/// Steam writes Windows line ends, and "\r\n" is one Character in Swift: lines are split with
+/// `isNewline`, never on "\n".
 struct LaunchWatcher {
     enum Event {
         case needsConfirmation
@@ -206,7 +224,7 @@ struct LaunchWatcher {
             try? handle.seek(toOffset: offset > 65_536 ? offset - 65_536 : 0)
             let tail = String(decoding: (try? handle.readToEnd()) ?? Data(), as: UTF8.self)
             try? handle.close()
-            let last = tail.split(separator: "\n").last { $0.contains("GameAction [AppID \(appID),") }
+            let last = tail.split(whereSeparator: \.isNewline).last { $0.contains("GameAction [AppID \(appID),") }
             openQuestion = last?.contains("waiting for user response") ?? false
         }
     }
@@ -226,7 +244,7 @@ struct LaunchWatcher {
         offset += UInt64(data.count)
 
         var event: Event?
-        for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
+        for line in String(decoding: data, as: UTF8.self).split(whereSeparator: \.isNewline) {
             if line.contains("ExecCommandLine"), line.hasSuffix("-applaunch \(appID)\"") || line.contains("-applaunch \(appID) ") {
                 steamReceivedLaunch = true
             }
@@ -270,7 +288,7 @@ enum Launcher {
     }
 
     static func launch(_ game: Game, runnerPath: String, options: GameOptions, profile: GameProfile? = nil,
-                       displayRefreshRate: Int = 60) throws {
+                       displayRefreshRate: Int = 60, extraArguments: [String] = []) throws {
         guard FileManager.default.isExecutableFile(atPath: runnerPath) else {
             throw LaunchError.runnerMissing(runnerPath)
         }
@@ -284,6 +302,7 @@ enum Launcher {
 
         if game.bottle.isBuiltIn {
             environment["WINEDLLOVERRIDES"] = Engine.steamDLLOverrides
+            environment["WINEDEBUG"] = GameLog.wineDebug
             Engine.installWebHelperWrapper()
         } else if runnerPath.contains("CrossOver.app") {
             arguments += ["--bottle", game.bottle.name]
@@ -310,6 +329,7 @@ enum Launcher {
         if game.bottle.isBuiltIn {
             arguments += SteamCatalog.antiCheatOffArguments(appID: game.appID, steamRoot: game.steamRoot)
             arguments += profile?.arguments ?? []
+            arguments += extraArguments
         }
         arguments += splitArguments(options.extraArgs)
 
@@ -319,8 +339,10 @@ enum Launcher {
         process.arguments = arguments
         process.environment = environment
         process.standardInput = FileHandle.nullDevice
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        // When Steam isn't running yet, this becomes the Steam its games inherit output from.
+        let log = game.bottle.isBuiltIn ? GameLog.handleForSteam() : nil
+        process.standardOutput = log ?? FileHandle.nullDevice
+        process.standardError = log ?? FileHandle.nullDevice
         try process.run()
     }
 

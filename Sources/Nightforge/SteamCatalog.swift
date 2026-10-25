@@ -47,25 +47,14 @@ enum SteamCatalog {
     /// what that option adds to the default one; Steam appends extra -applaunch arguments to the
     /// default option, which gives the same command line. Empty when there's no such option.
     static func antiCheatOffArguments(appID: Int, steamRoot: URL) -> [String] {
-        guard let bytes = try? Data(contentsOf: steamRoot.appendingPathComponent("appcache/appinfo.vdf")),
-              let info = appInfo(Array(bytes), appID: appID),
-              let launch = info["config"]?.object?["launch"]?.object
-        else { return [] }
-
-        let windows = launch
-            .compactMap { key, value -> (index: Int, option: [String: BinaryKV])? in
-                guard let index = Int(key), let option = value.object else { return nil }
-                let os = option["config"]?.object?["oslist"]?.string ?? ""
-                return os.isEmpty || os.contains("windows") ? (index, option) : nil
-            }
-            .sorted { $0.index < $1.index }
-        guard let standard = windows.first?.option else { return [] }
+        let windows = windowsLaunchOptions(appID: appID, steamRoot: steamRoot)
+        guard let standard = windows.first else { return [] }
 
         func words(_ option: [String: BinaryKV]) -> [String] {
             (option["arguments"]?.string ?? "").split(separator: " ").map(String.init)
         }
         let markers = ["-noeac", "-forceeac off", "-nobattleye", "-noanticheat", "-no-anticheat"]
-        let candidate = windows.dropFirst().map(\.option).first { option in
+        let candidate = windows.dropFirst().first { option in
             let arguments = (option["arguments"]?.string ?? "").lowercased()
             let description = (option["description"]?.string ?? "").lowercased()
             let mentionsAntiCheat = ["eac", "anti-cheat", "anticheat", "battleye"].contains { description.contains($0) }
@@ -81,6 +70,28 @@ enum SteamCatalog {
             return extra.filter { !base.contains($0) }
         }
         return Array(extra.dropFirst(base.count))
+    }
+
+    /// The program Steam starts with the game's default Windows launch option, relative to the
+    /// game folder ("Binaries\NMS.exe"); nil when Steam doesn't say.
+    static func launchExecutable(appID: Int, steamRoot: URL) -> String? {
+        windowsLaunchOptions(appID: appID, steamRoot: steamRoot).first?["executable"]?.string
+    }
+
+    /// The game's launch options that apply to Windows, in Steam's order.
+    private static func windowsLaunchOptions(appID: Int, steamRoot: URL) -> [[String: BinaryKV]] {
+        guard let bytes = try? Data(contentsOf: steamRoot.appendingPathComponent("appcache/appinfo.vdf")),
+              let info = appInfo(Array(bytes), appID: appID),
+              let launch = info["config"]?.object?["launch"]?.object
+        else { return [] }
+        return launch
+            .compactMap { key, value -> (index: Int, option: [String: BinaryKV])? in
+                guard let index = Int(key), let option = value.object else { return nil }
+                let os = option["config"]?.object?["oslist"]?.string ?? ""
+                return os.isEmpty || os.contains("windows") ? (index, option) : nil
+            }
+            .sorted { $0.index < $1.index }
+            .map(\.option)
     }
 
     /// The "appinfo" section of one app in appinfo.vdf.

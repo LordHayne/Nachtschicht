@@ -7,9 +7,10 @@
 // uses on Apple silicon, hold far more). This layer sits between Wine and MoltenVK and
 //   - reports wide lines as supported (Metal draws them one pixel wide) and leaves out every
 //     feature the device doesn't have when the game creates its device, and
-//   - raises limits a game's profile asks for, from nightforge-vulkan.conf next to the game's
-//     program (written by Nightforge before each start, like dxmt.conf):
-//         maxPerStageDescriptorSamplers = 32
+//   - reports at least 32 samplers per shader stage (enough for No Man's Sky, which refuses 16),
+//     or what a game's profile asks for, from nightforge-vulkan.conf next to the game's program
+//     (written by Nightforge before each start, like dxmt.conf):
+//         maxPerStageDescriptorSamplers = 64
 //
 // Inside the "Nightforge Game" bundle the Vulkan loader finds it as an implicit layer in
 // Contents/Resources/vulkan/implicit_layer.d (see Engine.installVulkanLayer).
@@ -36,7 +37,7 @@ static PFN_vkGetPhysicalDeviceProperties2 next_properties2;
 
 // MARK: - Configuration
 
-static uint32_t min_samplers;
+static uint32_t min_samplers = 32;
 
 static int read_config(const char *path) {
     FILE *file = fopen(path, "r");

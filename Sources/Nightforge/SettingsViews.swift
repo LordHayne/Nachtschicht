@@ -3,13 +3,18 @@ import SwiftUI
 
 struct GameOptionsSheet: View {
     let game: Game
+    /// What Nightforge knows about the game: which layers fit it and which way "Automatic" takes.
+    let insight: GameInsight?
+    let report: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var options: GameOptions
     /// Known fixes for the game, so "Automatic" shows what it will really do.
     @State private var profile: GameProfile?
 
-    init(game: Game) {
+    init(game: Game, insight: GameInsight?, report: @escaping () -> Void) {
         self.game = game
+        self.insight = insight
+        self.report = report
         _options = State(initialValue: GameOptionsStore.load(game.appID))
     }
 
@@ -33,16 +38,16 @@ struct GameOptionsSheet: View {
 
             if game.bottle.isBuiltIn {
                 VStack(alignment: .leading, spacing: 6) {
-                    Picker(L10n.t("Graphics"), selection: $options.graphics) {
-                        ForEach(GraphicsLayer.allCases) { layer in
-                            if layer == .automatic && GraphicsHealth.dxmtFailed(game.appID) {
-                                Text(L10n.t("Automatic (%@)", "DXVK")).tag(layer)
-                            } else {
-                                Text(layer.label).tag(layer)
+                    if layers.isEmpty {
+                        Text(L10n.t("Graphics"))
+                    } else {
+                        Picker(L10n.t("Graphics"), selection: $options.graphics) {
+                            ForEach(layers) { layer in
+                                Text(layer == .automatic ? automaticLabel(automaticWay.shortLabel) : layer.label).tag(layer)
                             }
                         }
                     }
-                    Text(L10n.t("How DirectX 10/11 reaches the Mac's graphics. DXMT translates straight to Metal and is usually faster; DXVK takes a detour through Vulkan and works with more games."))
+                    Text(graphicsCaption)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -61,7 +66,7 @@ struct GameOptionsSheet: View {
                         Text(L10n.t("On")).tag(Choice.on)
                         Text(L10n.t("Off")).tag(Choice.off)
                     }
-                    .disabled(options.graphics == .dxvk)
+                    .disabled(!drawsWith.upscales || layers.isEmpty)
                     Text(L10n.t("Automatic follows “Sharp & smooth” in Settings. The frame limit keeps frames even; MetalFX (DXMT only) upscales the picture to full Retina sharpness – set a lower resolution in the game for more FPS."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -79,12 +84,19 @@ struct GameOptionsSheet: View {
             }
 
             HStack {
+                if game.bottle.isBuiltIn {
+                    Button(L10n.t("Report problem …")) {
+                        report()
+                        dismiss()
+                    }
+                    .help(L10n.t("Opens a problem report on GitHub, filled in with what Nightforge knows about the game. Nothing is sent until you submit it there."))
+                }
                 Spacer()
                 Button(L10n.t("Cancel")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button(L10n.t("Save")) {
                     // Picking a layer by hand overrides what self-healing learned.
-                    if options.graphics != .automatic { GraphicsHealth.reset(game.appID) }
+                    if options.graphics != .automatic { LaunchHealth.reset(game.appID) }
                     GameOptionsStore.save(options, for: game.appID)
                     dismiss()
                 }
@@ -101,6 +113,39 @@ private extension GameOptionsSheet {
     var refreshRate: Int { NSScreen.main?.maximumFramesPerSecond ?? 60 }
 
     func automaticLabel(_ value: String) -> String { L10n.t("Automatic (%@)", value) }
+
+    /// The layers that fit what the game draws with; none for Vulkan, OpenGL and DirectX 12.
+    var layers: [GraphicsLayer] {
+        var list: [GraphicsLayer]
+        if let analysis = insight?.analysis, !analysis.usesD3D11, !analysis.apis.isEmpty {
+            list = analysis.usesD3D9 ? [.automatic, .dxvk, .wined3d] : []
+        } else {
+            list = [.automatic, .dxmt, .dxvk]
+        }
+        if !list.isEmpty, !list.contains(options.graphics) { list.append(options.graphics) }
+        return list
+    }
+
+    /// The way "Automatic" takes right now (LaunchHealth).
+    var automaticWay: LaunchAttempt {
+        guard let attempts = insight?.attempts, !attempts.isEmpty else { return LaunchAttempt(graphics: Engine.defaultGraphics) }
+        return attempts[LaunchHealth.current(game.appID, attempts).index]
+    }
+
+    var drawsWith: GraphicsLayer { options.graphics == .automatic ? automaticWay.graphics : options.graphics }
+
+    var graphicsCaption: String {
+        guard let analysis = insight?.analysis, !analysis.apis.isEmpty else {
+            return L10n.t("How DirectX 10/11 reaches the Mac's graphics. DXMT translates straight to Metal and is usually faster; DXVK takes a detour through Vulkan and works with more games.")
+        }
+        if analysis.usesD3D11 {
+            return L10n.t("This game uses %@. DXMT translates DirectX 10/11 straight to Metal and is usually faster; DXVK takes a detour through Vulkan and works with more games. Automatic switches by itself if a game doesn't start.", analysis.summary)
+        }
+        if analysis.usesD3D9 {
+            return L10n.t("This game uses %@. DXVK is usually faster; WineD3D runs some older games DXVK can't. Automatic switches by itself if a game doesn't start.", analysis.summary)
+        }
+        return L10n.t("This game uses %@ and draws without a DirectX layer, so there's nothing to choose here.", analysis.summary)
+    }
 }
 
 private extension Int {

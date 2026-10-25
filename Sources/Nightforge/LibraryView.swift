@@ -64,7 +64,7 @@ struct LibraryView: View {
         .animation(.easeOut(duration: 0.22), value: model.showingLibrary)
         .sheet(isPresented: $model.showingOptions) {
             if let game = model.selected {
-                GameOptionsSheet(game: game)
+                GameOptionsSheet(game: game, insight: model.insights[game.appID]) { model.reportProblem(for: game) }
             }
         }
         .alert(
@@ -75,6 +75,22 @@ struct LibraryView: View {
             ),
             actions: { Button("OK") {} },
             message: { Text(model.errorMessage ?? "") }
+        )
+        .alert(
+            L10n.t("%@ didn't start", model.failedLaunch?.game.name ?? ""),
+            isPresented: Binding(
+                get: { model.failedLaunch != nil },
+                set: { if !$0 { model.failedLaunch = nil } }
+            ),
+            presenting: model.failedLaunch,
+            actions: { failed in
+                Button(L10n.t("Report problem")) { model.reportProblem(for: failed.game) }
+                Button("OK", role: .cancel) {}
+            },
+            message: { failed in
+                Text(L10n.t("It ended right after starting, with every way Nightforge knows: %@. A problem report helps get it running – it opens on GitHub, filled in with what Nightforge found.",
+                            failed.tried.joined(separator: ", ")))
+            }
         )
         .alert(
             uninstallTitle,
@@ -360,12 +376,8 @@ private struct GameDetail: View {
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Theme.muted)
             }
-            if game.bottle.isBuiltIn && GraphicsHealth.dxmtFailed(game.appID)
-                && GameOptionsStore.load(game.appID).graphics == .automatic {
-                Label(L10n.t("This game didn't start with DXMT, so Nightforge uses DXVK for it automatically."),
-                      systemImage: "wand.and.stars")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.muted)
+            if let insight = model.insights[game.appID] {
+                GameInsightNotes(game: game, insight: insight)
             }
             if model.lowPowerMode && game.install != .inStore {
                 HStack(spacing: 10) {
@@ -393,8 +405,7 @@ private struct GameDetail: View {
                            isUninstalling: model.uninstallingID == game.id,
                            isRunning: model.isRunning(game),
                            needsConfirmation: model.launchNeedsConfirmation,
-                           isPreparing: model.launchPreparing,
-                           isRestartingSteam: model.launchRestartingSteam,
+                           status: model.launchStatus,
                            vrOnly: game.isVROnly && game.install == .notInstalled) {
                     model.primaryAction()
                 }
@@ -446,8 +457,8 @@ private struct PlayButton: View {
     var isUninstalling = false
     var isRunning = false
     var needsConfirmation = false
-    var isPreparing = false
-    var isRestartingSteam = false
+    /// What the launch is busy with, when it's more than waiting for Steam.
+    var status: String?
     /// VR-only and not downloaded: nothing useful to do on a Mac.
     var vrOnly = false
     let action: () -> Void
@@ -460,8 +471,7 @@ private struct PlayButton: View {
     }
 
     private var title: String {
-        if isLaunching && isPreparing { return L10n.t("Setting up the game …") }
-        if isLaunching && isRestartingSteam { return L10n.t("Restarting Steam …") }
+        if isLaunching, let status { return status }
         if isLaunching { return needsConfirmation ? L10n.t("Confirm in the Steam window") : L10n.t("Launching …") }
         if isUninstalling { return L10n.t("Uninstalling …") }
         if isRunning { return L10n.t("Running – switch to game") }
@@ -801,5 +811,36 @@ private struct EmptyLibrary: View {
             }
             .controlSize(.large)
         }
+    }
+}
+
+/// What Nightforge found out about a game that the player should know before pressing Play.
+private struct GameInsightNotes: View {
+    let game: Game
+    let insight: GameInsight
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if GameOptionsStore.load(game.appID).graphics == .automatic,
+               let healed = LaunchHealth.note(game.appID, insight.attempts) {
+                note(healed, systemImage: "wand.and.stars")
+            }
+            if insight.analysis.onlyD3D12 {
+                note(L10n.t("This game uses DirectX 12 only, which runs on a Mac in part at best."), systemImage: "exclamationmark.triangle")
+            }
+            if !insight.analysis.antiCheat.isEmpty {
+                note(L10n.t("Uses %@: online play with it doesn't work on a Mac, single player usually does.",
+                            insight.analysis.antiCheat.joined(separator: ", ")),
+                     systemImage: "shield.lefthalf.filled")
+            }
+        }
+    }
+
+    private func note(_ text: String, systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(Theme.muted)
+            .frame(maxWidth: 620, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

@@ -25,6 +25,7 @@ struct LibraryGrid: View {
                 if case .downloading = $0 { return true } else { return false }
             }),
             Section(id: "library", title: L10n.t("In your library"), items: items { $0 == .notInstalled }),
+            Section(id: "store", title: L10n.t("In the Steam Store"), items: items { $0 == .inStore }),
         ].filter { !$0.items.isEmpty }
     }
 

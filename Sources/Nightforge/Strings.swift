@@ -64,6 +64,16 @@ enum L10n {
         "Options": "Optionen",
         "Select": "Auswählen",
         "Something went wrong": "Etwas ist schiefgelaufen",
+
+        // Steam store & Mac versions
+        "View in Steam Store": "Im Steam-Store ansehen",
+        "In the Steam Store": "Im Steam-Store",
+        "Price": "Preis",
+        "Free": "Kostenlos",
+        "Coming soon": "Demnächst",
+        "Steam also has a Mac version": "Steam hat auch eine Mac-Version",
+        "Steam also has a Mac version of this game. It often runs better than the Windows version, but older Mac versions sometimes don't start on current Macs.":
+            "Steam hat dieses Spiel auch als Mac-Version. Sie läuft oft besser als die Windows-Version, ältere Mac-Versionen starten auf aktuellen Macs aber manchmal nicht.",
         "No games here yet": "Noch keine Spiele hier",
         "Nightforge shows the Steam games installed in your CrossOver bottles. Install Steam in a bottle, download a game there, then rescan your library.":
             "Nightforge zeigt die Steam-Spiele, die in deinen CrossOver-Bottles installiert sind. Installiere Steam in einer Bottle, lade dort ein Spiel herunter und lies die Bibliothek dann neu ein.",

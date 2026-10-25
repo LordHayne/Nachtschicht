@@ -72,7 +72,7 @@ final class InputRouter {
         default: break
         }
         switch chars.lowercased() {
-        case "o" where model.selected != nil:
+        case "o" where model.selected.map { $0.install != .inStore } ?? false:
             model.showingOptions = true
             return true
         case "l":
@@ -152,7 +152,7 @@ final class InputRouter {
     }
 
     private func toggleOptions() {
-        guard let model, model.selected != nil else { return }
+        guard let model, let game = model.selected, game.install != .inStore else { return }
         model.showingOptions.toggle()
     }
 

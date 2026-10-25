@@ -9,13 +9,16 @@ struct CatalogApp: Hashable {
     let size: Int64
     /// Steam marks it as playable only with a VR headset.
     var vrOnly = false
+    /// Steam also has a macOS version of it.
+    var macNative = false
 }
 
 /// Reads the owned-games list from the binary caches Steam keeps after sign-in:
 /// `appcache/packageinfo.vdf` (licenses → app IDs) and `appcache/appinfo.vdf` (name, type, depots).
 /// No API key, no network: Steam has already downloaded both for its own library view.
 enum SteamCatalog {
-    private static var cache: (key: Date, apps: [CatalogApp])?
+    /// Per Steam install, keyed by when its catalog files last changed.
+    private static var cache: [String: (modified: Date, apps: [CatalogApp])] = [:]
     private static let lock = NSLock()
 
     static func ownedGames(steamRoot: URL) -> [CatalogApp] {
@@ -27,13 +30,13 @@ enum SteamCatalog {
 
         lock.lock()
         defer { lock.unlock() }
-        if let cache, cache.key == modified { return cache.apps }
+        if let cached = cache[steamRoot.path], cached.modified == modified { return cached.apps }
 
         guard let apps = try? Data(contentsOf: appinfo), let packages = try? Data(contentsOf: packageinfo) else { return [] }
         let owned = ownedAppIDs(Array(packages))
         let games = gameEntries(Array(apps)).filter { owned.contains($0.appID) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        cache = (modified, games)
+        cache[steamRoot.path] = (modified, games)
         return games
     }
 
@@ -155,7 +158,8 @@ enum SteamCatalog {
                 let installDir = info["config"]?.object?["installdir"]?.string ?? name
                 games.append(CatalogApp(appID: Int(appID), name: name, installDir: installDir,
                                         size: windowsSize(info["depots"]?.object),
-                                        vrOnly: common["onlyvrsupport"]?.int == 1))
+                                        vrOnly: common["onlyvrsupport"]?.int == 1,
+                                        macNative: (common["oslist"]?.string ?? "").contains("macos")))
             }
             reader.position = end
         }

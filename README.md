@@ -26,7 +26,8 @@ Nightforge sets up everything a Windows game needs on your Mac and then gets out
 - **macOS Game Mode.** Games get priority on the CPU and graphics, and controllers and headphones get half the Bluetooth latency.
 - **Fixes that arrive by themselves.** A game database is rebuilt every night from the community fixes behind Proton, plus our own profiles tested on Macs. Nightforge applies the right one silently when a game starts.
 - **Anti-cheat aware.** Easy Anti-Cheat and BattlEye can't run on a Mac; when Steam offers a way to start a game without them, Nightforge takes it.
-- **Your whole library.** Every game you own, with search, downloads with progress, uninstall, and running games you can switch back to.
+- **Your whole library, and the store.** Every game you own, with downloads, uninstall and running games you can switch back to. The search also finds games in the Steam store, with price, Metascore and a link to buy them in your browser; once bought, they appear in your library.
+- **Mac versions marked.** A small MAC tag shows which games Steam also sells as a Mac version, which can be the better choice.
 - **Made for the couch too.** Keyboard and controller work everywhere. English and German.
 - **Free and quiet.** No account, no telemetry, no background service. Steam is closed when you quit Nightforge and no game or download is running.
 

@@ -7,10 +7,19 @@ final class LibraryModel: ObservableObject {
     @Published private(set) var allGames: [Game] = []
     /// What's shown and navigated: `allGames` narrowed by the search.
     @Published private(set) var games: [Game] = []
-    @Published var selectedIndex = 0
-    @Published var searchText = "" {
-        didSet { if searchText != oldValue { applyFilter(selectBestMatch: true) } }
+    @Published var selectedIndex = 0 {
+        didSet { loadStoreDetailsIfNeeded() }
     }
+    @Published var searchText = "" {
+        didSet {
+            guard searchText != oldValue else { return }
+            applyFilter(selectBestMatch: true)
+            searchStore()
+        }
+    }
+    /// Steam store hits for the current search, games the account doesn't own yet.
+    @Published private(set) var storeResults: [Game] = []
+    private var storeSearch: Task<Void, Never>?
     /// Bumped to move keyboard focus into the search field (⌘F).
     @Published private(set) var searchFocusRequest = 0
     /// The full-library grid instead of the single game with its cover rail.
@@ -54,6 +63,10 @@ final class LibraryModel: ObservableObject {
         inputStarted = true
         input.start(model: self)
         watchRunningGames()
+        // Back from buying in the browser (or from Steam): pick up newly owned games.
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reload(quiet: true) }
+        }
     }
 
     // MARK: - Running games
@@ -187,6 +200,66 @@ final class LibraryModel: ObservableObject {
         case .installed: launchSelected()
         case .notInstalled: if !game.isVROnly { download(game) }
         case .downloading: break
+        case .inStore: openStorePage(game)
+        }
+    }
+
+    /// Buying happens on Steam's own store page in the browser; Nightforge never sees payment data.
+    /// Once Steam has the new licence, the game shows up in the library with its Download button.
+    func openStorePage(_ game: Game) {
+        guard let url = URL(string: "https://store.steampowered.com/app/\(game.appID)") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    // MARK: - Steam store search
+
+    /// Waits for a pause in typing, then asks the store; owned games are left out.
+    private func searchStore() {
+        storeSearch?.cancel()
+        let term = searchText.trimmingCharacters(in: .whitespaces)
+        guard term.count >= 2 else {
+            if !storeResults.isEmpty { storeResults = []; applyFilter() }
+            return
+        }
+        storeSearch = Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled else { return }
+            let hits = await StoreSearch.shared.search(term)
+            guard !Task.isCancelled, term == searchText.trimmingCharacters(in: .whitespaces) else { return }
+            storeResults = hits.map(Self.storeGame)
+            applyFilter()
+        }
+    }
+
+    private static func storeGame(_ hit: StoreSearch.Hit) -> Game {
+        var game = Game(
+            appID: hit.appID, name: hit.name, bottle: Engine.bottle, steamRoot: Engine.steamRoot,
+            steamExeWindowsPath: Engine.steamExeWindowsPath,
+            installDir: Engine.steamRoot.appendingPathComponent("steamapps/common", isDirectory: true),
+            sizeOnDisk: 0
+        )
+        game.install = .inStore
+        game.macNative = hit.macNative ?? false
+        game.storePrice = hit.price
+        game.metascore = hit.metascore
+        return game
+    }
+
+    /// Hits from the games-only search can lack price and platforms; fetch them once it's selected.
+    private var storeDetailsRequested: Set<Int> = []
+
+    private func loadStoreDetailsIfNeeded() {
+        guard let game = selected, game.install == .inStore, game.storePrice == nil,
+              storeDetailsRequested.insert(game.appID).inserted  // once: some games have no price at all
+        else { return }
+        Task {
+            guard let hit = await StoreSearch.shared.details(for: game.appID),
+                  let index = storeResults.firstIndex(where: { $0.appID == game.appID })
+            else { return }
+            var updated = Self.storeGame(hit)
+            updated.metascore = hit.metascore ?? storeResults[index].metascore
+            storeResults[index] = updated
+            applyFilter()
         }
     }
 
@@ -237,7 +310,9 @@ final class LibraryModel: ObservableObject {
                 let nameWords = Self.searchKey(game.name).split(separator: " ")
                 return words.allSatisfy { word in nameWords.contains { $0.hasPrefix(word) } }
             }
+            let owned = Set(allGames.map(\.appID))
             games = matches.filter(startsWord) + matches.filter { !startsWord($0) }
+                + storeResults.filter { !owned.contains($0.appID) }
         }
         selectedIndex = selectBestMatch && !words.isEmpty ? 0 : games.firstIndex(where: { $0.id == previous }) ?? 0
     }
@@ -367,8 +442,9 @@ final class LibraryModel: ObservableObject {
     /// Only games in Nightforge's own Steam; CrossOver bottles are managed by their own Steam.
     /// Uninstalling stops Steam for a moment, so not while any game runs or starts – it would go too.
     func canUninstall(_ game: Game) -> Bool {
-        game.bottle.isBuiltIn && game.install != .notInstalled && uninstallingID == nil
-            && launchingID == nil && running.isEmpty
+        guard game.isInstalled || { if case .downloading = game.install { return true } else { return false } }()
+        else { return false }
+        return game.bottle.isBuiltIn && uninstallingID == nil && launchingID == nil && running.isEmpty
     }
 
     func requestUninstall(_ game: Game? = nil) {

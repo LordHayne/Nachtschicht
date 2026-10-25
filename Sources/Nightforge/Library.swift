@@ -13,6 +13,8 @@ enum InstallState: Hashable {
     case notInstalled
     /// Steam is downloading it; nil while Steam hasn't worked out the size yet.
     case downloading(Double?)
+    /// Not owned: a hit from the Steam store search.
+    case inStore
 }
 
 struct Game: Identifiable, Hashable {
@@ -32,6 +34,11 @@ struct Game: Identifiable, Hashable {
     var isVROnly = false
     /// Name of the folder under steamapps/common (needed to ask Steam for a download).
     var installDirName = ""
+    /// Steam also sells a macOS version (which may or may not run on current Macs).
+    var macNative = false
+    /// Store hits only: price as shown in the store, and the Metacritic score.
+    var storePrice: String?
+    var metascore: Int?
 
     var id: String { "\(bottle.name)#\(appID)" }
     var isInstalled: Bool { install == .installed }
@@ -72,6 +79,7 @@ enum LibraryScanner {
             case .installed: return 0
             case .downloading: return 1
             case .notInstalled: return 2
+            case .inStore: return 3
             }
         }
         return games.sorted { a, b in
@@ -115,13 +123,17 @@ enum LibraryScanner {
                 }
             }
 
+            // What Steam knows about each game: VR only, a Mac version.
+            let catalog = SteamCatalog.ownedGames(steamRoot: steamRoot)
+            let vrOnly = Set(catalog.filter(\.vrOnly).map(\.appID))
+            let macNative = Set(catalog.filter(\.macNative).map(\.appID))
+            for index in result.indices {
+                result[index].isVROnly = vrOnly.contains(result[index].appID)
+                result[index].macNative = macNative.contains(result[index].appID)
+            }
+
             // Nightforge's own Steam: show the whole library, not only what's on disk.
             if bottle.isBuiltIn {
-                let catalog = SteamCatalog.ownedGames(steamRoot: steamRoot)
-                let vrOnly = Set(catalog.filter(\.vrOnly).map(\.appID))
-                for index in result.indices where vrOnly.contains(result[index].appID) {
-                    result[index].isVROnly = true
-                }
                 let steamapps = steamRoot.appendingPathComponent("steamapps", isDirectory: true)
                 for app in catalog
                 where !seen.contains(app.appID) && !ignoredAppIDs.contains(app.appID) {
@@ -137,6 +149,7 @@ enum LibraryScanner {
                     game.install = .notInstalled
                     game.installDirName = app.installDir
                     game.isVROnly = app.vrOnly
+                    game.macNative = app.macNative
                     result.append(game)
                 }
             }

@@ -216,7 +216,8 @@ private struct TopBar: View {
         if model.searchText.isEmpty {
             return total == 1 ? L10n.t("1 game") : L10n.t("%ld games", total)
         }
-        return L10n.t("%ld of %ld games", model.games.count, total)
+        let matches = model.games.filter { $0.install != .inStore }.count  // store hits aren't yours
+        return L10n.t("%ld of %ld games", matches, total)
     }
 }
 
@@ -306,11 +307,18 @@ private struct GameDetail: View {
             .accessibilityLabel(game.name)
 
             HStack(alignment: .top, spacing: 34) {
-                Stat(label: L10n.t("Last played"), value: game.lastPlayed.map(Format.relative) ?? L10n.t("Never"))
+                if game.install != .inStore {
+                    Stat(label: L10n.t("Last played"), value: game.lastPlayed.map(Format.relative) ?? L10n.t("Never"))
+                }
                 if let minutes = game.playtimeMinutes, minutes > 0 {
                     Stat(label: L10n.t("Play time"), value: Format.playtime(minutes))
                 }
                 switch game.install {
+                case .inStore:
+                    Stat(label: L10n.t("Price"), value: game.storePrice ?? "–")
+                    if let score = game.metascore {
+                        Stat(label: "Metascore", value: "\(score)")
+                    }
                 case .installed:
                     Stat(label: L10n.t("Size"), value: Format.bytes(game.sizeOnDisk))
                 case .notInstalled:
@@ -329,6 +337,14 @@ private struct GameDetail: View {
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Theme.muted)
             }
+            if game.macNative {
+                Label(L10n.t("Steam also has a Mac version of this game. It often runs better than the Windows version, but older Mac versions sometimes don't start on current Macs."),
+                      systemImage: "laptopcomputer")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: 620, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack(spacing: 14) {
                 PlayButton(install: game.install, isLaunching: model.launchingID == game.id,
@@ -339,11 +355,13 @@ private struct GameDetail: View {
                            vrOnly: game.isVROnly && game.install == .notInstalled) {
                     model.primaryAction()
                 }
-                RoundIconButton(symbol: "slider.horizontal.3", help: L10n.t("Options for this game (O)")) {
-                    model.showingOptions = true
-                }
-                RoundIconButton(symbol: "folder", help: L10n.t("Show game folder in Finder")) {
-                    model.revealSelected()
+                if game.install != .inStore {
+                    RoundIconButton(symbol: "slider.horizontal.3", help: L10n.t("Options for this game (O)")) {
+                        model.showingOptions = true
+                    }
+                    RoundIconButton(symbol: "folder", help: L10n.t("Show game folder in Finder")) {
+                        model.revealSelected()
+                    }
                 }
                 if model.canUninstall(game) {
                     RoundIconButton(
@@ -408,6 +426,7 @@ private struct PlayButton: View {
         case .notInstalled: return L10n.t("Download")
         case .downloading(let fraction?): return L10n.t("Downloading … %ld %%", Int(fraction * 100))
         case .downloading(nil): return L10n.t("Preparing download …")
+        case .inStore: return L10n.t("View in Steam Store")
         }
     }
 
@@ -424,7 +443,7 @@ private struct PlayButton: View {
                         .controlSize(.small)
                         .environment(\.colorScheme, .light)
                 } else {
-                    Image(systemName: install == .notInstalled ? "arrow.down" : "play.fill")
+                    Image(systemName: install == .notInstalled ? "arrow.down" : install == .inStore ? "cart" : "play.fill")
                         .font(.system(size: 15, weight: .bold))
                 }
                 Text(title)
@@ -525,10 +544,14 @@ struct GameContextMenu: ViewModifier {
                 Button(model.isRunning(game) ? L10n.t("Switch to Game") : L10n.t("Play")) { select(); model.primaryAction() }
             case .notInstalled where !game.isVROnly:
                 Button(L10n.t("Download")) { select(); model.primaryAction() }
+            case .inStore:
+                Button(L10n.t("View in Steam Store")) { model.openStorePage(game) }
             default:
                 EmptyView()
             }
-            Button(L10n.t("Show game folder in Finder")) { select(); model.revealSelected() }
+            if game.install != .inStore {
+                Button(L10n.t("Show game folder in Finder")) { select(); model.revealSelected() }
+            }
             if model.canUninstall(game) {
                 Divider()
                 Button(game.isInstalled ? L10n.t("Uninstall …") : L10n.t("Cancel Download"), role: .destructive) {
@@ -565,8 +588,20 @@ struct CoverCard: View {
             }
         }
         .frame(width: 154, height: 231)
-        .saturation(game.install == .notInstalled ? 0.15 : 1)
+        .saturation(game.install == .notInstalled || game.install == .inStore ? 0.15 : 1)
         .overlay(alignment: .bottom) { installBadge }
+        .overlay(alignment: .topTrailing) {
+            if game.macNative {
+                Text("MAC")
+                    .font(.system(size: 9.5, weight: .heavy).width(.expanded))
+                    .foregroundStyle(Theme.ink)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Theme.night.opacity(0.78), in: Capsule())
+                    .padding(7)
+                    .help(L10n.t("Steam also has a Mac version"))
+            }
+        }
         .overlay(alignment: .topLeading) {
             if isRunning {
                 HStack(spacing: 5) {
@@ -599,10 +634,10 @@ struct CoverCard: View {
         switch game.install {
         case .installed:
             EmptyView()
-        case .notInstalled:
+        case .notInstalled, .inStore:
             HStack {
                 Spacer()
-                Image(systemName: "arrow.down.circle.fill")
+                Image(systemName: game.install == .inStore ? "cart.circle.fill" : "arrow.down.circle.fill")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(Theme.ink, Theme.night.opacity(0.7))
                     .padding(8)

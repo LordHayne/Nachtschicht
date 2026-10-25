@@ -6,8 +6,12 @@ import Foundation
 enum GameLog {
     static var url: URL { Engine.supportDir.appendingPathComponent("Logs/wine.log") }
 
-    /// Wine's own messages that help: libraries a program can't load. Everything else stays quiet.
-    static let wineDebug = "-all,err+module"
+    /// Wine's own messages that help: libraries a program can't load, and .NET without Mono.
+    /// Everything else stays quiet.
+    static let wineDebug = "-all,err+module,err+mscoree"
+
+    /// Not a winetricks verb: Wine Mono, which Nightforge installs itself (Engine.installWineMono).
+    static let wineMono = "wine-mono"
 
     /// For a Steam about to start: appends to the log, starting a fresh one when it has grown large.
     static func handleForSteam() -> FileHandle? {
@@ -52,6 +56,9 @@ enum GameLog {
                lower.contains(folder) || !lower.contains("which is needed by") {
                 // err:module:import_dll Library MSVCP120.dll (which is needed by L"C:\\…\\Game.exe") not found
                 dll = lower.range(of: "library ").map { lower[$0.upperBound...].prefix { $0 != " " } }
+            } else if lower.contains("wine mono is not installed") || lower.contains("install mono for windows") {
+                if !verbs.contains(wineMono) { verbs.append(wineMono) }
+                dll = nil
             } else if let range = lower.range(of: "unimplemented function ") {
                 // wine: Call from … to unimplemented function msvcp140.dll.?_Xbad_alloc@std@@YAXXZ, aborting
                 let function = lower[range.upperBound...]

@@ -828,6 +828,13 @@ private struct GameInsightNotes: View {
             if insight.analysis.onlyD3D12 {
                 note(L10n.t("This game uses DirectX 12 only, which runs on a Mac in part at best."), systemImage: "exclamationmark.triangle")
             }
+            if let launcher = insight.analysis.launcher {
+                note(L10n.t("Starts through another launcher: %@. Under Wine its window can stay empty or fail to sign in; if the game doesn't come up, a problem report helps.", launcher),
+                     systemImage: "arrow.triangle.branch")
+            } else if insight.analysis.usesWebView2 {
+                note(L10n.t("Draws some windows (sign-in, news) with Microsoft WebView2, which can stay empty on a Mac."),
+                     systemImage: "rectangle.dashed")
+            }
             if !insight.analysis.antiCheat.isEmpty {
                 note(L10n.t("Uses %@: online play with it doesn't work on a Mac, single player usually does.",
                             insight.analysis.antiCheat.joined(separator: ", ")),

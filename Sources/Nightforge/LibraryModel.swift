@@ -437,10 +437,17 @@ final class LibraryModel: ObservableObject {
 
             while true {
                 // Runtimes the profile asks for, and those an earlier start turned out to need.
-                let missing = Engine.missingWinetricks((profile?.winetricks ?? []) + LearnedFixes.winetricks(game.appID))
+                let learned = LearnedFixes.winetricks(game.appID)
+                let missing = Engine.missingWinetricks((profile?.winetricks ?? []) + learned.filter { $0 != GameLog.wineMono })
                 if !missing.isEmpty, let runner {
                     launchStatus = L10n.t("Setting up the game …")
                     await Engine.installWinetricks(missing, wine: URL(fileURLWithPath: runner))
+                    launchStatus = nil
+                }
+                if game.bottle.isBuiltIn, analysis?.usesDotNet == true || learned.contains(GameLog.wineMono),
+                   !Engine.wineMonoInstalled, let runner {
+                    launchStatus = L10n.t("Setting up .NET for the game …")
+                    await Engine.installWineMono(URL(fileURLWithPath: runner))
                     launchStatus = nil
                 }
                 var arguments = analysis?.preferD3D11Arguments ?? []

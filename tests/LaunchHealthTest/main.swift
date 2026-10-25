@@ -12,6 +12,29 @@ struct LaunchHealthTest {
         }
     }
 
+    /// A minimal 64-bit Windows program whose only content is an import table naming `imports`.
+    static func writePE(_ url: URL, imports: [String]) {
+        var bytes = [UInt8](repeating: 0, count: 0x400)
+        func put16(_ value: Int, _ at: Int) { bytes[at] = UInt8(value & 0xFF); bytes[at + 1] = UInt8(value >> 8 & 0xFF) }
+        func put32(_ value: Int, _ at: Int) { put16(value & 0xFFFF, at); put16(value >> 16, at + 2) }
+        bytes[0] = 0x4D; bytes[1] = 0x5A                                    // "MZ"
+        put32(0x40, 0x3C)                                                   // → PE header
+        bytes.replaceSubrange(0x40..<0x44, with: [0x50, 0x45, 0, 0])        // "PE\0\0"
+        put16(0x8664, 0x44); put16(1, 0x46); put16(240, 0x54)               // x86-64, 1 section, PE32+ header
+        let optional = 0x58
+        put16(0x20B, optional)                                              // PE32+
+        put32(0x1000, optional + 112 + 8); put32(20 * (imports.count + 1), optional + 112 + 12)  // import directory
+        let section = optional + 240
+        put32(0x200, section + 8); put32(0x1000, section + 12); put32(0x200, section + 16); put32(0x200, section + 20)
+        var name = 0x200 + 20 * (imports.count + 1)
+        for (index, dll) in imports.enumerated() {
+            put32(0x1000 + name - 0x200, 0x200 + index * 20 + 12)           // descriptor → name
+            bytes.replaceSubrange(name..<name + dll.utf8.count, with: Array(dll.utf8))
+            name += dll.utf8.count + 1
+        }
+        FileManager.default.createFile(atPath: url.path, contents: Data(bytes))
+    }
+
     static func ids(_ analysis: GameAnalysis, _ profileJSON: String? = nil) -> [String] {
         let profile = profileJSON.flatMap { try? JSONDecoder().decode(GameProfile.self, from: Data($0.utf8)) }
         return LaunchHealth.attempts(for: analysis, profile: profile).map(\.id)
@@ -120,6 +143,30 @@ struct LaunchHealthTest {
         check(errors.count == 6, "errors without repeats: \(errors.count)")
         check(errors.first?.hasPrefix("err:module") == true, "thread ids dropped: \(errors.first ?? "")")
         check(errors.contains("err:   DXGI: Failed to create swap chain"), "DXVK's own error lines kept")
+
+        // MARK: Analysis of a made-up game folder
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("lht-game-\(UUID().uuidString)", isDirectory: true)
+        let fm = FileManager.default
+        try? fm.createDirectory(at: folder.appendingPathComponent("EasyAntiCheat"), withIntermediateDirectories: true)
+        try? fm.createDirectory(at: folder.appendingPathComponent("__Installer"), withIntermediateDirectories: true)
+        writePE(folder.appendingPathComponent("Game.exe"), imports: ["KERNEL32.dll", "mscoree.dll"])
+        writePE(folder.appendingPathComponent("__Installer/Touchup.exe"), imports: ["d3d12.dll"])
+        for name in ["uplay_r1_loader64.dll", "WebView2Loader.dll"] { fm.createFile(atPath: folder.appendingPathComponent(name).path, contents: Data()) }
+        check(PEImports.dlls(of: folder.appendingPathComponent("Game.exe")) == ["kernel32.dll", "mscoree.dll"], "the PE reader reads imports")
+        var analysis = GameAnalysis.analyze(installDir: folder, launchExecutable: "Game.exe")
+        check(analysis.usesDotNet, ".NET recognised")
+        check(analysis.launcher == "Ubisoft Connect", "Ubisoft Connect recognised: \(analysis.launcher ?? "none")")
+        check(analysis.usesWebView2, "WebView2 recognised")
+        check(analysis.antiCheat == ["Easy Anti-Cheat"], "anti-cheat recognised")
+        check(!analysis.apis.contains(.d3d12), "programs in __Installer don't count")
+        try? fm.removeItem(at: folder.appendingPathComponent("uplay_r1_loader64.dll"))
+        fm.createFile(atPath: folder.appendingPathComponent("__Installer/installerdata.xml").path, contents: Data())
+        writePE(folder.appendingPathComponent("Game.exe"), imports: ["d3d9.dll"])
+        analysis = GameAnalysis.analyze(installDir: folder, launchExecutable: "Game.exe")
+        check(analysis.launcher == "EA app" && analysis.usesD3D9 && !analysis.usesDotNet, "EA app and DirectX 9: \(analysis)")
+        try? fm.removeItem(at: folder)
+        check(GameLog.missingRuntimes(in: "0040:err:mscoree:CLRRuntimeInfo_GetRuntimeHost Wine Mono is not installed", gameFolder: "x")
+              == [GameLog.wineMono], "missing Mono recognised")
 
         // MARK: Installed games
         if CommandLine.arguments.count > 1 {

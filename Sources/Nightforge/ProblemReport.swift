@@ -30,8 +30,10 @@ enum ProblemReport {
             graphics += " → " + insight.attempts[index].label + (confirmed ? "" : " (not confirmed yet)")
         }
         var detected = insight?.analysis.summary ?? "–"
-        if let antiCheat = insight?.analysis.antiCheat, !antiCheat.isEmpty {
-            detected += " · " + antiCheat.joined(separator: ", ")
+        if let analysis = insight?.analysis {
+            detected += analysis.antiCheat.map { " · " + $0 }.joined()
+            if let launcher = analysis.launcher { detected += " · " + launcher }
+            if analysis.usesWebView2 { detected += " · WebView2" }
         }
         var lines = [
             "**What happens:** <!-- e.g. black window, crash after the logo, low FPS, no sound -->",

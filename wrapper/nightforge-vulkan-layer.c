@@ -8,9 +8,14 @@
 //   - reports wide lines as supported (Metal draws them one pixel wide) and leaves out every
 //     feature the device doesn't have when the game creates its device, and
 //   - reports at least 32 samplers per shader stage (enough for No Man's Sky, which refuses 16),
-//     or what a game's profile asks for, from nightforge-vulkan.conf next to the game's program
-//     (written by Nightforge before each start, like dxmt.conf):
+//     or what a game's profile asks for, and
+//   - offers the game only standard (sRGB) picture formats unless the player turned HDR on for it:
+//     on a Mac's XDR display games otherwise pick HDR, which under Wine mostly looks washed out.
+// Per-game settings come from nightforge-vulkan.conf next to the game's program (written by
+// Nightforge before each start, like dxmt.conf):
 //         maxPerStageDescriptorSamplers = 64
+//         hdr = on
+// Each swapchain's size, format and colour space goes to stderr, i.e. Nightforge's wine.log.
 //
 // Inside the "Nightforge Game" bundle the Vulkan loader finds it as an implicit layer in
 // Contents/Resources/vulkan/implicit_layer.d (see Engine.installVulkanLayer).
@@ -34,10 +39,14 @@ static PFN_vkGetPhysicalDeviceFeatures next_features;
 static PFN_vkGetPhysicalDeviceFeatures2 next_features2;
 static PFN_vkGetPhysicalDeviceProperties next_properties;
 static PFN_vkGetPhysicalDeviceProperties2 next_properties2;
+static PFN_vkGetPhysicalDeviceSurfaceFormatsKHR next_surface_formats;
+static PFN_vkGetPhysicalDeviceSurfaceFormats2KHR next_surface_formats2;
+static PFN_vkCreateSwapchainKHR next_create_swapchain;
 
 // MARK: - Configuration
 
 static uint32_t min_samplers = 32;
+static int allow_hdr = 0;
 
 static int read_config(const char *path) {
     FILE *file = fopen(path, "r");
@@ -45,7 +54,9 @@ static int read_config(const char *path) {
     char line[256];
     while (fgets(line, sizeof line, file)) {
         unsigned value;
+        char word[16];
         if (sscanf(line, " maxPerStageDescriptorSamplers = %u", &value) == 1) min_samplers = value;
+        if (sscanf(line, " hdr = %15s", word) == 1) allow_hdr = !strcmp(word, "on");
     }
     fclose(file);
     return 1;
@@ -99,6 +110,83 @@ static VKAPI_ATTR void VKAPI_CALL GetPhysicalDeviceProperties(VkPhysicalDevice d
 static VKAPI_ATTR void VKAPI_CALL GetPhysicalDeviceProperties2(VkPhysicalDevice device, VkPhysicalDeviceProperties2 *properties) {
     next_properties2(device, properties);
     raise_limits(&properties->properties.limits);
+}
+
+// MARK: - Picture formats
+
+/// Standard dynamic range: what a game gets unless HDR is on for it.
+static int is_sdr(VkColorSpaceKHR space) { return space == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR; }
+
+/// Hands out `kept` entries the Vulkan way: only the count without an array, VK_INCOMPLETE when
+/// the game's array is smaller.
+static VkResult hand_out(uint32_t kept, uint32_t *count, int has_array) {
+    if (!has_array) {
+        *count = kept;
+        return VK_SUCCESS;
+    }
+    VkResult result = *count < kept ? VK_INCOMPLETE : VK_SUCCESS;
+    if (*count > kept) *count = kept;
+    return result;
+}
+
+static VKAPI_ATTR VkResult VKAPI_CALL GetPhysicalDeviceSurfaceFormatsKHR(VkPhysicalDevice device, VkSurfaceKHR surface,
+                                                                        uint32_t *count, VkSurfaceFormatKHR *formats) {
+    pthread_once(&config_once, load_config);
+    if (allow_hdr) return next_surface_formats(device, surface, count, formats);
+    uint32_t total = 0;
+    VkResult result = next_surface_formats(device, surface, &total, NULL);
+    if (result != VK_SUCCESS || total == 0) return result == VK_SUCCESS ? hand_out(0, count, formats != NULL) : result;
+    VkSurfaceFormatKHR *all = calloc(total, sizeof *all);
+    if (!all) return VK_ERROR_OUT_OF_HOST_MEMORY;
+    result = next_surface_formats(device, surface, &total, all);
+    if (result < 0) {
+        free(all);
+        return result;
+    }
+    uint32_t kept = 0;
+    for (uint32_t i = 0; i < total; i++) if (is_sdr(all[i].colorSpace)) all[kept++] = all[i];
+    if (kept == 0) {
+        free(all);
+        return next_surface_formats(device, surface, count, formats);  // no sRGB at all: leave the list alone
+    }
+    if (formats) memcpy(formats, all, (*count < kept ? *count : kept) * sizeof *all);
+    free(all);
+    return hand_out(kept, count, formats != NULL);
+}
+
+static VKAPI_ATTR VkResult VKAPI_CALL GetPhysicalDeviceSurfaceFormats2KHR(VkPhysicalDevice device,
+                                                                         const VkPhysicalDeviceSurfaceInfo2KHR *info,
+                                                                         uint32_t *count, VkSurfaceFormat2KHR *formats) {
+    pthread_once(&config_once, load_config);
+    if (allow_hdr) return next_surface_formats2(device, info, count, formats);
+    uint32_t total = 0;
+    VkResult result = next_surface_formats2(device, info, &total, NULL);
+    if (result != VK_SUCCESS || total == 0) return result == VK_SUCCESS ? hand_out(0, count, formats != NULL) : result;
+    VkSurfaceFormat2KHR *all = calloc(total, sizeof *all);
+    if (!all) return VK_ERROR_OUT_OF_HOST_MEMORY;
+    for (uint32_t i = 0; i < total; i++) all[i].sType = VK_STRUCTURE_TYPE_SURFACE_FORMAT_2_KHR;
+    result = next_surface_formats2(device, info, &total, all);
+    if (result < 0) {
+        free(all);
+        return result;
+    }
+    uint32_t kept = 0;
+    for (uint32_t i = 0; i < total; i++) if (is_sdr(all[i].surfaceFormat.colorSpace)) all[kept++] = all[i];
+    if (kept == 0) {
+        free(all);
+        return next_surface_formats2(device, info, count, formats);  // no sRGB at all: leave the list alone
+    }
+    // The game's entries keep their own sType and pNext; only the format itself is filled in.
+    if (formats) for (uint32_t i = 0; i < *count && i < kept; i++) formats[i].surfaceFormat = all[i].surfaceFormat;
+    free(all);
+    return hand_out(kept, count, formats != NULL);
+}
+
+static VKAPI_ATTR VkResult VKAPI_CALL CreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR *info,
+                                                         const VkAllocationCallbacks *allocator, VkSwapchainKHR *swapchain) {
+    fprintf(stderr, "[nightforge-vulkan] swapchain %ux%u format %d colour space %d%s\n", info->imageExtent.width,
+            info->imageExtent.height, info->imageFormat, info->imageColorSpace, allow_hdr ? " (HDR allowed)" : "");
+    return next_create_swapchain(device, info, allocator, swapchain);
 }
 
 // MARK: - Instance and device
@@ -175,7 +263,12 @@ static VKAPI_ATTR VkResult VKAPI_CALL CreateDevice(VkPhysicalDevice physicalDevi
 
 static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL GetDeviceProcAddr(VkDevice device, const char *name) {
     if (!strcmp(name, "vkGetDeviceProcAddr")) return (PFN_vkVoidFunction)GetDeviceProcAddr;
-    return next_device_proc(device, name);
+    PFN_vkVoidFunction theirs = next_device_proc(device, name);
+    if (theirs && !strcmp(name, "vkCreateSwapchainKHR")) {
+        if (!next_create_swapchain) next_create_swapchain = (PFN_vkCreateSwapchainKHR)theirs;
+        return (PFN_vkVoidFunction)CreateSwapchainKHR;
+    }
+    return theirs;
 }
 
 static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL GetInstanceProcAddr(VkInstance instance, const char *name) {
@@ -198,6 +291,14 @@ static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL GetInstanceProcAddr(VkInstance i
     if (theirs && (!strcmp(name, "vkGetPhysicalDeviceProperties2") || !strcmp(name, "vkGetPhysicalDeviceProperties2KHR"))) {
         if (!next_properties2) next_properties2 = (PFN_vkGetPhysicalDeviceProperties2)theirs;
         return (PFN_vkVoidFunction)GetPhysicalDeviceProperties2;
+    }
+    if (theirs && !strcmp(name, "vkGetPhysicalDeviceSurfaceFormatsKHR")) {
+        if (!next_surface_formats) next_surface_formats = (PFN_vkGetPhysicalDeviceSurfaceFormatsKHR)theirs;
+        return (PFN_vkVoidFunction)GetPhysicalDeviceSurfaceFormatsKHR;
+    }
+    if (theirs && !strcmp(name, "vkGetPhysicalDeviceSurfaceFormats2KHR")) {
+        if (!next_surface_formats2) next_surface_formats2 = (PFN_vkGetPhysicalDeviceSurfaceFormats2KHR)theirs;
+        return (PFN_vkVoidFunction)GetPhysicalDeviceSurfaceFormats2KHR;
     }
     return theirs;
 }

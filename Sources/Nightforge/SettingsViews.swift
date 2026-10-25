@@ -72,6 +72,18 @@ struct GameOptionsSheet: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                Toggle(isOn: $options.hdr) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("HDR")
+                        Text(L10n.t("For games that draw through Vulkan, on the XDR display. Off by default: under Wine HDR mostly looks washed out."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .toggleStyle(.switch)
+                .disabled(drawsWith == .dxmt && insight?.analysis.apis.contains(.vulkan) != true)
             }
 
             VStack(alignment: .leading, spacing: 6) {

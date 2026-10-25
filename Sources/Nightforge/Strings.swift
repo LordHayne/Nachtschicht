@@ -95,6 +95,13 @@ enum L10n {
         "This game didn't start with %@, so Nightforge uses %@ for it automatically.":
             "Mit %@ ist dieses Spiel nicht gestartet, deshalb nutzt Nightforge dafür automatisch %@.",
         "Starting again with %@ …": "Neuer Start mit %@ …",
+        "Setting up .NET for the game …": ".NET wird für das Spiel eingerichtet …",
+        "Starts through another launcher: %@. Under Wine its window can stay empty or fail to sign in; if the game doesn't come up, a problem report helps.":
+            "Startet über einen weiteren Launcher: %@. Unter Wine kann dessen Fenster leer bleiben oder die Anmeldung scheitern; wenn das Spiel nicht kommt, hilft eine Problemmeldung.",
+        "Draws some windows (sign-in, news) with Microsoft WebView2, which can stay empty on a Mac.":
+            "Zeigt manche Fenster (Anmeldung, News) mit Microsoft WebView2, die auf dem Mac leer bleiben können.",
+        "For games that draw through Vulkan, on the XDR display. Off by default: under Wine HDR mostly looks washed out.":
+            "Für Spiele, die über Vulkan zeichnen, auf dem XDR-Display. Standardmäßig aus: Unter Wine wirkt HDR meist blass.",
         "%@ didn't start": "%@ ist nicht gestartet",
         "Report problem": "Problem melden",
         "Report problem …": "Problem melden …",

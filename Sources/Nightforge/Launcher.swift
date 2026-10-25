@@ -107,13 +107,16 @@ struct GameOptions: Codable, Equatable {
     var frameLimit: Int?
     /// MetalFX spatial upscaling of the game's picture (DXMT only).
     var upscaling = Choice.automatic
+    /// HDR for games that draw through Vulkan (themselves or via DXVK); off, since under Wine it
+    /// mostly looks washed out (wrapper/nightforge-vulkan-layer.c).
+    var hdr = false
 
     static let frameLimits = [0, 30, 40, 60, 120]
 
     init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case metalHUD, extraArgs, graphics, fps, metalFX
+        case metalHUD, extraArgs, graphics, fps, metalFX, hdr
         // 0.1.4 stored these; their defaults (0, false) meant "untouched", so they read as automatic.
         case frameLimit, upscaling
     }
@@ -128,6 +131,7 @@ struct GameOptions: Codable, Equatable {
         frameLimit = try c.decodeIfPresent(Int.self, forKey: .fps) ?? (legacyLimit > 0 ? legacyLimit : nil)
         let legacyUpscaling = try c.decodeIfPresent(Bool.self, forKey: .upscaling) ?? false
         upscaling = try c.decodeIfPresent(Choice.self, forKey: .metalFX) ?? (legacyUpscaling ? .on : .automatic)
+        hdr = try c.decodeIfPresent(Bool.self, forKey: .hdr) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -137,6 +141,7 @@ struct GameOptions: Codable, Equatable {
         try c.encode(graphics, forKey: .graphics)
         try c.encodeIfPresent(frameLimit, forKey: .fps)
         try c.encode(upscaling, forKey: .metalFX)
+        if hdr { try c.encode(hdr, forKey: .hdr) }
     }
 
     /// The frame limit actually used: the game's own choice, or with "Sharp & smooth" half the
@@ -314,7 +319,7 @@ enum Launcher {
             Engine.writeGameConfigs(installDir: game.installDir,
                                     frameLimit: options.effectiveFrameLimit(displayRefreshRate: displayRefreshRate, profile: profile),
                                     upscaling: options.effectiveUpscaling(profile: profile),
-                                    vulkanSamplers: profile?.vulkanSamplers)
+                                    vulkanSamplers: profile?.vulkanSamplers, hdr: options.hdr)
             Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner)
         }
         // CrossOver bottles: the game inherits this process's environment. Nightforge's own

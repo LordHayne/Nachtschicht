@@ -1,7 +1,8 @@
 import Foundation
 
 /// What a game's files reveal before it runs: the graphics interfaces its programs link, its
-/// engine and anti-cheat. Read from the Windows import tables; nothing is executed.
+/// engine, anti-cheat, .NET and the other launchers it needs. Read from the Windows import tables
+/// and the file names; nothing is executed.
 struct GameAnalysis: Codable, Equatable {
     enum API: String, Codable, CaseIterable, Comparable {
         case legacy, d3d9, d3d10, d3d11, d3d12, vulkan, openGL
@@ -29,6 +30,12 @@ struct GameAnalysis: Codable, Equatable {
     var engine = GameEngine.other
     /// "Easy Anti-Cheat", "BattlEye": online play with them doesn't work on a Mac.
     var antiCheat: [String] = []
+    /// A .NET program (or a .NET launcher in front of the game): it needs Wine Mono.
+    var usesDotNet = false
+    /// Another company's launcher the game starts through ("Ubisoft Connect", "EA app", …).
+    var launcher: String?
+    /// Microsoft WebView2 draws some of its windows (login, news); under Wine they often stay empty.
+    var usesWebView2 = false
 
     /// Direct3D 10/11 is what DXMT and DXVK translate.
     var usesD3D11: Bool { apis.contains(.d3d10) || apis.contains(.d3d11) }
@@ -52,6 +59,7 @@ struct GameAnalysis: Codable, Equatable {
         var parts = [apis.sorted().map(\.label).joined(separator: ", ")]
         if engine == .unreal { parts.append("Unreal Engine") }
         if engine == .unity { parts.append("Unity") }
+        if usesDotNet { parts.append(".NET") }
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }
@@ -62,7 +70,8 @@ extension GameAnalysis {
     static func analyze(installDir: URL, launchExecutable: String?) -> GameAnalysis {
         let fm = FileManager.default
         var analysis = GameAnalysis()
-        let programs = gamePrograms(in: installDir)
+        let contents = scan(installDir)
+        let programs = contents.programs
         var targets: [URL] = []
         if let launchExecutable {
             let relative = launchExecutable.replacingOccurrences(of: "\\", with: "/")
@@ -79,6 +88,7 @@ extension GameAnalysis {
             guard let imports = PEImports.dlls(of: file) else { continue }
             let folder = file.deletingLastPathComponent()
             analysis.apis.formUnion(imports.compactMap(api(forDLL:)))
+            if imports.contains("mscoree.dll") { analysis.usesDotNet = true }
             // The game's own big libraries can be where it draws (Source's engine.dll and the like);
             // upscalers and SDKs link every graphics interface they support, so they don't count.
             engineLibraries += imports
@@ -105,9 +115,21 @@ extension GameAnalysis {
             || fm.fileExists(atPath: installDir.appendingPathComponent("Engine/Binaries").path) {
             analysis.engine = .unreal
         }
-        analysis.antiCheat = antiCheat(in: installDir, programs: programs)
+        analysis.antiCheat = [("Easy Anti-Cheat", "easyanticheat"), ("BattlEye", "battleye")]
+            .filter { contents.hasItem(named: $0.1) }.map(\.0)
+        analysis.launcher = launchers.first { $0.paths.contains(where: contents.has) }?.name
+        analysis.usesWebView2 = contents.hasItem(named: "webview2loader.dll")
         return analysis
     }
+
+    /// Launchers of other stores, recognised by files they leave in the game folder (paths are
+    /// relative to it; a bare name may be anywhere).
+    private static let launchers: [(name: String, paths: [String])] = [
+        ("Ubisoft Connect", ["upc_r2_loader64.dll", "upc_r1_loader64.dll", "uplay_r1_loader64.dll", "uplay_r2_loader64.dll", "uplay_r164.dll"]),
+        ("EA app", ["__installer/installerdata.xml"]),
+        ("Rockstar Games Launcher", ["playgtav.exe", "playrdr2.exe", "rockstar-games-launcher.exe"]),
+        ("Paradox Launcher", ["launcher-settings.json"]),
+    ]
 
     private static func api(forDLL dll: String) -> API? {
         switch dll {
@@ -129,34 +151,34 @@ extension GameAnalysis {
         "galaxy", "discord", "bink", "fmod", "physx", "nvapi", "d3dcompiler", "msvcp", "vcruntime", "ucrtbase",
     ]
 
-    /// Windows programs in the game folder (a few levels deep, where Unity/Unreal put them),
-    /// without installers and crash reporters.
-    private static func gamePrograms(in dir: URL) -> [URL] {
-        guard let files = FileManager.default.enumerator(
-            at: dir, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else { return [] }
-        let helpers = ["crash", "redist", "dxsetup", "vcredist", "setup", "installer", "unins", "easyanticheat", "beservice", "report"]
-        var found: [URL] = []
-        for case let file as URL in files {
-            if files.level > 4 { files.skipDescendants(); continue }
-            let name = file.lastPathComponent.lowercased()
-            if name == "_commonredist" || name == "__installer" { files.skipDescendants(); continue }
-            if name.hasSuffix(".exe"), !helpers.contains(where: name.contains) { found.append(file) }
-        }
-        return found
+    /// The game folder a few levels deep (where Unity and Unreal put their programs).
+    private struct Contents {
+        /// Windows programs, without installers and crash reporters.
+        var programs: [URL] = []
+        /// Every file and folder, lower-cased and relative to the game folder.
+        var paths = Set<String>()
+
+        /// `path` relative to the game folder, or a bare name anywhere in it.
+        func has(_ path: String) -> Bool { path.contains("/") ? paths.contains(path) : hasItem(named: path) }
+        func hasItem(named name: String) -> Bool { paths.contains(name) || paths.contains { $0.hasSuffix("/" + name) } }
     }
 
-    private static func antiCheat(in dir: URL, programs: [URL]) -> [String] {
-        let fm = FileManager.default
-        let folders = Set([dir] + programs.map { $0.deletingLastPathComponent() })
-        var found: [String] = []
-        if folders.contains(where: { fm.fileExists(atPath: $0.appendingPathComponent("EasyAntiCheat").path) }) {
-            found.append("Easy Anti-Cheat")
+    private static func scan(_ dir: URL) -> Contents {
+        var contents = Contents()
+        guard let files = FileManager.default.enumerator(
+            at: dir, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return contents }
+        let base = dir.standardizedFileURL.path.count + 1
+        let helpers = ["crash", "redist", "dxsetup", "vcredist", "setup", "installer", "unins", "easyanticheat", "beservice", "report"]
+        for case let file as URL in files {
+            if files.level > 4 { files.skipDescendants(); continue }
+            let path = String(file.standardizedFileURL.path.dropFirst(base)).lowercased()
+            contents.paths.insert(path)
+            let name = file.lastPathComponent.lowercased()
+            let installers = path.hasPrefix("_commonredist") || path.hasPrefix("__installer")
+            if name.hasSuffix(".exe"), !installers, !helpers.contains(where: name.contains) { contents.programs.append(file) }
         }
-        if folders.contains(where: { fm.fileExists(atPath: $0.appendingPathComponent("BattlEye").path) }) {
-            found.append("BattlEye")
-        }
-        return found
+        return contents
     }
 
     private static func size(_ file: URL) -> Int {

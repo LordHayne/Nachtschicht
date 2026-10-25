@@ -28,7 +28,7 @@ enum Engine {
     ]
     /// Settings games inherit from the background Steam. Bump `steamConfigVersion` whenever this
     /// or `steamDLLOverrides` changes, so a running Steam gets restarted with them.
-    static let steamConfigVersion = 7
+    static let steamConfigVersion = 8
     static var gameEnvironment: [String: String] {
         var env = [
             // Compile shaders in the background instead of stalling the frame that first needs them.
@@ -39,6 +39,9 @@ enum Engine {
             // DXVK's warnings go there as well, instead of log files in the Windows user folder.
             "DXVK_LOG_LEVEL": "warn",
             "DXVK_LOG_PATH": "none",
+            // Rosetta runs AVX and AVX2 (macOS 15 and later) but only tells programs so when asked;
+            // many newer games refuse to start or crash without it.
+            "ROSETTA_ADVERTISE_AVX": "1",
         ]
         // Apple's Metal HUD: DXMT draws with Metal directly, so this is its FPS display. Only an
         // environment variable turns it on, and games get theirs from Steam, hence app-wide.
@@ -50,7 +53,8 @@ enum Engine {
     /// its own – so the game settings go into the user environment (HKCU\Environment) as well,
     /// where every Windows program, games included, picks them up at start.
     static func applyGameEnvironment(wine: URL) {
-        let managed = ["DXVK_ASYNC", "MTL_HUD_ENABLED", "WINEDEBUG", "MVK_CONFIG_LOG_LEVEL", "DXVK_LOG_LEVEL", "DXVK_LOG_PATH"]
+        let managed = ["DXVK_ASYNC", "MTL_HUD_ENABLED", "WINEDEBUG", "MVK_CONFIG_LOG_LEVEL", "DXVK_LOG_LEVEL", "DXVK_LOG_PATH",
+                       "ROSETTA_ADVERTISE_AVX"]
         let current = gameEnvironment
         let values = managed.map { name in
             current[name].map { "\"\(name)\"=\"\($0)\"" } ?? "\"\(name)\"=-"
@@ -400,6 +404,35 @@ enum Engine {
     /// winetricks verbs that would change every game in the shared prefix, not just the one that
     /// asks (Proton gives each game its own prefix; Nightforge has one for all).
     private static let sharedPrefixUnsafeVerbs: Set<String> = ["dsound"]
+
+    /// .NET programs run on Wine Mono, which the engine brings along (share/wine/mono) and Wine finds
+    /// by itself. Its Windows side – the .NET registry keys and libraries games and launchers check
+    /// for – comes with its support package, which setup leaves out (it would show dialogs then).
+    static var wineMonoInstalled: Bool {
+        let registry = (try? String(contentsOf: prefix.appendingPathComponent("system.reg"), encoding: .utf8)) ?? ""
+        return registry.contains("Wine Mono Windows Support")
+    }
+
+    /// Installs Wine Mono's support package quietly; a few seconds.
+    static func installWineMono(_ wine: URL) async {
+        let mono = wine.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("share/wine/mono")
+        guard let version = (try? FileManager.default.contentsOfDirectory(atPath: mono.path))?
+            .filter({ $0.hasPrefix("wine-mono-") }).sorted().last
+        else { return }
+        let package = mono.appendingPathComponent("\(version)/support/winemono-support.msi")
+        await Task.detached(priority: .userInitiated) {
+            let process = Process()
+            process.executableURL = wine
+            process.arguments = ["msiexec", "/i", "Z:" + package.path.replacingOccurrences(of: "/", with: "\\"), "/qn"]
+            var env = environment(wine: wine)
+            env["WINEDLLOVERRIDES"] = nil  // setup's switch that keeps Mono out
+            process.environment = env
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            guard (try? process.run()) != nil else { return }
+            process.waitUntilExit()
+        }.value
+    }
 
     /// The profile's winetricks verbs that aren't in the prefix yet (winetricks logs what it installed).
     static func missingWinetricks(_ verbs: [String]) -> [String] {
@@ -829,7 +862,7 @@ enum Engine {
     /// from the game's working folder – the game is started by the already running Steam, so
     /// environment variables don't reach it. Written next to every program of the game, since some
     /// start from a subfolder; a config the game ships itself is left alone.
-    static func writeGameConfigs(installDir: URL, frameLimit: Int, upscaling: Bool, vulkanSamplers: Int? = nil) {
+    static func writeGameConfigs(installDir: URL, frameLimit: Int, upscaling: Bool, vulkanSamplers: Int? = nil, hdr: Bool = false) {
         var dxvk = ["dxvk.enableAsync = True"]
         if Prefs.performanceHUD { dxvk.append("dxvk.hud = fps,frametimes,gpuload") }
         var dxmt: [String] = []
@@ -844,7 +877,8 @@ enum Engine {
         }
         // Read by Nightforge's Vulkan layer (wrapper/nightforge-vulkan-layer.c); only games whose
         // profile needs it get one.
-        let vulkan = vulkanSamplers.map { ["maxPerStageDescriptorSamplers = \($0)"] } ?? []
+        var vulkan = vulkanSamplers.map { ["maxPerStageDescriptorSamplers = \($0)"] } ?? []
+        if hdr { vulkan.append("hdr = on") }
         var folders = Set([installDir.standardizedFileURL])
         for exe in executableFiles(in: installDir) { folders.insert(exe.deletingLastPathComponent().standardizedFileURL) }
         for folder in folders {

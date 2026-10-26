@@ -827,7 +827,7 @@ private struct GameDetail: View {
                            isUninstalling: model.uninstallingID == game.id,
                            isRunning: model.isRunning(game),
                            needsConfirmation: model.launchNeedsConfirmation,
-                           status: model.launchStatus,
+                           status: model.launchPhase?.title,
                            unavailable: unavailable, cloud: game.playsInCloud,
                            noSpace: game.downloadNeedsSpace != nil) {
                     model.primaryAction()
@@ -872,6 +872,15 @@ private struct GameDetail: View {
                         model.togglePinned(game)
                     }
                 }
+            }
+            if model.launchingID == game.id, let hint = model.launchHint {
+                Text(hint)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+                    .frame(minWidth: 320, maxWidth: 620, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+                    .accessibilityAddTraits(.updatesFrequently)
             }
         }
         .task(id: game.id) {

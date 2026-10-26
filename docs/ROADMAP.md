@@ -74,7 +74,7 @@
 
 ## Phase 1 – Schnelle Gewinne mit vorhandenen Daten
 
-- [ ] **1.1 Ehrliche Wartezustände beim Start** · `M` · braucht 0.1
+- [x] **1.1 Ehrliche Wartezustände beim Start** · `M` · braucht 0.1 · Branch `claude/ux-launch-phases-1-1`
   - **Warum:** Ein Launcher, der 40 s „Launching …“ zeigt, wirkt kaputt. Shader-Kompilierung beim ersten Start/nach Updates ist normal – man muss es nur sagen.
   - **Was:** Startphasen auf dem Play-Button, je mit Erklärzeile darunter:
     - „Starting Steam …“ (Steam unsichtbar im Hintergrund)
@@ -83,6 +83,7 @@
   - **Wo:** `LibraryModel.launchStatus` existiert bereits → zu einem Enum `LaunchPhase` ausbauen; Quellen: `Launcher.swift` (Steam-Konsolen-Log), `GameLog.swift`, DXMT/DXVK-Shader-Cache-Ordner (prüfen, ob leer/neu).
   - **Design:** `Parts.tsx` → `LaunchPhase`, `playLabel`, `playHint`.
   - **Fertig wenn:** Jede Phase > 2 s hat einen eigenen Text; nach einem Grafik-Update zeigt der erste Start „Preparing shaders“, der zweite nicht.
+  - **Stand:** `LaunchPhase.swift` ersetzt `launchStatus`: Starting Steam (neu, solange die Hintergrund-Steam noch hochfährt) / Starting Steam for Mac / Signing in / Sign in in the Steam window / Setting up the game / Setting up .NET / Restarting Steam / Starting again with …, jede mit Erklärzeile unter dem Play-Knopf; „Confirm in the Steam window“ ebenso. Shader: Beim ersten Start mit neuer Engine, anderer Ebene oder neuen Grafik-Builds aus der Komponentenliste (`LaunchPhase.graphicsSignature`) steht unter „Launching …“ „First start with this graphics version: shaders are prepared …“; nach dem Start wird die Signatur gemerkt, der zweite Start zeigt es nicht. **Abweichung:** kein Prozentwert – die Shader entstehen erst im laufenden Spiel; der Knopf heißt weiter „Launching …“, die Zeile erklärt die Wartezeit. Test in `tests/LaunchHealthTest/`.
 
 - [x] **1.2 Fehlstart mit Lösung statt Sackgasse** · `M` · Branch `claude/ux-failed-launch-1-2`
   - **Was:** Das heutige Alert „didn't start“ wird zum Sheet: Erklärung + **„Start with ‚Most compatible‘“** (Primär) + **„Start through <anderer Store>“** (wenn vorhanden) + „Report problem“ (bestehend).

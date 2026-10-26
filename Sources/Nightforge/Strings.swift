@@ -428,6 +428,21 @@ enum L10n {
             "Immer noch nicht? Ein Problembericht öffnet sich auf GitHub, ausgefüllt mit dem, was Nightforge versucht hat – nichts wird gesendet, bis du ihn dort abschickst.",
         "Close": "Schließen",
 
+        // Launch phases
+        "Starting Steam …": "Steam startet …",
+        "Steam runs invisibly in the background – it only has to start once.": "Steam läuft unsichtbar im Hintergrund – es muss nur einmal starten.",
+        "The Mac version starts through Steam for Mac, which runs in the background.": "Die Mac-Version startet über Steam für Mac, das im Hintergrund läuft.",
+        "Steam signs in again, so your cloud saves come along.": "Steam meldet sich neu an, damit deine Cloud-Spielstände mitkommen.",
+        "Steam needs you to sign in – its window is open.": "Steam möchte, dass du dich anmeldest – sein Fenster ist offen.",
+        "Installing what the game needs from Windows. Only the first time.": "Installiert, was das Spiel von Windows braucht. Nur beim ersten Mal.",
+        "Installing .NET, which this game needs. Only the first time.": "Installiert .NET, das dieses Spiel braucht. Nur beim ersten Mal.",
+        "Steam got stuck while starting – a fresh start fixes that.": "Steam ist beim Starten hängen geblieben – ein Neustart behebt das.",
+        "It closed right away – Nightforge starts it the next way and remembers what works.":
+            "Es hat sich sofort beendet – Nightforge startet es auf dem nächsten Weg und merkt sich, was funktioniert.",
+        "First start with this graphics version: shaders are prepared, so it can take a minute. Next time it's quicker.":
+            "Erster Start mit dieser Grafikversion: Shader werden vorbereitet, das kann eine Minute dauern. Beim nächsten Mal geht es schneller.",
+        "Steam asks something before the game starts – answer it in its window.": "Steam fragt vor dem Start etwas – antworte in seinem Fenster.",
+
         // Library filters
         "Sort": "Sortieren",
         "Recently played": "Zuletzt gespielt",

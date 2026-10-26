@@ -55,7 +55,17 @@ final class LibraryModel: ObservableObject {
     /// Steam is showing a question (licence, setup) for the game being launched.
     @Published private(set) var launchNeedsConfirmation = false
     /// What the launch is busy with when it's more than waiting for Steam ("Restarting Steam …").
-    @Published private(set) var launchStatus: String?
+    @Published private(set) var launchPhase: LaunchPhase?
+    /// The start in progress is the game's first with these graphics: its shaders get built.
+    @Published private(set) var launchBuildsShaders = false
+
+    /// The line under the Play button while a game starts: why it takes a moment.
+    var launchHint: String? {
+        guard launchingID != nil else { return nil }
+        if launchNeedsConfirmation { return LaunchPhase.confirmHint }
+        if let launchPhase { return launchPhase.hint }
+        return launchBuildsShaders ? LaunchPhase.shaderHint : nil
+    }
     /// A game that ended right after starting with every way Nightforge knows.
     @Published var failedLaunch: FailedLaunch?
     /// What Nightforge knows about installed games before starting them, by app ID.
@@ -788,28 +798,29 @@ final class LibraryModel: ObservableObject {
         launchingID = game.id
         GameDisplay.enterGame()
         launchNeedsConfirmation = false
-        launchStatus = nil
+        launchPhase = nil
         let behavior = Prefs.afterLaunch
         let arguments = GameOptionsStore.load(game.appID).extraArgs.trimmingCharacters(in: .whitespaces)
         launchTask = Task {
             defer {
                 launchingID = nil
                 launchNeedsConfirmation = false
-                launchStatus = nil
+                launchPhase = nil
+                launchBuildsShaders = false
             }
             // A Wine Steam that is still starting would sign in after Steam for Mac and sign it out.
             if Engine.isSteamRunning, !Engine.steamSignedIn, !Engine.sessionReplaced(),
                let wine = await Engine.installedWine() {
-                launchStatus = L10n.t("Starting Steam for Mac …")
+                launchPhase = .startingSteamForMac
                 try? await Engine.stopSteam(wine)
             }
             if !MacSteam.isRunning {
-                launchStatus = L10n.t("Starting Steam for Mac …")
+                launchPhase = .startingSteamForMac
                 MacSteam.start()
             } else if MacSteam.sessionReplaced {
                 // The Wine Steam signed in since; signing in again needs a fresh start. Without it
                 // the game would start without its cloud saves.
-                launchStatus = L10n.t("Signing in to Steam …")
+                launchPhase = .signingIn
                 await MacSteam.quit()
                 MacSteam.start()
             }
@@ -817,13 +828,13 @@ final class LibraryModel: ObservableObject {
             var waited = 0
             while !(MacSteam.signedIn && MacSteam.startupFinished) && waited < 90 {
                 if waited == 25 {
-                    launchStatus = L10n.t("Sign in in the Steam window")
+                    launchPhase = .signInInSteamWindow
                     MacSteam.show()
                 }
                 try? await Task.sleep(for: .seconds(1))
                 waited += 1
             }
-            launchStatus = nil
+            launchPhase = nil
             // steam://run/<id>//<arguments>: the extra part goes to the game.
             let extra = arguments.isEmpty ? ""
                 : "//" + (arguments.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "")
@@ -1300,33 +1311,38 @@ final class LibraryModel: ObservableObject {
         launchingID = game.id
         GameDisplay.enterGame()
         launchNeedsConfirmation = false
-        launchStatus = nil
+        launchPhase = nil
         let behavior = Prefs.afterLaunch
         launchTask = Task {
             defer {
                 launchingID = nil
                 launchNeedsConfirmation = false
-                launchStatus = nil
+                launchPhase = nil
+                launchBuildsShaders = false
             }
-            if game.bottle.isBuiltIn { await steamStartup?.value }
+            if game.bottle.isBuiltIn, let startup = steamStartup {
+                if !Engine.isSteamRunning { launchPhase = .startingSteam }
+                await startup.value
+                launchPhase = nil
+            }
             // Steam for Mac signed in since and signed this Steam out: sign it in again, or the
             // game starts without its cloud saves.
             if game.bottle.isBuiltIn, Engine.sessionReplaced(), let wine = await Engine.installedWine() {
-                launchStatus = L10n.t("Signing in to Steam …")
+                launchPhase = .signingIn
                 _ = await restartStuckSteam(wine)
-                launchStatus = nil
+                launchPhase = nil
             }
             // A Steam that is still signing in starts the game offline ("Steam is currently in
             // Offline Mode"): wait for it, and start it afresh if it doesn't get there.
             if game.bottle.isBuiltIn, Engine.isSteamSignedIn, !Engine.steamSignedIn, let wine = await Engine.installedWine() {
-                launchStatus = L10n.t("Signing in to Steam …")
+                launchPhase = .signingIn
                 var waited = 0
                 while !Engine.steamSignedIn, waited < 45 {
                     try? await Task.sleep(for: .seconds(1))
                     waited += 1
                 }
                 if !Engine.steamSignedIn { _ = await restartStuckSteam(wine) }
-                launchStatus = nil
+                launchPhase = nil
             }
             if game.bottle.isBuiltIn { await takeSavesAlong(game, to: .windows) }
             let runner = game.bottle.isBuiltIn ? await Engine.installedWine()?.path : Prefs.runnerPath
@@ -1347,9 +1363,9 @@ final class LibraryModel: ObservableObject {
             }
 
             if let preparing = preparations[game.appID] {
-                launchStatus = L10n.t("Setting up the game …")
+                launchPhase = .settingUp
                 await preparing.value
-                launchStatus = nil
+                launchPhase = nil
             }
             while true {
                 if let runner {
@@ -1380,13 +1396,18 @@ final class LibraryModel: ObservableObject {
                    Engine.prepareLaunchEnvironment(avx: LearnedFixes.avx(game.appID, profile: profile), d3dMetal: layer == .d3dmetal,
                                                    frameLimit: frameLimit, upscaling: options.effectiveUpscaling(profile: profile)),
                    Engine.isSteamRunning, !anyRunning(.windows), let runner {
-                    launchStatus = L10n.t("Signing in to Steam …")
+                    launchPhase = .signingIn
                     _ = await restartStuckSteam(URL(fileURLWithPath: runner))
-                    launchStatus = nil
+                    launchPhase = nil
                 }
+                let shaders = LaunchPhase.graphicsSignature(runner: runner, layer: layer,
+                                                            components: ComponentStore.localManifest()?.components ?? [])
+                launchBuildsShaders = game.bottle.isBuiltIn && LaunchPhase.isFirstStart(game.appID, signature: shaders)
                 guard await start(game, runner: runner, options: options, profile: profile,
                                   arguments: arguments, frameLimit: frameLimit)
                 else { return }
+                if game.bottle.isBuiltIn { LaunchPhase.recordStart(game.appID, signature: shaders) }
+                launchBuildsShaders = false
                 launchingID = nil
                 if game.bottle.isBuiltIn { SteamPriority.watch(game) }
                 startedHere.insert(game.id)
@@ -1420,7 +1441,7 @@ final class LibraryModel: ObservableObject {
                 }
                 if LaunchHealth.advance(game.appID, attempts) {
                     let next = attempts[LaunchHealth.current(game.appID, attempts).index]
-                    launchStatus = L10n.t("Starting again with %@ …", next.label)
+                    launchPhase = .retrying(next.label)
                     continue
                 }
                 // One way only (Vulkan, DirectX 12): what the game draws with says more than a layer.
@@ -1445,15 +1466,15 @@ final class LibraryModel: ObservableObject {
         let missing = Engine.missingWinetricks((profile?.winetricks ?? []) + learned.filter { $0 != GameLog.wineMono })
             .filter(Engine.isSafeWinetricksVerb)
         if !missing.isEmpty {
-            if showStatus { launchStatus = L10n.t("Setting up the game …") }
+            if showStatus { launchPhase = .settingUp }
             await Engine.installWinetricks(missing, wine: wine)
-            if showStatus { launchStatus = nil }
+            if showStatus { launchPhase = nil }
         }
         if game.bottle.isBuiltIn, analysis?.usesDotNet == true || learned.contains(GameLog.wineMono),
            !Engine.wineMonoInstalled {
-            if showStatus { launchStatus = L10n.t("Setting up .NET for the game …") }
+            if showStatus { launchPhase = .settingUpDotNet }
             await Engine.installWineMono(wine)
-            if showStatus { launchStatus = nil }
+            if showStatus { launchPhase = nil }
         }
     }
 
@@ -1540,7 +1561,7 @@ final class LibraryModel: ObservableObject {
                 if game.bottle.isBuiltIn, !watcher.steamReceivedLaunch, !retriedAfterRestart,
                    totalSeconds % 5 == 0, running.isEmpty, let runner, Engine.steamLooksStuck(quietFor: 30) {
                     retriedAfterRestart = true
-                    launchStatus = L10n.t("Restarting Steam …")
+                    launchPhase = .restartingSteam
                     if await restartStuckSteam(URL(fileURLWithPath: runner)) {
                         watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
                         try? await Task.detached(priority: .userInitiated) {
@@ -1548,7 +1569,7 @@ final class LibraryModel: ObservableObject {
                                                 frameLimit: frameLimit, extraArguments: arguments)
                         }.value
                     }
-                    launchStatus = nil
+                    launchPhase = nil
                     quietSeconds = 0
                     continue
                 }

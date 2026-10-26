@@ -950,32 +950,18 @@ final class LibraryModel: ObservableObject {
 
     // MARK: - Search & views
 
-    /// Matches ignoring case, accents and punctuation, so "baldurs" finds "Baldur's Gate 3".
-    private static func searchKey(_ text: String) -> String {
-        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
-            .unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || $0 == " " }
-            .map(String.init).joined()
-    }
-
     /// `selectBestMatch`: while typing, jump to the first hit instead of keeping the old selection.
     private func applyFilter(selectBestMatch: Bool = false) {
         let previous = selected?.id
-        let words = Self.searchKey(searchText).split(separator: " ").map(String.init)
+        let words = Search.key(searchText).split(separator: " ")
         if words.isEmpty {
             games = allGames
         } else {
-            let matches = allGames.filter { game in
-                let name = Self.searchKey(game.name)
-                return words.allSatisfy { name.contains($0) }
-            }
-            // Names where a word starts with the search ("ark" → ARK, Arkham) before mid-word hits
-            // (Amnesia: The Dark Descent); otherwise keep the library order.
-            func startsWord(_ game: Game) -> Bool {
-                let nameWords = Self.searchKey(game.name).split(separator: " ")
-                return words.allSatisfy { word in nameWords.contains { $0.hasPrefix(word) } }
-            }
+            // Word starts first ("ark" → ARK, Arkham), then initials ("rdr2"), then mid-word hits
+            // (Amnesia: The Dark Descent); within each, the library order.
+            let ranked = allGames.compactMap { game in Search.rank(name: game.name, query: searchText).map { (game, $0) } }
             let owned = Set(allGames.map(\.appID))
-            games = matches.filter(startsWord) + matches.filter { !startsWord($0) }
+            games = (0...2).flatMap { rank in ranked.filter { $0.1 == rank }.map(\.0) }
                 + storeResults.filter { !owned.contains($0.appID) }
         }
         selectedIndex = selectBestMatch && !words.isEmpty ? 0 : games.firstIndex(where: { $0.id == previous }) ?? 0

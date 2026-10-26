@@ -304,7 +304,21 @@ enum Engine {
         let macSteam = MacSteam.startedByNightforge && MacSteam.isRunning
         let macLibrary = FileManager.default.fileExists(atPath: MacSteam.steamapps.path) ? MacSteam.steamapps.path : ""
         let script = supportDir.appendingPathComponent("steam-shutdown.sh")
-        let text = #"""
+        let text = steamShutdownScript
+        guard (try? text.write(to: script, atomically: true, encoding: .utf8)) != nil else { return }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [script.path, wine?.path ?? "", prefix.path, macLibrary, macSteam ? "1" : "0", Bundle.main.bundlePath]
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()  // keeps running after Nightforge has quit
+    }
+
+    /// The script scheduleSteamShutdown runs: $1 wine, $2 prefix, $3 Steam for Mac's steamapps,
+    /// $4 "1" to quit Steam for Mac too, $5 the Nightforge app to bring back after a game.
+    static let steamShutdownScript = #"""
         #!/bin/bash
         # Written by Nightforge on quit: ends the background Steam once nothing needs it, and brings
         # Nightforge back when a game that was running ends.
@@ -358,16 +372,6 @@ enum Engine {
         # Wine helpers that outlive the server, recognisable by their working directory in the prefix.
         lsof -a -d cwd -Fpn 2>/dev/null           | awk -v root="$PREFIX" '/^p/ { pid = substr($0, 2) } /^n/ { if (index(substr($0, 2), root) == 1) print pid }'           | while read -r pid; do kill -9 "$pid" 2>/dev/null; done
         """#
-        guard (try? text.write(to: script, atomically: true, encoding: .utf8)) != nil else { return }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [script.path, wine?.path ?? "", prefix.path, macLibrary, macSteam ? "1" : "0", Bundle.main.bundlePath]
-        process.standardInput = FileHandle.nullDevice
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try? process.run()  // keeps running after Nightforge has quit
-    }
 
     /// Installed engine binary, if setup has got that far.
     static func installedWine() async -> URL? {

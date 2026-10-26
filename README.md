@@ -114,7 +114,7 @@ Got a game running better with a specific setting? Add it to `profiles/mac.json`
 }
 ```
 
-Fields: `graphics` (`dxmt` or `dxvk`), `arguments`, `dllOverrides`, `registry`, `windowsVersion`, `winetricks`, `metalFX` (`false` keeps MetalFX off for a game it doesn't suit), `frameLimit` (the game's automatic FPS limit), `vulkanSamplers` (for games that draw with Vulkan themselves: the samplers per shader stage reported to them, when MoltenVK's 16 make a game refuse to start) and `preferWindows` (`true` keeps a game on its Windows version although Steam has a 64-bit Mac version, e.g. an old OpenGL port that runs worse).
+Fields: `graphics` (`dxmt` or `dxvk`), `arguments`, `dllOverrides`, `registry`, `windowsVersion`, `winetricks`, `metalFX` (`false` keeps MetalFX off for a game it doesn't suit), `frameLimit` (the game's automatic FPS limit), `vulkanSamplers` (for games that draw with Vulkan themselves: the samplers per shader stage reported to them, when MoltenVK's 16 make a game refuse to start) `preferWindows` (`true` keeps a game on its Windows version although Steam has a 64-bit Mac version, e.g. an old Mac port that is known to be broken) and `saves` (save folders for games whose Steam Cloud rules don't name them, so their saves come along when the game changes between its Windows and Mac version: `{"root": "WinAppDataRoaming", "path": "7DaysToDie/Saves", "mac": "MacAppSupport"}`).
 
 ## Build from source
 

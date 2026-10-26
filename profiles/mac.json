@@ -1,10 +1,22 @@
 {
- "about": "Nightforge's own per-game profiles, tested on Macs. They take precedence over umu-protonfixes. Fields: graphics (dxmt|dxvk), arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX (false = keep MetalFX off), frameLimit (automatic FPS limit), vulkanSamplers (samplers per shader stage reported to Vulkan games), preferWindows (true = Automatic keeps the Windows version although Steam has a 64-bit Mac one), ignoreUpstream, note.",
+ "about": "Nightforge's own per-game profiles, tested on Macs. They take precedence over umu-protonfixes. Fields: graphics (dxmt|dxvk), arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX (false = keep MetalFX off), frameLimit (automatic FPS limit), vulkanSamplers (samplers per shader stage reported to Vulkan games), preferWindows (true = Automatic keeps the Windows version although Steam has a 64-bit Mac one), saves (save folders for games without Steam Cloud rules, carried over when the game changes between its Windows and Mac version), ignoreUpstream, note.",
  "games": {
   "251570": {
    "name": "7 Days to Die",
    "graphics": "dxmt",
-   "note": "Tested 2026-10-24 on M5: ~63 FPS with DXMT; with DXVK the game sees only 128 MB VRAM and drops to low textures and ~30 FPS. Steam's no-EAC launch option is picked automatically."
+   "note": "Tested 2026-10-24 on M5: ~63 FPS with DXMT; with DXVK the game sees only 128 MB VRAM and drops to low textures and ~30 FPS. Steam's no-EAC launch option is picked automatically.",
+   "saves": [
+    {
+     "root": "WinAppDataRoaming",
+     "path": "7DaysToDie/Saves",
+     "mac": "MacAppSupport"
+    },
+    {
+     "root": "WinAppDataRoaming",
+     "path": "7DaysToDie/GeneratedWorlds",
+     "mac": "MacAppSupport"
+    }
+   ]
   },
   "275850": {
    "name": "No Man's Sky",

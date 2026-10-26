@@ -256,6 +256,33 @@ final class LibraryModel: ObservableObject {
             macSteamPrewarmed = true
             if !MacSteam.isRunning { MacSteam.start() }
         }
+        takeTurnsDownloading()
+    }
+
+    /// One Steam can be signed in at a time, and a signed-out one soon gets no download servers
+    /// any more ("Failed to get list of download sources"). With downloads waiting in both, the
+    /// signed-in one finishes first, then the other is signed in – not while a game runs or starts.
+    private var lastSignInSwitch = Date.distantPast
+
+    private func takeTurnsDownloading() {
+        guard launchingID == nil, running.isEmpty, Date().timeIntervalSince(lastSignInSwitch) > 120 else { return }
+        let macDownload = allGames.contains { game in
+            (game.platform == .mac && Self.isDownloading(game.install)) || Self.isDownloading(game.macPending)
+        }
+        let windowsDownload = allGames.contains { $0.platform == .windows && $0.bottle.isBuiltIn && Self.isDownloading($0.install) }
+        if macDownload, MacSteam.isReady, !MacSteam.signedIn, !(windowsDownload && Engine.steamSignedIn) {
+            lastSignInSwitch = Date()
+            Task {
+                if MacSteam.isRunning { await MacSteam.quit() }
+                MacSteam.start()
+            }
+        } else if windowsDownload, Engine.isSteamRunning, Engine.sessionReplaced(), !(macDownload && MacSteam.signedIn) {
+            lastSignInSwitch = Date()
+            Task {
+                guard let wine = await Engine.installedWine() else { return }
+                try? await Engine.restartSteamInBackground(wine)
+            }
+        }
     }
 
     private static func isDownloading(_ state: InstallState?) -> Bool {
@@ -631,10 +658,12 @@ final class LibraryModel: ObservableObject {
         guard game.macNative else { return }
         let appID = game.appID
         let installDir = game.installDirName
+        let profileRules = await ProfileStore.shared.profile(for: appID)?.saves ?? []
         await Task.detached(priority: .userInitiated) {
             let macCatalog = MacSteam.root.appendingPathComponent("appcache/appinfo.vdf")
             let rules = SteamCatalog.saveRules(
                 appID: appID, steamRoot: FileManager.default.fileExists(atPath: macCatalog.path) ? MacSteam.root : Engine.steamRoot)
+                + profileRules
             var places = SaveTransfer.Places()
             places.windowsInstall = Engine.steamRoot.appendingPathComponent("steamapps/common/\(installDir)", isDirectory: true)
             places.macInstall = MacSteam.steamapps.appendingPathComponent("common/\(installDir)", isDirectory: true)

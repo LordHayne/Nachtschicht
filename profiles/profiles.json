@@ -694,7 +694,19 @@
    "name": "7 Days to Die",
    "graphics": "dxmt",
    "note": "Tested 2026-10-24 on M5: ~63 FPS with DXMT; with DXVK the game sees only 128 MB VRAM and drops to low textures and ~30 FPS. Steam's no-EAC launch option is picked automatically.",
-   "source": "mac"
+   "source": "mac",
+   "saves": [
+    {
+     "root": "WinAppDataRoaming",
+     "path": "7DaysToDie/Saves",
+     "mac": "MacAppSupport"
+    },
+    {
+     "root": "WinAppDataRoaming",
+     "path": "7DaysToDie/GeneratedWorlds",
+     "mac": "MacAppSupport"
+    }
+   ]
   },
   "252430": {
    "name": "Dusty Revenge: Co-Op Edition",

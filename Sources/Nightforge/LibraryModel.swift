@@ -510,7 +510,8 @@ final class LibraryModel: ObservableObject {
         game.controller = hit.controller ?? .none
         game.storePrice = hit.price
         game.metascore = hit.metascore
-        if hit.macNative != true { game.antiCheatBlock = antiCheatBlocks[hit.appID] }
+        // Store hits don't say whether there's single player, so only blocks that always hold.
+        if hit.macNative != true, let block = antiCheatBlocks[hit.appID], !block.onlineOnly { game.antiCheatBlock = block }
         return game
     }
 

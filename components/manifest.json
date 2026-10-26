@@ -35,10 +35,10 @@
     {
       "id": "gamepad",
       "kind": "graphics",
-      "version": "4.7.3-3",
-      "url": "https://github.com/LordHayne/Nightforge/releases/download/gamepad-winecx4.7.3-3/nightforge-gamepad-winecx-4.7.3-3.tar.gz",
-      "sha256": "3ac442f6d6b88d8fda153e819d1ea41767ca772155050eeddcb26b93b5da04f4",
-      "size": 623708,
+      "version": "4.7.3-7",
+      "url": "https://github.com/LordHayne/Nightforge/releases/download/gamepad-winecx4.7.3-7/nightforge-gamepad-winecx-4.7.3-7.tar.gz",
+      "sha256": "6e411c21b03535cf7cbde3a4d9eda828c5cd053735c553a8a038c5dee489dced",
+      "size": 623707,
       "license": "LGPL-2.1-or-later AND Zlib",
       "source": "https://github.com/LordHayne/Nightforge"
     },

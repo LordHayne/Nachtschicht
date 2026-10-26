@@ -35,7 +35,7 @@ jobs:
     steps:
       - name: Cache LLVM
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           key: llvm-darwin-${{ env.LLVM_VERSION }}-x86_64
           path: toolchains/llvm-darwin
@@ -61,7 +61,7 @@ jobs:
 
       - name: Save LLVM
         if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           key: llvm-darwin-${{ env.LLVM_VERSION }}-x86_64
           path: toolchains/llvm-darwin
@@ -70,7 +70,7 @@ jobs:
     needs: llvm
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
 
@@ -92,7 +92,7 @@ jobs:
           done
 
       - name: Restore LLVM
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           key: llvm-darwin-${{ env.LLVM_VERSION }}-x86_64
           path: toolchains/llvm-darwin
@@ -124,14 +124,14 @@ jobs:
           meson compile -C build32
           meson install -C build32
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dxmt
           path: |
             dxmt/install64
             dxmt/install32
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dxmt-source
           path: source
@@ -139,7 +139,7 @@ jobs:
   winemac:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: nightforge
           persist-credentials: false
@@ -211,7 +211,7 @@ jobs:
           otool -L server/wineserver
           otool -L dlls/ntdll/ntdll.so
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: winemac
           path: |
@@ -219,7 +219,7 @@ jobs:
             build/dlls/ntdll/ntdll.so
             build/server/wineserver
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wine-source
           path: source
@@ -233,7 +233,7 @@ jobs:
     env:
       SDL_HEADERS_TAG: release-2.32.8  # the SDL the engine ships (libSDL2-2.0.0.dylib, dlopened by name)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: nightforge
 
@@ -290,7 +290,7 @@ jobs:
           codesign -fs - "$so"
           otool -L "$so"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: winebus
           path: build/dlls/winebus.sys/winebus.so
@@ -301,7 +301,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: nightforge
           persist-credentials: false
@@ -310,7 +310,7 @@ jobs:
             .github/workflows/graphics.yml
           sparse-checkout-cone-mode: false
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts
 

@@ -2,7 +2,7 @@
 
 Was liegen geblieben ist und irgendwann angegangen werden kann. Stand: 26.10.2026, nach dem
 Umstieg auf winecx 4.7.3 mit D3DMetal (PR #7), dem Controller-Paket (PR #8) und dem Code-Audit
-(behoben in PR #4, #5 und #11, der Rest steht unten unter „Aus dem Code-Audit“).
+(behoben in PR #4, #5, #11, #12, #14–#19, der Rest steht unten unter „Aus dem Code-Audit“).
 
 Neue Punkte unten in den passenden Abschnitt, Erledigtes löschen (die Geschichte steht im Git-Log).
 Jeder Punkt nennt, wo man anfängt.
@@ -16,7 +16,9 @@ Die Tests vom 26.10. liefen größtenteils noch auf Wine 11.18 (Gcenx). Seit PR 
   `profiles/mac.json` beziehen sich auf 11.18.
 - **Left 4 Dead 2.** Auf 11.18 scheitert DXVK an seinen Puffern (`vkCreateBuffer`, MoltenVK lehnt
   externe Speicher-Handles ab). WineD3D läuft, stürzt aber nach etwa einer Minute ab, und im Spiel fehlte der Ton.
-  `-vulkan` (Valves DXVK) und WineD3D mit Vulkan starten nicht. Auf winecx neu testen. Zum Ton:
+  `-vulkan` (Valves DXVK) und WineD3D mit Vulkan starten nicht. Auf winecx (26.10.) scheitert DXVK schon früher:
+  `VK_ERROR_FEATURE_NOT_PRESENT` bei `vkCreateDevice`, weil der Vulkan-Layer dort nicht geladen wird (siehe
+  „Aus dem Code-Audit“ → Vulkan-Layer). WineD3D bleibt der Weg. Zum Ton:
   In der Cloud-Konfiguration stehen `volume "0.008"` und Quadro-Lautsprecher, also erst im Spiel unter
   Optionen → Audio hochdrehen, bevor man Wine verdächtigt.
 - **Andere Source-Spiele** (Team Fortress 2, Garry's Mod): Sie bekommen jetzt dieselbe DirectX-9-Leiter wie L4D2.
@@ -120,8 +122,8 @@ Person hängen (Whisky ist 2025 daran gescheitert).
   `manifest.json` auf `main`. Besser: ein Bot-PR, den die Tests (`tests/*/run.sh` auf einem macOS-Runner)
   durchlaufen müssen und der erst nach einem kurzen Spieltest gemergt wird. Dazu ein Rückweg: Die vorherige
   Version bleibt im Manifest, und Nightforge kann auf sie zurückfallen (`ComponentStore`).
-- **Tests in der CI.** Die Testprogramme unter `tests/` bei jedem PR auf GitHubs macOS-Runner laufen lassen
-  (für öffentliche Repos kostenlos). Echte Spiele bleiben Handarbeit.
+- **Tests in der CI** laufen seit PR #5 (`ci.yml`: Build, alle `tests/*/run.sh`, Profil- und Manifest-Prüfung).
+  Offen: dieselben Tests als Pflicht für die Bot-PRs aus dem Punkt darüber. Echte Spiele bleiben Handarbeit.
 - **Problembericht ausbauen.** `ProblemReport` öffnet schon ein GitHub-Issue. Ergänzen: Komponenten-Versionen,
   Grafik-Layer und Profil mitschicken, Issue-Vorlage im Repo, der Nutzer sieht vorher alles. Nichts automatisch
   senden, kein Tracking. Vorher den Benutzernamen-Befund unter „Aus dem Code-Audit“ beheben.
@@ -140,102 +142,60 @@ Person hängen (Whisky ist 2025 daran gescheitert).
 
 ## Aus dem Code-Audit
 
-Befunde vom 26.10., die noch nicht behoben sind. Behoben sind: Spiele, die ein Engine-Wechsel oder
-das Steam-Aufräumen beendete, die Deinstallation in Zusatz-Bibliotheken, die Winetricks-Verben, die
-Registry-Schlüssel aus Profilen, die Prüfung des Manifests, die CI-Rechte, der CI-Build, Wine-Aufrufe
-auf dem Main-Thread und sich überholende Rescans.
+Befunde vom 26.10., die noch offen sind. Alles andere ist behoben (PR #4, #5, #11, #12, #14–#19).
 
-### Sicherheit und Lieferkette
+### Entscheidungen
 
 - **Updates sind nicht echt signiert.** `Updater.install` prüft nur `codesign --verify` auf eine Ad-hoc-Signatur,
-  `scripts/install.sh` lädt ohne Prüfsumme. Entscheidung offen: einen Ed25519-Schlüssel als Repo-Secret
-  (Release-Zip signieren, im Updater und in install.sh prüfen) oder einen Apple-Developer-Account (Developer ID, Notarisierung).
-- **Nächtliche Daten gehen ungeprüft an alle.** `components.yml` und `profiles.yml` committen direkt auf `main`,
-  umu-protonfixes und AreWeAntiCheatYet werden ab `HEAD` gelesen. Besser: Bot-PRs statt Push, Upstreams per Commit festlegen.
-- **Build-Eingaben ohne Prüfsumme.** In `graphics.yml` sind das `WINE_TOOLCHAIN_URL`, das Gcenx-Archiv, der
-  inotify-Header und Klone per Tag, in `tools.yml` das cabextract-Archiv. Dazu kommt `brew install … || true`.
-  Die Actions sind per Tag statt per SHA festgelegt, Dependabot fehlt.
-- **Lizenztexte und Quellen der eigenen Pakete** sind in `graphics.yml`, `gamepad.yml` und `tools.yml` eingebaut
-  (Lizenzen im Paket, Quellarchiv als zweites Release-Asset). Wirksam erst mit dem nächsten Lauf auf `main`: die
-  bestehenden Releases `graphics-*`, `gamepad-winecx*` und `cabextract-*` haben noch keine. Nach dem Lauf prüfen,
-  dass `update-components.py` weiter genau ein Asset findet. DXMT v0.80 ist MIT (nicht LGPL, wie die alten
-  Release-Notes sagen), erst neuere DXMT-Versionen sind LGPL. Beim nächsten DXMT-Update die Lizenzdateien prüfen.
-- **Lizenzhinweise im App-Bundle.** Es fehlen die Lizenz der Vulkan-Headers (im Vulkan-Layer einkompiliert) und
-  die mingw-Runtime im `steamwebhelper.exe`. Eine `THIRD_PARTY_NOTICES` in `build.sh` mitkopieren.
-- **Problembericht.** `GameLog` entfernt nur `$HOME`. Windows-Pfade wie `C:\users\<name>` oder
-  `drive_c/users/<name>` landen mit dem Benutzernamen in der GitHub-URL (`ProblemReport`).
-- **`SaveTransfer`** lehnt `..` in Pfaden aus `mac.json` nicht ab.
+  `scripts/install.sh` lädt ohne Prüfsumme. Bewusst offen gelassen. Wege: ein Ed25519-Schlüssel als Repo-Secret
+  (Release-Zip signieren, im Updater und in install.sh prüfen) oder ein Apple-Developer-Account (Developer ID, Notarisierung).
 
-### Stabilität
+### Vulkan-Layer und winecx
 
-- **Ersteinrichtung lädt die falsche Engine.** `SetupModel.run` installiert `manifest.component(Engine.engineID)`
-  (Wine 11.18) statt `Engine.engineComponent(in:)` (winecx). Neue Nutzer laden erst 11.18 und beim ersten Start
-  der Bibliothek winecx (≈1,3 GB). Setup auf `ensureEngine` umbauen und mit einem frischen Konto testen.
-- **Ein Spielstart bricht nach 120 s still ab.** Die Warteschleife im Start in `LibraryModel` gibt `false` zurück,
-  ohne Meldung. Es fehlen ein Hinweis („Steam reagiert nicht“, Nochmal/Steam zeigen) und ein Abbrechen mit B oder Esc.
-- **Steam-Shutdown-Skript** (`Engine`, steam-shutdown): `reopened` wird nur in der Warteschleife geprüft, nicht mehr
-  vor `-shutdown` und `wineserver -k`. Wird Nightforge in diesem Fenster wieder geöffnet, kann ein neues Spiel beendet werden.
-- **`SteamPriority`** ruft `kill` auf die PID aus der PID-Datei auf, ohne zu prüfen, ob das noch das eigene Skript ist.
-- **Migration** (`LegacyMigration`): Schlägt das Verschieben einmal fehl, legt die App den neuen Ordner trotzdem an.
-  Beim nächsten Start bleibt der alte Nachtschicht-Prefix für immer zurück.
-- **`installWebHelperWrapper`** tauscht nicht atomar. Scheitert das Kopieren, fehlt `steamwebhelper.exe` ganz.
-- **`requestDownload`** escaped in der .acf nur `"`, nicht `\`.
-- **Mac-Start und Spielstand-Übernahme** setzen `installDir` aus der Standardbibliothek zusammen statt
-  `game.installDir` zu nehmen. Mac-Spiele auf externen Bibliotheken bekommen den DualSense-Fix im falschen Ordner.
-- **Alte Komponenten werden nie gelöscht** (`ComponentStore`). Auf dem Entwickler-Mac sind das rund 1 GB
-  (`wine-staging`, alte `graphics`-Versionen). Nach einer erfolgreichen Installation unbenutzte Versionen entfernen.
-- **Logs wachsen ohne Grenze:** `winetricks.log` immer, `wine.log` während einer langen Steam-Sitzung (`GameLog`).
-
-### Vulkan-Layer und Wrapper (`wrapper/`)
-
-- **CAMetalLayer ohne Retain** in der Surface-Tabelle und kein Hook auf `vkDestroySurfaceKHR`. Nach einem Wechsel in den
-  Vollbildmodus kann der Layer auf einen freigegebenen Layer zugreifen (Absturz). Nur mit MetalFX-Upscaling.
-- **Kein `@autoreleasepool`** in `nightforge-vulkan-metalfx.m`. Pro Frame bleiben Objekte auf dem Render-Thread liegen,
-  der Speicher wächst die ganze Sitzung.
-- **Swapchain-Fallback** übergibt das schon verbrauchte `oldSwapchain` noch einmal. `vkDeviceWaitIdle` in
-  `DestroySwapchain` kann mit anderen Threads kollidieren. Device- und Instance-Globals werden nie zurückgesetzt.
-- **Die Retina-Erkennung** schaut auf den Hauptbildschirm statt auf den Bildschirm des Fensters (wichtig für den TV-Modus).
+- **winecx hat keinen Vulkan-Loader, der Layer wird nie geladen.** Seine `winevulkan.so` lädt `libMoltenVK.dylib`
+  direkt (Gcenx' 11.18 ging über `libvulkan.1.dylib`), also findet sich kein Layer aus
+  `Nightforge Game.app/…/implicit_layer.d`. Seit PR #7 fehlen damit für Vulkan- und DXVK-Spiele: das Aussortieren
+  nicht unterstützter Funktionen (No Man's Sky, DXVK in L4D2 scheitert genau daran), die Sampler-Grenze, der HDR-Filter
+  und MetalFX. Ansatz: den Khronos-Loader (aus der Gcenx-Engine oder MoltenVK-Release) in die winecx-Engine legen und
+  winevulkan auf ihn lenken (Name `libMoltenVK.dylib` → Loader, MoltenVK per ICD-JSON), dabei die „MoltenVK-ICD-Falle“
+  aus den Game-Mode-Notizen beachten. Erst danach lässt sich PR #13 im Spiel prüfen.
+- **PR #13** (Entwurf): Layer-Fixes (freigegebene `CAMetalLayer`, Speicherleck pro Frame, Abbau, Retina pro Fenster).
+  Kompiliert, aber ungetestet, weil der Layer unter winecx nicht läuft (siehe oben).
+- **MetalFX auf der exportierten Metal-Queue** verlässt sich darauf, dass MoltenVK synchron einreicht. Mit
+  `MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=0` könnte das Upscaling ein halbfertiges Bild lesen.
 - **`steamwebhelper-wrapper.c`** startet den echten Helper ohne Job-Object. Wird der Wrapper beendet, bleibt CEF
   verwaist (passt zu den bekannten Shutdown-Hängern).
+
+### Lieferkette
+
+- **Nächtliche Daten gehen ungeprüft an alle.** `components.yml` und `profiles.yml` committen direkt auf `main`,
+  umu-protonfixes und AreWeAntiCheatYet werden ab `HEAD` gelesen. Siehe „Nur geprüfte Komponenten ausliefern“ oben.
+- **Build-Eingaben ohne Prüfsumme.** In `graphics.yml` `WINE_TOOLCHAIN_URL`, das Gcenx-Archiv, der inotify-Header und
+  Klone per Tag, in `tools.yml` das cabextract-Archiv; dazu `brew install … || true`. Die Actions selbst sind seit dem
+  Audit auf Commit-SHAs festgelegt, Dependabot hält sie aktuell.
+- **Erster Lauf der Lizenz-Pakete (PR #14).** Nach den ersten Releases mit Lizenzen und Quellarchiv prüfen, dass
+  `update-components.py` weiter genau ein Asset pro Komponente findet. Beim nächsten DXMT-Update die Lizenz prüfen
+  (v0.80 ist MIT, neuere DXMT-Versionen LGPL).
+
+### Steam und Start
+
+- **Steams erstes Update auf einem frischen winecx-Prefix dauert rund 11 Minuten**: Der alte Bootstrapper startet alle
+  13 s neu (164 Installationsläufe, „Bad NTFS transaction canary“), bis das Update durch ist. Die Einrichtung wartet
+  das ab, aber für neue Nutzer ist es lang. Mit 11.18 vergleichen; vielleicht hilft ein Neustart von Steam durch
+  Nightforge, sobald das Paket geladen ist.
 
 ### Leistung
 
 - **Downloads:** Alle 3 s läuft ein kompletter Rescan mit `folderSize` über `downloading/<id>`. Nur die Manifeste der
   ladenden Spiele neu lesen und die Ordnergröße cachen.
-- **Dauerndes Polling:** `ps` alle 3 s auch im Leerlauf, eine 1-Hz-Schleife in `MacSteam`. Besser wären Exit-Quellen
-  (`DispatchSource.makeProcessSource`) und längere Abstände im Leerlauf.
 - **SwiftUI:** `LibraryModel` ist ein `ObservableObject` mit 26 `@Published`, jede Änderung zeichnet alles neu.
   `@Observable` (ab macOS 14) oder das Modell aufteilen.
-- **Cover-Cache** (`Artwork`): Bilder liegen in voller Auflösung im Speicher, die Platte hat kein Limit, und
-  `.missing`-Marker laufen nie ab.
-- **`appinfo.vdf`** wird mehrfach ohne Cache gelesen (`SteamCatalog`). `insight(of:)` startet bei schnellem Blättern
-  mehrere Analysen gleichzeitig.
-
-### Bedienung, Controller und Sprache
-
-- **VoiceOver:** Die ganze App hat ein einziges `accessibilityLabel`. Cover, Icon-Knöpfe (`RoundIconButton`) und das
-  Zahnrad brauchen Labels und Traits.
-- **Controller:**
-  - „Mac-Version laden“ samt Abbrechen, „Entfernen…“, „Akku-Einstellungen“ und die Suche haben kein `.padFocus`,
-    damit ist der Store mit dem Pad unerreichbar.
-  - ↑/↓ im Raster rechnet `±gridColumns`, obwohl jede Sektion eine neue Zeile beginnt.
-  - B löscht keine aktive Suche.
-  - In Alerts trifft A den Standardknopf. „Problem melden“ öffnet dadurch den Browser.
-- **Rückmeldung:** Die Rosetta-Installation zeigt weder Fortschritt noch Fehler (`SetupModel.installRosetta`).
-  Die Ersteinrichtung hat kein Abbrechen.
-- **Sprache:**
-  - Es gibt kein `de.lproj` und keine `CFBundleLocalizations`, deshalb sind die macOS-Menüs immer englisch.
-  - Rohe Systemfehler erscheinen in der Systemsprache.
-  - Fachbegriffe im Hauptscreen: DXMT, „Bottle“, WebView2.
-  - Kleinigkeiten: „1 hrs“ (`Format.playtime`), „1 of 1 games“, die Uhr in der Systemsprache.
-- **Darstellung:** „Bewegung reduzieren“ wird ignoriert, alle Schriftgrößen sind fest. Über heller Hero-Art fehlt
-  der Topbar ein Verlauf für den Kontrast.
-- **README-Steuerungstabelle** stimmt nicht: X, L2/R2 und `/` fehlen, im Raster öffnet der zweite Klick die große Ansicht.
+- **`MacSteam`** hat eine 1-Hz-Schleife; eine Exit-Quelle (`DispatchSource.makeProcessSource`) wäre ruhiger.
 
 ### Wartbarkeit
 
 - `LibraryModel`, `Engine` und `LibraryView` haben je über 1000 Zeilen. Den SDK-Fallback gibt es 7-mal
   (`build.sh`, `tests/*/run.sh`), dazu etwa 10 eigene Process-Helfer und mehrfach definierte Pfadkonstanten.
-- **`scripts/install.sh`:** Mit `pipefail` bricht ein leeres grep stumm ab, die Meldung „No release found“ erscheint nie.
-  Das Skript steckt nicht in einer Funktion, ein abgeschnittener `curl | bash`-Download läuft deshalb halb.
-- **`engine/patches`:** Die Patches werden in Glob-Reihenfolge angewendet. Nummerieren und eine README mit Upstream-Stand anlegen.
+- **`engine/patches`:** Die Patches werden in Glob-Reihenfolge angewendet (`frame-log` baut auf `metalfx-fit-window`
+  auf, sortiert aber davor). Nummerieren und eine README mit Upstream-Stand anlegen; ein Umbenennen löst auf `main`
+  einen neuen Grafik-Build aus.

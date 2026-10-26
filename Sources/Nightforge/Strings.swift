@@ -392,6 +392,20 @@ enum L10n {
         "No zoom on covers, no sliding – plain cross-fades. Follows “Reduce motion” in macOS until you change it here.":
             "Kein Zoom auf Covern, kein Gleiten – nur Überblenden. Folgt „Bewegung reduzieren“ in macOS, bis du es hier änderst.",
 
+        // Not enough space
+        "%@ needs up to %@": "%@ braucht bis zu %@",
+        "Your Mac has %@ free – %@ short. Nothing is downloaded until there's room, so nothing stops halfway.":
+            "Dein Mac hat %@ frei – es fehlen %@. Geladen wird erst, wenn Platz ist, damit nichts auf halbem Weg abbricht.",
+        "No game here has gone unplayed for a month. Remove games or other files you don't need, then try again.":
+            "Kein Spiel hier wurde seit einem Monat nicht gespielt. Entferne Spiele oder andere Dateien, die du nicht brauchst, und versuch es dann noch einmal.",
+        "Make room – these haven't been played for a while. They stay in your Steam library, and saves in the Steam Cloud are kept.":
+            "Platz schaffen – diese wurden länger nicht gespielt. Sie bleiben in deiner Steam-Bibliothek, Spielstände in der Steam Cloud bleiben erhalten.",
+        "Last played %@": "Zuletzt gespielt %@",
+        "Never played": "Noch nie gespielt",
+        "Frees %@ – enough": "Macht %@ frei – reicht",
+        "Frees %@ of %@": "Macht %@ von %@ frei",
+        "Uninstall %ld & Download": "%ld deinstallieren & laden",
+
         // Library filters
         "Sort": "Sortieren",
         "Recently played": "Zuletzt gespielt",

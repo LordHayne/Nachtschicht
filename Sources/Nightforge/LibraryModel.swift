@@ -70,6 +70,8 @@ final class LibraryModel: ObservableObject {
     @Published var pendingLeftoverRemoval: Game?
     /// Steam for Mac being set up for a game whose Mac version is wanted.
     @Published var macSetup: MacSteamSetup?
+    /// A download that wouldn't fit: which games could make room (SpaceCheck).
+    @Published var pendingSpace: SpaceRequest?
     /// A game about to open in GeForce Now for the first time: what that means is said once.
     @Published var pendingCloudGame: Game?
     private var macSteamPrewarmed = false
@@ -504,7 +506,7 @@ final class LibraryModel: ObservableObject {
         case .installed: launchSelected()
         case .installed where game.antiCheatBlock != nil: break
         case .notInstalled where game.isVROnly || game.antiCheatBlock != nil: break
-        case .notInstalled: download(game)
+        case .notInstalled: downloadIfRoom(game)
         case .downloading: if game.downloadNeedsSpace != nil { resumeDownload(game) }
         case .inStore: openStorePage(game)
         }
@@ -628,6 +630,39 @@ final class LibraryModel: ObservableObject {
                 }
             } catch {
                 errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// Download, unless it wouldn't fit: then the player picks games to make room first.
+    private func downloadIfRoom(_ game: Game) {
+        let folder = game.installDir
+        let free = Self.freeSpace(at: SpaceCheck.existingFolder(for: folder))
+        guard let shortfall = SpaceCheck.shortfall(needed: game.sizeOnDisk, free: free) else {
+            download(game)
+            return
+        }
+        let removable = allGames.filter { canUninstall($0) && !isRunning($0) && SpaceCheck.sameVolume($0.installDir, folder) }
+        pendingSpace = SpaceRequest(game: game, free: free, shortfall: shortfall,
+                                    candidates: SpaceCheck.candidates(removable, except: game))
+    }
+
+    /// The space sheet's button: uninstall the picked games one after another, then download.
+    func freeUpAndDownload(_ ids: Set<String>) {
+        guard let request = pendingSpace else { return }
+        pendingSpace = nil
+        let picked = request.candidates.filter { ids.contains($0.id) }
+        Task {
+            for game in picked {
+                await uninstall(game)
+            }
+            reload(quiet: true)
+            let free = Self.freeSpace(at: SpaceCheck.existingFolder(for: request.game.installDir))
+            if SpaceCheck.shortfall(needed: request.game.sizeOnDisk, free: free) == nil {
+                download(request.game)
+            } else {
+                errorMessage = L10n.t("There's still not enough space: Steam needs %@ for %@, your Mac has %@ free.",
+                                      Format.bytes(request.game.sizeOnDisk + SpaceCheck.margin), request.game.name, Format.bytes(free))
             }
         }
     }
@@ -1674,22 +1709,24 @@ final class LibraryModel: ObservableObject {
     func confirmUninstall() {
         guard let game = pendingUninstall else { return }
         pendingUninstall = nil
-        uninstallingID = game.id
         Task {
-            defer {
-                uninstallingID = nil
-                reload(quiet: true)
+            await uninstall(game)
+            reload(quiet: true)
+        }
+    }
+
+    private func uninstall(_ game: Game) async {
+        uninstallingID = game.id
+        defer { uninstallingID = nil }
+        do {
+            if game.platform == .mac {
+                try await MacSteam.uninstall(appID: game.appID, installDir: game.installDir)
+                return
             }
-            do {
-                if game.platform == .mac {
-                    try await MacSteam.uninstall(appID: game.appID, installDir: game.installDir)
-                    return
-                }
-                guard let wine = await Engine.installedWine() else { return }
-                try await Engine.uninstall(appID: game.appID, installDir: game.installDir, wine: wine)
-            } catch {
-                errorMessage = L10n.t("%@ could not be uninstalled: %@", game.name, error.localizedDescription)
-            }
+            guard let wine = await Engine.installedWine() else { return }
+            try await Engine.uninstall(appID: game.appID, installDir: game.installDir, wine: wine)
+        } catch {
+            errorMessage = L10n.t("%@ could not be uninstalled: %@", game.name, error.localizedDescription)
         }
     }
 

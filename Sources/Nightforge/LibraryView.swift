@@ -65,6 +65,9 @@ struct LibraryView: View {
                 GameOptionsSheet(game: game, insight: model.insights[game.appID]) { model.reportProblem(for: game) }
             }
         }
+        .sheet(item: $model.pendingSpace) { request in
+            SpaceSheet(request: request)
+        }
         // Esc closes it like Cancel: the setup stops.
         .sheet(item: Binding(get: { model.macSetup }, set: { if $0 == nil { model.closeMacSetup() } })) { setup in
             MacSteamSetupView(
@@ -327,6 +330,82 @@ private struct AllGamesHero: View {
             .padFocus("play", cornerRadius: 34, activate: { model.goLibrary() })
         }
         .frame(height: 340, alignment: .bottomLeading)
+    }
+}
+
+// MARK: - Not enough space
+
+/// A download that wouldn't fit: how much is missing, and long unplayed games to make room with.
+struct SpaceSheet: View {
+    let request: SpaceRequest
+    @EnvironmentObject private var model: LibraryModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var picked: Set<String>
+
+    init(request: SpaceRequest) {
+        self.request = request
+        _picked = State(initialValue: SpaceCheck.preselect(request.candidates, shortfall: request.shortfall))
+    }
+
+    private var freed: Int64 { request.candidates.filter { picked.contains($0.id) }.reduce(0) { $0 + $1.sizeOnDisk } }
+    private var enough: Bool { freed >= request.shortfall }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(L10n.t("%@ needs up to %@", request.game.name, Format.bytes(request.game.sizeOnDisk)))
+                .font(Theme.display(20))
+                .lineLimit(2)
+            Label(L10n.t("Your Mac has %@ free – %@ short. Nothing is downloaded until there's room, so nothing stops halfway.",
+                         Format.bytes(request.free), Format.bytes(request.shortfall)),
+                  systemImage: "externaldrive.badge.exclamationmark")
+                .fixedSize(horizontal: false, vertical: true)
+            if request.candidates.isEmpty {
+                Text(L10n.t("No game here has gone unplayed for a month. Remove games or other files you don't need, then try again."))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(L10n.t("Make room – these haven't been played for a while. They stay in your Steam library, and saves in the Steam Cloud are kept."))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 8) {
+                    ForEach(request.candidates) { game in
+                        let on = Binding(get: { picked.contains(game.id) },
+                                         set: { if $0 { picked.insert(game.id) } else { picked.remove(game.id) } })
+                        Toggle(isOn: on) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(game.name).lineLimit(1)
+                                    Text(game.lastPlayed.map { L10n.t("Last played %@", Format.relative($0)) } ?? L10n.t("Never played"))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text(Format.bytes(game.sizeOnDisk)).monospacedDigit().foregroundStyle(.secondary)
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                        .padFocus("space.\(game.id)", toggle: on)
+                    }
+                }
+                Text(enough ? L10n.t("Frees %@ – enough", Format.bytes(freed)) : L10n.t("Frees %@ of %@", Format.bytes(freed), Format.bytes(request.shortfall)))
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(enough ? Theme.runsGreat : .secondary)
+            }
+            HStack {
+                Spacer()
+                Button(L10n.t("Cancel")) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .padFocus("space.cancel", activate: { dismiss() })
+                if !request.candidates.isEmpty {
+                    Button(L10n.t("Uninstall %ld & Download", picked.count)) { model.freeUpAndDownload(picked) }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!enough)
+                        .padFocus("space.confirm", enabled: enough, activate: { model.freeUpAndDownload(picked) })
+                }
+            }
+        }
+        .padding(24)
+        .frame(width: 520)
     }
 }
 

@@ -963,7 +963,7 @@ final class LibraryModel: ObservableObject {
                 guard watchFirstSeconds else { break }
 
                 // The first start with this way: is the game still there after its first seconds?
-                if await survivesFirstSeconds(game) {
+                if await survivesFirstSeconds(game, logMark: logMark) {
                     LaunchHealth.confirm(game.appID, attempts)
                     break
                 }
@@ -1086,8 +1086,9 @@ final class LibraryModel: ObservableObject {
 
     /// Whether the game is still running `LaunchHealth.failureWindow` seconds after it started.
     /// A launcher handing over to the game leaves a gap of a few seconds, so only a longer absence
-    /// counts as the game having ended.
-    private func survivesFirstSeconds(_ game: Game) async -> Bool {
+    /// counts as the game having ended. A game whose Direct3D layer failed (GameLog) is ended here:
+    /// it would only sit behind its own error box.
+    private func survivesFirstSeconds(_ game: Game, logMark: UInt64? = nil) async -> Bool {
         let folders = Self.processFolders([game])
         let started = Date()
         var absent = 0
@@ -1096,6 +1097,15 @@ final class LibraryModel: ObservableObject {
             let pid = await Task.detached(priority: .utility) { Self.runningGames(folders)[game.id] }.value
             absent = pid == nil ? absent + 1 : 0
             if absent >= 10 { return false }
+            if let pid, let logMark, GameLog.graphicsFailed(since: logMark) {
+                kill(pid, SIGTERM)
+                // Steam has to see it gone before the next way can start.
+                for _ in 0..<15 {
+                    try? await Task.sleep(for: .seconds(1))
+                    if await Task.detached(priority: .utility, operation: { Self.runningGames(folders)[game.id] }).value == nil { break }
+                }
+                return false
+            }
         }
         return true
     }

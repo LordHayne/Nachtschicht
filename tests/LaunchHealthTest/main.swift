@@ -165,6 +165,18 @@ struct LaunchHealthTest {
         analysis = GameAnalysis.analyze(installDir: folder, launchExecutable: "Game.exe")
         check(analysis.launcher == "EA app" && analysis.usesD3D9 && !analysis.usesDotNet, "EA app and DirectX 9: \(analysis)")
         try? fm.removeItem(at: folder)
+        // A Source game: the program imports no graphics library, the renderer sits in bin/.
+        try? fm.createDirectory(at: folder.appendingPathComponent("bin"), withIntermediateDirectories: true)
+        writePE(folder.appendingPathComponent("left4dead2.exe"), imports: ["KERNEL32.dll"])
+        fm.createFile(atPath: folder.appendingPathComponent("bin/shaderapidx9.dll").path, contents: Data())
+        analysis = GameAnalysis.analyze(installDir: folder, launchExecutable: "left4dead2.exe")
+        check(analysis.apis == [.d3d9] && ids(analysis) == ["dxvk", "wined3d"], "Source game: DirectX 9 ladder: \(analysis)")
+        try? fm.removeItem(at: folder)
+        check(GameLog.graphicsFailed(in: "warn:  DXVK: No state cache file found\nerr:   DxvkBuffer: Failed to create buffer:\nerr:     size:  65536"),
+              "DXVK's failed buffer counts as a failed start")
+        check(GameLog.graphicsFailed(in: "err:   DxvkAdapter: Failed to create device"), "DXVK's failed device counts as a failed start")
+        check(!GameLog.graphicsFailed(in: "warn:  DXVK: No state cache file found\nerr:   DXGI: Failed to create swap chain"),
+              "other DXVK errors don't end a game")
         check(GameLog.missingRuntimes(in: "0040:err:mscoree:CLRRuntimeInfo_GetRuntimeHost Wine Mono is not installed", gameFolder: "x")
               == [GameLog.wineMono], "missing Mono recognised")
 

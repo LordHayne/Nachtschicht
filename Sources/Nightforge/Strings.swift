@@ -268,6 +268,7 @@ enum L10n {
         "Nightforge plays it on GeForce Now, NVIDIA's cloud gaming, with your Steam copy (own NVIDIA account; free sessions last an hour).":
             "Nightforge spielt es über GeForce Now, NVIDIAs Cloud-Gaming, mit deinem Steam-Spiel (eigenes NVIDIA-Konto; kostenlos je eine Stunde).",
         "Play on GeForce Now": "Über GeForce Now spielen",
+        "Plays on": "Läuft über",
         "Plays on GeForce Now – its anti-cheat doesn't run on a Mac": "Läuft über GeForce Now – sein Anti-Cheat läuft nicht auf dem Mac",
         "Play %@ on GeForce Now?": "%@ über GeForce Now spielen?",
         "Continue to GeForce Now": "Weiter zu GeForce Now",

@@ -28,7 +28,7 @@ enum Engine {
     ]
     /// Settings games inherit from the background Steam. Bump `steamConfigVersion` whenever this
     /// or `steamDLLOverrides` changes, so a running Steam gets restarted with them.
-    static let steamConfigVersion = 8
+    static let steamConfigVersion = 9
     static var gameEnvironment: [String: String] {
         var env = [
             // Compile shaders in the background instead of stalling the frame that first needs them.
@@ -42,6 +42,10 @@ enum Engine {
             // Rosetta runs AVX and AVX2 (macOS 15 and later) but only tells programs so when asked;
             // many newer games refuse to start or crash without it.
             "ROSETTA_ADVERTISE_AVX": "1",
+            // DXMT keeps the shaders it has translated in the Mac's per-user cache folder by default,
+            // which macOS empties at every restart – and then each game stutters through compiling
+            // them all over again. The user's Caches folder keeps them (and stays out of backups).
+            "DXMT_SHADER_CACHE_PATH": shaderCache.path,
         ]
         // Apple's Metal HUD: DXMT draws with Metal directly, so this is its FPS display. Only an
         // environment variable turns it on, and games get theirs from Steam, hence app-wide.
@@ -49,12 +53,19 @@ enum Engine {
         return env
     }
 
+    /// Where DXMT keeps translated shaders, shared by all games (its entries are keyed by shader).
+    static var shaderCache: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Nightforge/dxmt", isDirectory: true)
+    }
+
     /// Steam starts its games with a fresh environment built from the Windows registry, not with
     /// its own – so the game settings go into the user environment (HKCU\Environment) as well,
     /// where every Windows program, games included, picks them up at start.
     static func applyGameEnvironment(wine: URL) {
         let managed = ["DXVK_ASYNC", "MTL_HUD_ENABLED", "WINEDEBUG", "MVK_CONFIG_LOG_LEVEL", "DXVK_LOG_LEVEL", "DXVK_LOG_PATH",
-                       "ROSETTA_ADVERTISE_AVX"]
+                       "ROSETTA_ADVERTISE_AVX", "DXMT_SHADER_CACHE_PATH"]
+        try? FileManager.default.createDirectory(at: shaderCache, withIntermediateDirectories: true)
         let current = gameEnvironment
         let values = managed.map { name in
             current[name].map { "\"\(name)\"=\"\($0)\"" } ?? "\"\(name)\"=-"

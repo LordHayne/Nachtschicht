@@ -400,6 +400,8 @@ private struct GameDetail: View {
                     }
                 case .installed:
                     Stat(label: L10n.t("Size"), value: Format.bytes(game.sizeOnDisk))
+                case .notInstalled where game.playsInCloud:
+                    Stat(label: L10n.t("Plays on"), value: "GeForce Now")
                 case .notInstalled:
                     Stat(label: L10n.t("Download"), value: game.sizeOnDisk > 0
                          ? L10n.t("up to %@", Format.bytes(game.sizeOnDisk)) : "–")

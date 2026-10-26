@@ -41,6 +41,10 @@ final class LibraryModel: ObservableObject {
     @Published private(set) var pinnedGames = GameMarks.load(.pinned)
     /// The library shows only the hidden games, to bring them back.
     @Published private(set) var showingHidden = false
+    /// What the library grid shows and how it's ordered (only the library applies them).
+    @Published var filters = LibraryFilters() {
+        didSet { if filters != oldValue { applyFilter() } }
+    }
     /// The game each level had selected, so going back to it finds it there again.
     private var homeGameID: String?
     private var libraryGameID: String?
@@ -964,19 +968,26 @@ final class LibraryModel: ObservableObject {
     private func applyFilter(selectBestMatch: Bool = false) {
         let previous = selected?.id
         let words = Search.key(searchText).split(separator: " ")
-        // Hidden games only show where they're brought back from.
-        let shelf = allGames.filter { hiddenGames.contains($0.appID) == showingHidden }
+        // Hidden games only show where they're brought back from; the filters only in the library.
+        var shelf = allGames.filter { hiddenGames.contains($0.appID) == showingHidden }
+        if route.level == .library {
+            shelf = shelf.filter { filters.admits($0) { compatibility(of: $0).level } }
+            shelf = showingHidden ? LibraryFilters(sort: .name).sorted(shelf) : filters.sorted(shelf)
+        }
         if words.isEmpty {
             games = shelf
         } else {
             // Word starts first ("ark" → ARK, Arkham), then initials ("rdr2"), then mid-word hits
-            // (Amnesia: The Dark Descent); within each, the library order.
+            // (Amnesia: The Dark Descent); within each, the order above.
             let ranked = shelf.compactMap { game in Search.rank(name: game.name, query: searchText).map { (game, $0) } }
             let owned = Set(allGames.map(\.appID))
-            games = (0...2).flatMap { rank in ranked.filter { $0.1 == rank }.map(\.0) }
-                + (showingHidden ? [] : storeResults.filter { !owned.contains($0.appID) })
+            // Store hits are games you don't own: only without filters that ask about your copy.
+            let storeHits = showingHidden || filters.status != .all || filters.controller || filters.mac ? []
+                : storeResults.filter { !owned.contains($0.appID) && (!filters.great || compatibility(of: $0).level == .great) }
+            games = (0...2).flatMap { rank in ranked.filter { $0.1 == rank }.map(\.0) } + storeHits
         }
-        selectedIndex = selectBestMatch && !words.isEmpty ? 0 : games.firstIndex(where: { $0.id == previous }) ?? 0
+        let first = route.level == .library ? gridLayout.order.first ?? 0 : 0
+        selectedIndex = selectBestMatch && !words.isEmpty ? first : games.firstIndex(where: { $0.id == previous }) ?? first
         homeRail = words.isEmpty && !showingHidden ? HomeRail.pick(games, pinned: pinnedGames) : []
         switch route {
         case .detail(let id, let from) where !games.contains(where: { $0.id == id }):
@@ -1027,7 +1038,8 @@ final class LibraryModel: ObservableObject {
         guard route != .home else { return }
         rememberSelection()
         route = .home
-        if showingHidden { showingHidden = false; applyFilter() }
+        showingHidden = false
+        applyFilter()  // without the library's filters
         if !searchText.isEmpty { searchText = "" }  // Home is the whole collection
         selectOnHome()
     }
@@ -1036,6 +1048,7 @@ final class LibraryModel: ObservableObject {
         guard route != .library, !allGames.isEmpty else { return }
         rememberSelection()
         route = .library
+        applyFilter()  // with its filters
         if let id = libraryGameID, let index = games.firstIndex(where: { $0.id == id }) {
             selectedIndex = index
         }
@@ -1172,7 +1185,12 @@ final class LibraryModel: ObservableObject {
         selectedIndex = gridLayout.order.first ?? 0
     }
 
-    var gridLayout: GridLayout { GridLayout(games: games, columns: gridColumns) }
+    /// The grid's groups for what the library shows now.
+    var librarySections: [LibrarySection] {
+        LibrarySection.make(games, sort: filters.sort, searching: !Search.key(searchText).isEmpty, hidden: showingHidden)
+    }
+
+    var gridLayout: GridLayout { GridLayout(sections: librarySections.map(\.items), columns: gridColumns) }
 
     /// The selection is in the grid's first row, where ↑ leaves the grid for the top bar.
     var selectionInTopGridRow: Bool { (gridLayout.position(of: selectedIndex)?.row ?? 0) == 0 }

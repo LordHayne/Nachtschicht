@@ -199,26 +199,47 @@ private struct HomeLevel: View {
     }
 }
 
-/// Level 2 – every game, in the grid; a search's hits show here.
+/// Level 2 – every game, in the grid, with its filters; a search's hits show here.
 private struct LibraryLevel: View {
     @EnvironmentObject private var model: LibraryModel
 
     var body: some View {
-        if model.games.isEmpty {
-            VStack(alignment: .leading) {
-                Spacer()
-                if !model.searchText.isEmpty {
-                    NoResults()
-                } else if !model.isScanning {
-                    EmptyLibrary()
+        VStack(alignment: .leading, spacing: 0) {
+            LibraryToolbar()
+            if model.games.isEmpty {
+                VStack(alignment: .leading) {
+                    Spacer()
+                    if !model.searchText.isEmpty {
+                        NoResults()
+                    } else if model.filters.narrows {
+                        NoFilterMatches()
+                    } else if !model.isScanning {
+                        EmptyLibrary()
+                    }
+                    Spacer()
                 }
-                Spacer()
+                .padding(.horizontal, Theme.gutter)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                LibraryGrid()
+                    .padding(.top, 4)
             }
-            .padding(.horizontal, Theme.gutter)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            LibraryGrid()
-                .padding(.top, 16)
+        }
+    }
+}
+
+private struct NoFilterMatches: View {
+    @EnvironmentObject private var model: LibraryModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(L10n.t("No games match these filters"))
+                .font(Theme.display(30))
+                .foregroundStyle(Theme.ink)
+            Button(L10n.t("Clear filters")) { model.filters = model.filters.cleared }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .padFocus("noResults.clearFilters", activate: { model.filters = model.filters.cleared })
         }
     }
 }
@@ -376,11 +397,6 @@ private struct TopBar: View {
                 SectionSwitch()
                     .fixedSize()
                     .padding(.leading, 6)
-                if !model.searchText.isEmpty {
-                    Text(countText)
-                        .font(.system(size: 13).monospacedDigit())
-                        .foregroundStyle(Theme.muted)
-                }
             }
 
             Spacer()
@@ -444,11 +460,6 @@ private struct TopBar: View {
         .padding(.top, 36)
     }
 
-    private var countText: String {
-        let total = model.visibleCount
-        let matches = model.games.filter { $0.install != .inStore }.count  // store hits aren't yours
-        return total == 1 ? L10n.t("%ld of 1 game", matches) : L10n.t("%ld of %ld games", matches, total)
-    }
 }
 
 /// "Home | Library 104": the two levels, the one you're on filled in.

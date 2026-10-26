@@ -355,6 +355,26 @@ enum L10n {
         "Continue playing": "Weiterspielen",
         "Pinned, then what you played lately": "Angeheftet, dann was du zuletzt gespielt hast",
 
+        // Library filters
+        "Sort": "Sortieren",
+        "Recently played": "Zuletzt gespielt",
+        "Name": "Name",
+        "Disk space": "Speicherplatz",
+        "All": "Alle",
+        "On this Mac": "Auf diesem Mac",
+        "Not downloaded": "Nicht geladen",
+        "Mac version": "Mac-Version",
+        "Your games": "Deine Spiele",
+        "A – Z": "A – Z",
+        "Largest first": "Größte zuerst",
+        "%ld hidden": "%ld ausgeblendet",
+        "Only games that run great on a Mac": "Nur Spiele, die auf dem Mac super laufen",
+        "Full controller support": "Volle Controller-Unterstützung",
+        "Runs as its Mac version": "Läuft als Mac-Version",
+        "Games you hid from your library": "Spiele, die du aus der Bibliothek ausgeblendet hast",
+        "No games match these filters": "Keine Spiele passen zu diesen Filtern",
+        "Clear filters": "Filter zurücksetzen",
+
         // Hide & pin
         "Hidden": "Ausgeblendet",
         "Hidden games": "Ausgeblendete Spiele",

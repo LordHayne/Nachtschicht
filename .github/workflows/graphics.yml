@@ -2,7 +2,7 @@ name: Build graphics package
 
 # DXMT (Direct3D 10/11 → Metal) patched for Wine 11, plus Wine's Mac driver rebuilt with visible
 # symbols so DXMT can attach its Metal layer to game windows, ntdll.so + wineserver with msync
-# (engine/patches/wine-*.patch), and winebus.so with the SDL bus for controllers (winebus-*.patch). Published as one release asset that components/manifest.json points
+# (engine/patches/wine-*.patch), and winebus.so with the SDL bus for controllers (winebus-11.18-*.patch). Published as one release asset that components/manifest.json points
 # to – from main only, so a run on another branch just checks that everything builds.
 # WINE_VERSION must match the engine pinned in sources.json.
 
@@ -198,7 +198,7 @@ jobs:
   winebus:
     # Wine's HID bus with the SDL bus compiled in, which reads a DualSense, DualShock 4 or Switch pad
     # (macOS keeps PlayStation pads in a report mode Wine's plain IOHID bus can't read), plus
-    # engine/patches/winebus-*.patch: a pad SDL maps reports itself as an Xbox 360 controller, so
+    # engine/patches/winebus-11.18-*.patch (this Wine version only; winebus-winecx-* is gamepad.yml's): a pad SDL maps reports itself as an Xbox 360 controller, so
     # XInput games and engines that know the real pad (Unity's Input System) both take it.
     runs-on: macos-15
     env:
@@ -212,7 +212,7 @@ jobs:
         run: |
           brew install bison flex pkg-config mingw-w64 || true
           git clone --depth 1 --branch "wine-$WINE_VERSION" https://gitlab.winehq.org/wine/wine.git wine
-          for patch in nightforge/engine/patches/winebus-*.patch; do
+          for patch in nightforge/engine/patches/winebus-"$WINE_VERSION"-*.patch; do
             echo "Applying $patch"
             git -C wine apply --verbose "$GITHUB_WORKSPACE/$patch"
           done

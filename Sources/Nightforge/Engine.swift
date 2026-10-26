@@ -392,11 +392,12 @@ enum Engine {
         if readStamp(prefixStamp) != prefixWanted {
             applyGameEnvironment(wine: wine)
             if let dxvk { try installDXVK(try await store.install(dxvk), wine: wine, d3d9Only: gptk) }
+            let written = loadOrdersWritten
             if gptk {
                 try installDXMTNatives(graphicsDir)
                 try installWineD3D12Natives(wine: wine)
             }
-            writeStamp(prefixStamp, prefixWanted)
+            if written { writeStamp(prefixStamp, prefixWanted) }
         }
         return wine
     }
@@ -779,11 +780,13 @@ enum Engine {
     /// default for every program; games set to DXMT override that in `applyGameSettings`. Safe to repeat.
     /// `d3d9Only` (winecx): system32 holds DXMT's DirectX 10/11 natives, so only DXVK's d3d9 goes
     /// there; a game that takes DXVK for DirectX 11 gets its DLLs next to its program (`placeDXVK`).
-    static func installDXVK(_ dxvkDir: URL, wine: URL, d3d9Only: Bool = false) throws {
-        defer {
-            let values = direct3DLibraries.map { "\"\($0)\"=\"\(defaultLoadOrder($0, d3dMetalEngine: d3d9Only))\"" }.joined(separator: "\n")
-            importRegistry("[HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides]\n\(values)", wine: wine)
-        }
+    /// False when the load orders couldn't be written (a wineserver of another engine still
+    /// running, say), so setup tries again next time instead of counting it done.
+    @discardableResult
+    static func installDXVK(_ dxvkDir: URL, wine: URL, d3d9Only: Bool = false) throws -> Bool {
+        defer { loadOrdersWritten = importRegistry("[HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides]\n"
+            + direct3DLibraries.map { "\"\($0)\"=\"\(defaultLoadOrder($0, d3dMetalEngine: d3d9Only))\"" }.joined(separator: "\n"),
+            wine: wine) }
         let fm = FileManager.default
         let top = dxvkTop(dxvkDir)
         let windows = prefix.appendingPathComponent("drive_c/windows", isDirectory: true)
@@ -798,7 +801,11 @@ enum Engine {
                 try fm.copyItem(at: file, to: destination)
             }
         }
+        return true
     }
+
+    /// Whether the last `installDXVK` got its load orders into the registry.
+    private(set) static var loadOrdersWritten = true
 
     /// What every program without a per-game choice takes – Steam's browser above all. Gcenx's
     /// engine: DXVK's natives. winecx: DirectX 10/11 from the builtins (D3DMetal, or Wine's own);
@@ -1053,11 +1060,12 @@ enum Engine {
 
     /// Imports registry settings into the prefix and waits only for regedit itself (not for the
     /// wineserver, which keeps running as long as Steam does).
-    static func importRegistry(_ body: String, wine: URL) {
+    @discardableResult
+    static func importRegistry(_ body: String, wine: URL) -> Bool {
         let temp = prefix.appendingPathComponent("drive_c/windows/temp", isDirectory: true)
         try? FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
         let file = temp.appendingPathComponent("nightforge-\(UUID().uuidString).reg")
-        guard (try? ("REGEDIT4\n\n" + body + "\n").write(to: file, atomically: true, encoding: .utf8)) != nil else { return }
+        guard (try? ("REGEDIT4\n\n" + body + "\n").write(to: file, atomically: true, encoding: .utf8)) != nil else { return false }
         defer { try? FileManager.default.removeItem(at: file) }
 
         let regedit = Process()
@@ -1066,8 +1074,9 @@ enum Engine {
         regedit.environment = environment(wine: wine)
         regedit.standardOutput = FileHandle.nullDevice
         regedit.standardError = FileHandle.nullDevice
-        guard (try? regedit.run()) != nil else { return }
+        guard (try? regedit.run()) != nil else { return false }
         regedit.waitUntilExit()
+        return regedit.terminationStatus == 0
     }
 
     /// macOS only turns Game Mode on (CPU and GPU priority, lower Bluetooth latency) for apps whose

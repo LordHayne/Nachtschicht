@@ -1116,7 +1116,7 @@ final class LibraryModel: ObservableObject {
         homeOnAllGames ? homeRail.count : homeRail.firstIndex(of: selectedIndex) ?? 0
     }
 
-    /// Play from somewhere else (a message's or a notification's button): shows the game, then plays it.
+    /// Play from somewhere else (a message's button, the Dock menu): shows the game, then plays it.
     func play(_ game: Game) {
         guard reveal(game) else { return }
         primaryAction()

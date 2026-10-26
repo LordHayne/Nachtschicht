@@ -47,6 +47,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         MacIntegration.setUp(delegate: self)
     }
 
+    /// Right-click on the Dock icon: the last games played, one click to play.
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        MacIntegration.dockMenu(target: self, action: #selector(playFromDock(_:)))
+    }
+
+    @MainActor @objc private func playFromDock(_ item: NSMenuItem) {
+        MacIntegration.open(id: item.representedObject as? String, play: true)
+    }
+
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         MacIntegration.handle(response)
     }

@@ -157,7 +157,7 @@ private struct GeneralSettings: View {
                 Toggle(isOn: $notifyDownloads) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(L10n.t("Notify me when downloads finish"))
-                        Text(L10n.t("A macOS notification with a Play button while Nightforge is in the background."))
+                        Text(L10n.t("A macOS notification with a Play button while Nightforge is in the background. Your last five games are in the Dock menu, too."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

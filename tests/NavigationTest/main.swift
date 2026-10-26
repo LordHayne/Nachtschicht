@@ -65,6 +65,11 @@ struct NavigationTest {
         check(GameMarks.load(.hidden, from: UserDefaults(suiteName: "nightforge.navigation-test.empty")!).isEmpty, "nothing marked at first")
         defaults.removePersistentDomain(forName: "nightforge.navigation-test")
 
+        // The Dock menu: installed games played before, the last first, five at most, none hidden.
+        let dock = MacIntegration.recentGames(games + many.map { var g = $0; g.lastPlayed = nil; return g }, hidden: [3])
+        check(dock.map(\.appID) == [1, 7], "only installed and played, hidden left out, latest first: \(dock.map(\.appID))")
+        check(MacIntegration.recentGames(many).count == MacIntegration.dockLimit, "five at most")
+
         // A game's page belongs to where it was opened; Back goes there.
         check(Route.detail(gameID: "x", from: .library).level == .library, "a page opened in the library is in the library")
         check(Route.detail(gameID: "x", from: .home).level == .home, "a page opened on Home is on Home")

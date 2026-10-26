@@ -384,8 +384,8 @@ enum L10n {
 
         "The download is done.": "Der Download ist fertig.",
         "Notify me when downloads finish": "Mitteilung, wenn Downloads fertig sind",
-        "A macOS notification with a Play button while Nightforge is in the background.":
-            "Eine macOS-Mitteilung mit „Spielen“-Knopf, während Nightforge im Hintergrund ist.",
+        "A macOS notification with a Play button while Nightforge is in the background. Your last five games are in the Dock menu, too.":
+            "Eine macOS-Mitteilung mit „Spielen“-Knopf, während Nightforge im Hintergrund ist. Deine letzten fünf Spiele stehen auch im Dock-Menü.",
 
         // Library filters
         "Sort": "Sortieren",

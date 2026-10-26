@@ -1,17 +1,41 @@
 import AppKit
 import UserNotifications
 
-/// Nightforge outside its window: a macOS notification when a download finishes while
-/// Nightforge isn't in front.
+/// Nightforge outside its window: the Dock menu with the last games played, and a macOS
+/// notification when a download finishes while Nightforge isn't in front.
 @MainActor
 enum MacIntegration {
-    /// The library notifications act on (set when the window starts).
+    /// The library the Dock menu and notifications act on (set when the window starts).
     static weak var model: LibraryModel?
 
-    /// From a notification's Play button: Nightforge comes to the front and plays the game; a
-    /// click on the notification itself only shows it.
-    static func open(appID: Int?, play: Bool) {
-        guard let model, let appID, let game = model.allGames.first(where: { $0.appID == appID }) else { return }
+    // MARK: - Dock menu
+
+    nonisolated static let dockLimit = 5
+
+    /// Installed games, the last played first; never played ones aren't "recent".
+    nonisolated static func recentGames(_ games: [Game], hidden: Set<Int> = []) -> [Game] {
+        let played = games.filter { $0.isInstalled && $0.lastPlayed != nil && !hidden.contains($0.appID) }
+        return Array(played.sorted { $0.lastPlayed! > $1.lastPlayed! }.prefix(dockLimit))
+    }
+
+    static func dockMenu(target: AnyObject, action: Selector) -> NSMenu? {
+        guard let model else { return nil }
+        let games = recentGames(model.allGames, hidden: model.hiddenGames)
+        guard !games.isEmpty else { return nil }
+        let menu = NSMenu()
+        for game in games {
+            let item = NSMenuItem(title: game.name, action: action, keyEquivalent: "")
+            item.target = target
+            item.representedObject = game.id
+            menu.addItem(item)
+        }
+        return menu
+    }
+
+    /// From the Dock menu or a notification's Play button: Nightforge comes to the front and plays
+    /// the game; a click on the notification itself only shows it.
+    static func open(id: String? = nil, appID: Int? = nil, play: Bool) {
+        guard let model, let game = model.allGames.first(where: { $0.id == id || (appID != nil && $0.appID == appID) }) else { return }
         NSApp.activate()
         if play { model.play(game) } else { model.reveal(game) }
     }

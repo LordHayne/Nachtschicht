@@ -61,10 +61,10 @@ Die Tests vom 26.10. liefen größtenteils noch auf Wine 11.18 (Gcenx). Seit PR 
 ## Mac-Versionen
 
 - **Windows-Fallback** hat noch nie wirklich ausgelöst (keine Mac-Version ist bisher abgestürzt).
-- **Speicherplatz vor dem Download prüfen.** Steam für Mac hat Batman bei einem Auto-Update geleert und
-  dann wegen Platzmangel pausiert. Nightforge zeigt das jetzt an und bietet „Weiter laden“
-  (`Engine.unpauseDownload`). Besser wäre, vor einem Download oder Update vor knappem Platz zu warnen
-  (`LibraryModel.freeSpace`, Steams `BytesToStage`).
+- **Speicherplatz vor Updates prüfen.** Steam für Mac hat Batman bei einem Auto-Update geleert und
+  dann wegen Platzmangel pausiert. Nightforge zeigt das an und bietet „Weiter laden“
+  (`Engine.unpauseDownload`). Vor einem *Download* prüft Nightforge den Platz inzwischen (`SpaceCheck`, UX-Roadmap 4.1);
+  vor *Updates*, die Steam von selbst startet, noch nicht (Steams `BytesToStage`, `UpdateState.pending`).
 
 ## Controller
 
@@ -145,6 +145,28 @@ Person hängen (Whisky ist 2025 daran gescheitert).
   Schützt vor Erwartungen, die niemand allein erfüllen kann.
 - **Mehr Leute mit Schreibrechten.** Sobald jemand regelmäßig beiträgt, Mitbetreuer aufnehmen. Releases und
   Komponenten-Pakete (`scripts/package-d3dmetal.sh`) so dokumentieren, dass sie nicht nur auf einem Mac gehen.
+
+## Neue Oberfläche (UX-Roadmap, Nacht 26./27.10.) – in der echten App prüfen
+
+Gebaut in PR #27, ein Commit je Roadmap-Punkt (Stand je Punkt in `docs/ROADMAP.md`). Geprüft mit Tests, mit dem echten
+`LibraryModel` gegen die echte Bibliothek und mit Offscreen-Renderings – **nicht** per Klick in der laufenden App,
+weil die Bildschirmfreigabe abgelehnt war.
+
+- **Navigation mit Maus, Tastatur und DualSense** durchspielen: Startseite ↔ Bibliothek ↔ Spielseite, Esc/B,
+  Doppelklick auf nicht installierte Cover, ↑ aus der Leiste und der obersten Rasterzeile in die Knöpfe,
+  Filter- und Sortier-Segmente mit dem Pad, Zurück in die Bibliothek an dieselbe Scroll-Position.
+- **Einmal echt erleben:** Dock-Menü (Rechtsklick aufs Dock-Symbol), Mitteilung „<Spiel> is ready to play“ mit
+  „Play“ (macOS fragt beim ersten Mal), `nightforge://play/<id>` und „Add to Applications“ (findet Spotlight die
+  App?), „Update & Play“ bei einem echten Update, Download-Ring und Wachhalten bei einem echten Download,
+  „Welcome back“ nach einer echten Sitzung (wird die Steam-Cloud-Zeile grün?), das Fehlstart-Sheet, das
+  Platz-Sheet.
+- **Entscheidungen:** Was „Fastest / Balanced / Most compatible“ in 2.3 genau einstellen; ob „Save battery when
+  unplugged“ (3.4) standardmäßig an sein soll (jetzt aus); ob „Welcome back“ nach *jeder* Sitzung kommen soll.
+- **`syncstate` in `remotecache.vdf`:** Nur „1“ (im Einklang) ist sicher belegt; die anderen Werte während eines
+  Uploads einmal beobachten und `CloudSaves` danach schärfen.
+- **`LibraryView.swift` (über 1700 Zeilen) und `LibraryModel.swift` (fast 1900)** sind mit der Navigation weiter
+  gewachsen. Die drei Ebenen, die Sheets und die Navigation in eigene Dateien ziehen – erst wenn keine anderen
+  Branches mehr an diesen Dateien arbeiten.
 
 ## Aus dem Code-Audit
 

@@ -2,7 +2,7 @@
 
 > Ziel: **ein wirklich nahtloses Erlebnis – eine App, die man gerne verwendet.**
 > Diese Roadmap ist so geschrieben, dass Claude Code (CC) sie Punkt für Punkt abarbeiten kann.
-> Stand: 26.10.2026 · Basis: `main@9fc8467`
+> Stand: 27.10.2026 · Basis: `main@bcc2065` · Nachtarbeit in PR #27 (ein Commit je Punkt)
 
 ---
 
@@ -44,7 +44,7 @@
 
 ## Phase 0 – Fundament
 
-- [x] **0.1 Navigation in drei Ebenen** · `L` · Branch `claude/ux-navigation-0-1`
+- [x] **0.1 Navigation in drei Ebenen** · `L` · PR #27
   - **Warum:** Heute zeigt die Leiste alle Spiele (bei 100+ Spielen unbenutzbar), der zweite Klick startet/lädt sofort (versehentliche 50-GB-Downloads), und die Bibliothek ist ein Schalter statt einer Ebene – Zurück führt nicht dorthin, wo man herkam.
   - **Was:** `LibraryModel.showingLibrary` durch eine Route ersetzen: `home` → `library` → `detail(gameID, from:)`. Esc/B geht immer eine Ebene zurück (zuerst Suche leeren, dann Ebene).
     - **Home:** Hero des gewählten Spiels + Leiste „Continue playing“ (siehe 1.7) + letzte Kachel „All games“.
@@ -64,7 +64,7 @@
   - **Design:** `data.ts` (`Game`, `Provider`).
   - **Fertig wenn:** Nur Steam funktioniert wie vorher; bestehende Spieloptionen bleiben nach dem Update erhalten (Test).
 
-- [x] **0.3 Toasts mit Aktion** · `S` · PR #9, benutzt seit `claude/ux-hide-pin-1-4`
+- [x] **0.3 Toasts mit Aktion** · `S` · PR #9, benutzt seit 1.4 (PR #27)
   - **Was:** Leichtgewichtige Meldung unten mittig mit optionalem Button („Undo“, „Play“, „Show“), Auto-Ausblenden (2,8 s, mit Aktion 5 s), per Controller erreichbar.
   - **Design:** `NachtschichtLibrary.tsx` (`notify`), Toast-Markup.
   - **Fertig wenn:** Wird von 1.4 (Undo), 4.4 (Download fertig → Play) benutzt.
@@ -74,7 +74,7 @@
 
 ## Phase 1 – Schnelle Gewinne mit vorhandenen Daten
 
-- [x] **1.1 Ehrliche Wartezustände beim Start** · `M` · braucht 0.1 · Branch `claude/ux-launch-phases-1-1`
+- [x] **1.1 Ehrliche Wartezustände beim Start** · `M` · braucht 0.1 · PR #27
   - **Warum:** Ein Launcher, der 40 s „Launching …“ zeigt, wirkt kaputt. Shader-Kompilierung beim ersten Start/nach Updates ist normal – man muss es nur sagen.
   - **Was:** Startphasen auf dem Play-Button, je mit Erklärzeile darunter:
     - „Starting Steam …“ (Steam unsichtbar im Hintergrund)
@@ -85,7 +85,7 @@
   - **Fertig wenn:** Jede Phase > 2 s hat einen eigenen Text; nach einem Grafik-Update zeigt der erste Start „Preparing shaders“, der zweite nicht.
   - **Stand:** `LaunchPhase.swift` ersetzt `launchStatus`: Starting Steam (neu, solange die Hintergrund-Steam noch hochfährt) / Starting Steam for Mac / Signing in / Sign in in the Steam window / Setting up the game / Setting up .NET / Restarting Steam / Starting again with …, jede mit Erklärzeile unter dem Play-Knopf; „Confirm in the Steam window“ ebenso. Shader: Beim ersten Start mit neuer Engine, anderer Ebene oder neuen Grafik-Builds aus der Komponentenliste (`LaunchPhase.graphicsSignature`) steht unter „Launching …“ „First start with this graphics version: shaders are prepared …“; nach dem Start wird die Signatur gemerkt, der zweite Start zeigt es nicht. **Abweichung:** kein Prozentwert – die Shader entstehen erst im laufenden Spiel; der Knopf heißt weiter „Launching …“, die Zeile erklärt die Wartezeit. Test in `tests/LaunchHealthTest/`.
 
-- [x] **1.2 Fehlstart mit Lösung statt Sackgasse** · `M` · Branch `claude/ux-failed-launch-1-2`
+- [x] **1.2 Fehlstart mit Lösung statt Sackgasse** · `M` · PR #27
   - **Was:** Das heutige Alert „didn't start“ wird zum Sheet: Erklärung + **„Start with ‚Most compatible‘“** (Primär) + **„Start through <anderer Store>“** (wenn vorhanden) + „Report problem“ (bestehend).
   - **Wo:** `LibraryView.swift` (`failedLaunch`-Alert), `LaunchHealth.swift` (Attempts), `ProblemReport.swift`.
   - **Design:** `Dialogs.tsx` → `LaunchFailedDialog`.
@@ -105,45 +105,45 @@
   - **Fertig wenn:** Jedes Spiel hat eine Stufe; Unit-Test für die Ableitung; Kontrast ≥ 4,5:1 auf `night`.
   - **Stand:** Ableitung, Abzeichen und Test fertig – `Compatibility.swift` (`Compatibility.of(game, profile:, analysis:)`, `CompatibilityBadge`), `tests/CompatibilityTest/` (inkl. Kontrast). Farben `Theme.runsGreat / runsWithTweaks / runsNot`; „Tweaks“ bewusst blasser als `sodium`. Mit GeForce Now bleibt die Stufe `no`, die Notiz verweist auf GeForce Now (wie im Entwurf). Angezeigt in Home-Hero (Abzeichen), Detailseite (Abzeichen + Notiz + „Tested on“) und Rasterkarte (Symbol vor dem Namen) seit 0.1. Filter „Runs great“ seit 2.1.
 
-- [x] **1.4 Spiele ausblenden & anpinnen** · `S` · braucht 0.3 · Branch `claude/ux-hide-pin-1-4`
+- [x] **1.4 Spiele ausblenden & anpinnen** · `S` · braucht 0.3 · PR #27
   - **Was:** Detailseite: „Hide from library“ (Taste H) mit Undo-Toast; Bibliothek: Umschalter „Hidden (n)“ zum Zurückholen. „Pin to Home“ (Taste P): bleibt in der Home-Leiste, auch wenn lange nicht gespielt; Pin-Abzeichen auf dem Cover.
   - **Wo:** `Prefs` (UserDefaults), `LibraryModel`, `LibraryGrid`.
   - **Design:** `Detail.tsx` (Buttons), `Library.tsx` (Hidden-Toggle), `Cover.tsx` (Pin).
   - **Fertig wenn:** Ausgeblendete Spiele erscheinen weder in Home noch in Suche/Raster (außer im Hidden-Filter); bleibt über Neustarts erhalten.
   - **Stand:** `GameMarks.swift` (UserDefaults `library.hidden` / `library.pinned`, nach App-ID – überlebt den Wechsel Mac ↔ Windows-Version). Detailseite: Augen- und Pin-Knopf (H / P, per Pad erreichbar), „Hidden“-Chip; Ausblenden schließt die Seite und zeigt einen Toast mit „Undo“ (holt auch den Pin zurück). Bibliothek: Leiste über dem Raster mit Schalter „Hidden n“ (nur wenn es welche gibt); Esc schaltet ihn zuerst aus. Angeheftete Spiele stehen vorne in der Home-Leiste (nach Name), Pin-Abzeichen auf dem Cover. Zähler (Bibliothek, „All games“) ohne ausgeblendete Spiele. Tests in `tests/NavigationTest/` (Pins in der Leiste, Speichern/Laden); Ablauf mit dem echten Model durchgespielt.
 
-- [x] **1.5 Suche mit Abkürzungen** · `S` · Branch `claude/ux-search-1-5`
+- [x] **1.5 Suche mit Abkürzungen** · `S` · PR #27
   - **Was:** „rdr2“ → Red Dead Redemption 2, „bg3“ → Baldur's Gate 3 (Anfangsbuchstaben + Ziffern), Wortanfänge zuerst. Store-Treffer bleiben eigener Abschnitt.
   - **Wo:** `LibraryModel.searchKey` / `applyFilter`.
   - **Design:** `data.ts` → `searchMatches`, `searchRank`.
   - **Fertig wenn:** Test mit rdr2, bg3, „witcher“, „gate 3“, Umlauten.
   - **Stand:** `Search.swift` (`Search.rank(name:query:)`: 0 Wortanfänge, 1 Initialen mit Zahlen, 2 irgendwo im Namen). Apostroph verbindet („Baldur's“ → bg3), andere Zeichen trennen („Half-Life“ → hl2, „S.T.A.L.K.E.R.“ → stalker). `applyFilter` sortiert danach, innerhalb gleicher Stufe Bibliotheksreihenfolge. Test `tests/SearchTest/`.
 
-- [x] **1.6 „Credits & Lizenzen“ + Datenschutz-Seite** · `S` · (Teil von 2.2) · Branch `claude/ux-settings-2-2`
+- [x] **1.6 „Credits & Lizenzen“ + Datenschutz-Seite** · `S` · (Teil von 2.2) · PR #27
   - **Was:** Liste aus `components/manifest.json` (Name, Version, Lizenz – Felder sind schon da) plus umu-protonfixes (BSD-2) und AreWeAntiCheatYet (MIT); Satz „No account. No telemetry. No background service.“
   - **Design:** `Dialogs.tsx` → Tab „About“.
   - **Fertig wenn:** Jede mitgelieferte Komponente steht mit Lizenz drin, automatisch aus dem Manifest.
   - **Stand:** Tab „About“: „No account. No telemetry. No background service.“ + Satz zum Problembericht; Liste aus `ComponentStore.localManifest()` (zuletzt geladene Liste, sonst die mitgelieferte – ohne Netz) mit Name, Version, Rolle, Lizenz, dazu umu-protonfixes (BSD-2-Clause) und AreWeAntiCheatYet (MIT); „Show Licence Files“ zeigt die Lizenzdateien in der App im Finder. „Show the first start again“ kommt mit 6.1.
 
-- [x] **1.7 Home-Leiste = „Continue playing“** · `S` · braucht 0.1, 1.4 · Branch `claude/ux-continue-1-7`
+- [x] **1.7 Home-Leiste = „Continue playing“** · `S` · braucht 0.1, 1.4 · PR #27
   - **Was:** Angepinnte zuerst, dann installiert/ladend und in den letzten 90 Tagen gespielt, max. 12; letzte Kachel „All games · N“.
   - **Design:** `data.ts` → `continuePlaying`; `Home.tsx` → `Rail`.
   - **Fertig wenn:** Bei 100+ Spielen enthält die Leiste ≤ 13 Elemente.
   - **Stand:** `HomeRail.pick` – Angeheftete (nach Name), dann Downloads, dann installiert und in den letzten 90 Tagen gespielt (neueste zuerst), max. 12, plus Kachel „All games“. Abweichung: Sind es weniger als 3 (neue Bibliothek), füllen andere installierte Spiele auf, damit Home nie leer ist. Überschrift „Continue playing · Pinned, then what you played lately“. Kopfzeile: Bereichsschalter schrumpft nicht mehr, die Suche wird bei schmalem Fenster schmaler. Test in `tests/NavigationTest/`.
 
-- [x] **1.8 „Update & Play“** · `M` · Branch `claude/ux-update-play-1-8` (ungetestet mit echtem Update)
+- [x] **1.8 „Update & Play“** · `M` · PR #27 (ungetestet mit echtem Update)
   - **Warum:** „Play“ wird sonst überraschend zu einem 8-GB-Download.
   - **Was:** Steht ein Pflicht-Update an, zeigt der Button vorher „Update & Play · 1.2 GB“; nach dem Update startet das Spiel von selbst. Update-Abzeichen auf dem Cover.
   - **Wo:** `Library.swift` (appmanifest – `StateFlags`/`UpdateResult`/`BytesToDownload` prüfen und verifizieren), `LibraryModel.primaryAction`.
   - **Design:** `Parts.tsx` (`Update & Play`), `NachtschichtLibrary.tsx` (`playAfterUpdate`).
   - **Fertig wenn:** Update-Größe ist vor dem Klick sichtbar; nach Ende des Updates startet das Spiel ohne weiteren Klick.
-  - **Stand** (`claude/ux-update-play-1-8`): `UpdateState` (Library.swift) liest aus dem appmanifest: Update wartet = StateFlags-Bit 2 oder TargetBuildID ≠ buildid; Größe = BytesToDownload − BytesDownloaded (0 = Steam kennt sie noch nicht); läuft = Bits 256/1024/Downloading/Staging/Committing. Play-Knopf „Update & Play · 1,2 GB“ (ohne Größe, solange unbekannt), Abzeichen auf dem Cover, VoiceOver „Installed, update waiting“. Beim Start liest Nightforge jede Sekunde das Manifest: Solange Steam aktualisiert, zeigt der Knopf „Updating … 42 %“ mit Erklärzeile, und das zählt nicht als „Steam antwortet nicht“ – Steam startet das Spiel danach selbst (Steams eigenes Verhalten bei einer Startanfrage). Test `tests/UpdateStateTest/` (mit den echten Werten von diesem Mac). **Noch nicht mit einem echten Update ausprobiert** – gerade wartet bei keinem Spiel eins.
+  - **Stand:** `UpdateState` (Library.swift) liest aus dem appmanifest: Update wartet = StateFlags-Bit 2 oder TargetBuildID ≠ buildid; Größe = BytesToDownload − BytesDownloaded (0 = Steam kennt sie noch nicht); läuft = Bits 256/1024/Downloading/Staging/Committing. Play-Knopf „Update & Play · 1,2 GB“ (ohne Größe, solange unbekannt), Abzeichen auf dem Cover, VoiceOver „Installed, update waiting“. Beim Start liest Nightforge jede Sekunde das Manifest: Solange Steam aktualisiert, zeigt der Knopf „Updating … 42 %“ mit Erklärzeile, und das zählt nicht als „Steam antwortet nicht“ – Steam startet das Spiel danach selbst (Steams eigenes Verhalten bei einer Startanfrage). Test `tests/UpdateStateTest/` (mit den echten Werten von diesem Mac). **Noch nicht mit einem echten Update ausprobiert** – gerade wartet bei keinem Spiel eins.
 
 ---
 
 ## Phase 2 – Bibliothek, Einstellungen, Optionen
 
-- [x] **2.1 Bibliothek mit Filtern & Sortierung** · `M` · braucht 0.1, 1.3 · Branch `claude/ux-library-filters-2-1`
+- [x] **2.1 Bibliothek mit Filtern & Sortierung** · `M` · braucht 0.1, 1.3 · PR #27
   - **Was:**
     - **Filter:** „All / On this Mac / Not downloaded“, pro Store (mit Anzahl, Warnsymbol bei Sync-Fehler), „Runs great“, „Controller“, „Mac version“, „Hidden“.
     - **Sortierung:** Recently played / Name / Size.
@@ -153,13 +153,13 @@
   - **Fertig wenn:** Filter kombinierbar, Zustand bleibt beim Wechsel Detail ↔ Bibliothek erhalten, alles per Controller bedienbar.
   - **Stand:** `LibraryFilters.swift` (Status All / On this Mac / Not downloaded, „Runs great“, „Controller“ = volle Unterstützung, „Mac version“; Sortierung Recently played / Name / Disk space) und `LibrarySection.make` (Suche = eine Trefferliste, beste zuerst; Hidden = nach Name; „Recently played“ gruppiert nach Installiert / Lädt / Rest; Name/Größe eine Liste; Store-Treffer zuletzt). Leiste über dem Raster (nicht mitscrollend): Titel + „n von m Spielen“, Hidden-Schalter, Sortierung; darunter Status und Filter – jedes Segment ein eigener Pad-Knopf (↑ aus der obersten Rasterzeile). Filter gelten nur in der Bibliothek (Home bleibt vollständig) und bleiben über Detailseite und Home hinweg erhalten. Leeres Ergebnis: „No games match these filters“ + „Clear filters“. Pro-Store-Filter kommt mit Phase 7 (heute nur Steam). Test `tests/LibraryFiltersTest/`.
 
-- [x] **2.2 Einstellungen in Tabs** · `M` · Branches `claude/ux-settings-2-2`, `claude/ux-storage-4-3`
+- [x] **2.2 Einstellungen in Tabs** · `M` · PR #27
   - **Was:** Tabs `Stores` · `General` · `Controller` · `Storage` · `About`. Inhalte siehe 1.6, 4.3, 5.4, 2.5.
   - **Wo:** `SettingsViews.swift` (`SettingsView`).
   - **Design:** `Dialogs.tsx` → `SettingsDialog`.
-  - **Stand:** `SettingsView.swift` mit Tab-Leiste (eigene Pad-Knöpfe): **Stores** (Steam: angemeldet/Spiele, „Open Steam“; CrossOver/Whisky/eigenes Wine), **General** (wie bisher), **Controller** (Teil von 5.4), **About** (1.6). `SettingsView(tab:)` öffnet direkt einen Tab. **Storage** seit `claude/ux-storage-4-3` (Teil von 4.3). In General inzwischen auch 5.1 (Mitteilungen), 2.5 (Reduce motion) und 3.4 (Akku sparen).
+  - **Stand:** `SettingsView.swift` mit Tab-Leiste (eigene Pad-Knöpfe): **Stores** (Steam: angemeldet/Spiele, „Open Steam“; CrossOver/Whisky/eigenes Wine), **General** (wie bisher), **Controller** (Teil von 5.4), **About** (1.6). `SettingsView(tab:)` öffnet direkt einen Tab. **Storage** (Teil von 4.3). In General inzwischen auch 5.1 (Mitteilungen), 2.5 (Reduce motion) und 3.4 (Akku sparen).
 
-- [ ] **2.3 Grafik-Voreinstellungen in Klartext + Profil-Herkunft** · `M` · Herkunft in `claude/ux-profile-origin-2-3`
+- [ ] **2.3 Grafik-Voreinstellungen in Klartext + Profil-Herkunft** · `M` · Herkunft in PR #27
   - **Was:** In den Spieloptionen statt Einzelschaltern zuerst vier Voreinstellungen:
     - **Automatic (recommended):** bisheriges Verhalten.
     - **Fastest / Balanced / Most compatible:** werden auf `GraphicsLayer`, Frame-Limit und MetalFX gemappt.
@@ -168,23 +168,23 @@
     - **Detailseite:** Karte „This game“ zeigt Store, Version, Grafik, HUD, Startoptionen, Engine, Offline-Status sowie „Your own settings … Back to the profile“.
   - **Wo:** `SettingsViews.swift` (`GameOptionsSheet`), `Launcher.swift` (`GameOptions`, `GraphicsLayer`), `Profiles.swift`.
   - **Design:** `Dialogs.tsx` → `GameOptionsDialog`; `Detail.tsx` → `OptionsSummary`; `data.ts` → `PRESETS`.
-  - **Stand** (`claude/ux-profile-origin-2-3`, teilweise): Kopfzeile in den Spieloptionen – „Tested by Nightforge on M5“ (Chips aus der Profilnotiz, Notiz beim Darüberfahren) bzw. „Community fix · from umu-protonfixes“; weichen die Optionen vom Standard ab: „Your own settings. Back to the Profile“ (ohne Profil „Back to Automatic“), wirksam mit „Save“. Offen – **braucht deine Entscheidung:** welche Ebene/Grenze/MetalFX „Fastest“, „Balanced“ und „Most compatible“ genau bedeuten; „updated 5 days ago“ (die Profilliste hat ein `generated`-Datum, aber nicht pro Spiel); Karte „This game“ auf der Detailseite.
+  - **Stand** (teilweise): Kopfzeile in den Spieloptionen – „Tested by Nightforge on M5“ (Chips aus der Profilnotiz, Notiz beim Darüberfahren) bzw. „Community fix · from umu-protonfixes“; weichen die Optionen vom Standard ab: „Your own settings. Back to the Profile“ (ohne Profil „Back to Automatic“), wirksam mit „Save“. Offen – **braucht deine Entscheidung:** welche Ebene/Grenze/MetalFX „Fastest“, „Balanced“ und „Most compatible“ genau bedeuten; „updated 5 days ago“ (die Profilliste hat ein `generated`-Datum, aber nicht pro Spiel); Karte „This game“ auf der Detailseite.
 
-- [x] **2.4 „Bereit für offline“** · `M` · Recherche · Branch `claude/ux-offline-2-4`
+- [x] **2.4 „Bereit für offline“** · `M` · Recherche · PR #27
   - **Was:** Pro Spiel: „Ready“ oder „Start online once“. Steams Offline-Modus muss vorher online aktiviert worden sein – herausfinden, woran man das erkennt (z. B. `loginusers.vdf`, letzter erfolgreicher Online-Start).
   - **Design:** `Detail.tsx` → Zeile „Offline“.
-  - **Stand** (`claude/ux-offline-2-4`): Recherche – Steams Offline-Modus braucht ein gemerktes Konto (`config/loginusers.vdf`: `RememberPassword` 1; auf diesem Mac gesetzt). Pro installiertem Spiel auf der Detailseite „Offline: Ready / Start online once / Update first / Needs internet / Not yet“ mit Erklärung beim Darüberfahren (`OfflineReadiness.swift`): kein gemerktes Konto → „Not yet“; Steam nennt keinen Einzelspielermodus oder eigener Launcher mit Anmeldung → „Needs internet“; Update wartet → „Update first“; noch nie gestartet → „Start online once“; sonst „Ready“. Heuristik – was ein Spiel intern online prüft (DRM), sieht Nightforge nicht. Test `tests/OfflineReadinessTest/`.
+  - **Stand:** Recherche – Steams Offline-Modus braucht ein gemerktes Konto (`config/loginusers.vdf`: `RememberPassword` 1; auf diesem Mac gesetzt). Pro installiertem Spiel auf der Detailseite „Offline: Ready / Start online once / Update first / Needs internet / Not yet“ mit Erklärung beim Darüberfahren (`OfflineReadiness.swift`): kein gemerktes Konto → „Not yet“; Steam nennt keinen Einzelspielermodus oder eigener Launcher mit Anmeldung → „Needs internet“; Update wartet → „Update first“; noch nie gestartet → „Start online once“; sonst „Ready“. Heuristik – was ein Spiel intern online prüft (DRM), sieht Nightforge nicht. Test `tests/OfflineReadinessTest/`.
 
-- [ ] **2.5 Barrierefreiheit** · `S` · teilweise in `claude/ux-accessibility-2-5`
+- [ ] **2.5 Barrierefreiheit** · `S` · teilweise in PR #27
   - **Was:** „Reduce motion“ (folgt `NSWorkspace.accessibilityDisplayShouldReduceMotion`, abschaltbar): kein Lampen-Flackern, kein Cover-Zoom, nur Überblenden. „Larger text“ (eine Stufe größer). VoiceOver-Labels für alle Icon-Buttons und Abzeichen.
   - **Design:** `Dialogs.tsx` → Tab „General › Accessibility“; `index.css` (`.ns-reduce`).
-  - **Stand** (`claude/ux-accessibility-2-5`, teilweise): „Reduce motion“ in General › Accessibility – folgt macOS, bis man es umstellt (`Prefs.reduceMotion`, eigener Umgebungswert `\.reduceMotion`, weil SwiftUIs eigener nicht überschreibbar ist); schaltet Cover-Zoom, Rail-/Raster-Scrollen und Toast-Gleiten ab. VoiceOver-Labels: alle neuen Icon-Knöpfe, Abzeichen (Kompatibilität, Pin) und Kacheln haben Namen. Offen: „Larger text“ – die Ansichten nutzen feste Schriftgrößen (`.system(size:)`), das braucht einen Skalierungsfaktor quer durch alle Views.
+  - **Stand** (teilweise): „Reduce motion“ in General › Accessibility – folgt macOS, bis man es umstellt (`Prefs.reduceMotion`, eigener Umgebungswert `\.reduceMotion`, weil SwiftUIs eigener nicht überschreibbar ist); schaltet Cover-Zoom, Rail-/Raster-Scrollen und Toast-Gleiten ab. VoiceOver-Labels: alle neuen Icon-Knöpfe, Abzeichen (Kompatibilität, Pin) und Kacheln haben Namen. Offen: „Larger text“ – die Ansichten nutzen feste Schriftgrößen (`.system(size:)`), das braucht einen Skalierungsfaktor quer durch alle Views.
 
 ---
 
 ## Phase 3 – Der Kreis ums Spielen
 
-- [ ] **3.1 Sitzungsabschluss („Welcome back“)** · `M` · teilweise in `claude/ux-session-3-1`
+- [ ] **3.1 Sitzungsabschluss („Welcome back“)** · `M` · teilweise in PR #27
   - **Warum:** Wir denken bisher nur bis zum Start. Am Ende will man wissen: Ist der Spielstand sicher, kann ich zuklappen?
   - **Was:** Wenn das Spiel endet (Nightforge kommt ja schon nach vorne), Sheet mit:
     - Spielzeit dieser Sitzung und gesamt
@@ -194,7 +194,7 @@
   - **Wo:** `LibraryModel` (Erkennung Spielende), Steam-Cloud-Status aus dem Steam-Log/`remotecache.vdf` (recherchieren), `SaveTransfer.swift` (Speicherorte).
   - **Design:** `Overlays.tsx` → `SessionSummary`.
   - **Fertig wenn:** Erscheint nach jedem Spielende; die Bewertung wird lokal gespeichert und fließt in 1.3 (eigene Erfahrung schlägt Profil).
-  - **Stand** (`claude/ux-session-3-1`, teilweise): `SessionSummary.swift` – nach jedem von Nightforge gestarteten Spiel, das mindestens eine Minute lief, Sheet „Welcome back“: Spielzeit diesmal und insgesamt (Steams Zählung, ohne Doppelzählung), „How did it run?“ 👍/👎 mit Gründen (Stutters, Crashed, Low frame rate, Graphics glitches, Controller, Sound), „Play Again“ / „Done“. Bewertung lokal (`GameRatings`, UserDefaults) und in `Compatibility.rate` vor dem Profil (👍 → great, 👎 → tweaks mit „You said: …“; Anti-Cheat/VR bleiben „no“). Test in `tests/CompatibilityTest/`. Spielstand-Zeile: `CloudSaves.swift` liest `userdata/<Konto>/<App-ID>/remotecache.vdf` (pro Cloud-Datei `syncstate`, 1 = im Einklang); „Your save is in the Steam Cloud. You can close your Mac.“ erst, wenn Steam die Datei nach dem Spielende neu geschrieben hat und alle Dateien auf 1 stehen – vorher „Steam is syncing …“ (alle 2 s geprüft), nach einer Minute ohne Bestätigung „Steam syncs your save in the background.“, ohne Datei „No Steam Cloud for this game – its saves are on this Mac.“ Test `tests/CloudSavesTest/`. Die Bedeutung der anderen `syncstate`-Werte ist nicht dokumentiert – deshalb nur „1“ als sicher. Offen: „Use ‚Most compatible‘ next time“ (braucht 2.3).
+  - **Stand** (teilweise): `SessionSummary.swift` – nach jedem von Nightforge gestarteten Spiel, das mindestens eine Minute lief, Sheet „Welcome back“: Spielzeit diesmal und insgesamt (Steams Zählung, ohne Doppelzählung), „How did it run?“ 👍/👎 mit Gründen (Stutters, Crashed, Low frame rate, Graphics glitches, Controller, Sound), „Play Again“ / „Done“. Bewertung lokal (`GameRatings`, UserDefaults) und in `Compatibility.rate` vor dem Profil (👍 → great, 👎 → tweaks mit „You said: …“; Anti-Cheat/VR bleiben „no“). Test in `tests/CompatibilityTest/`. Spielstand-Zeile: `CloudSaves.swift` liest `userdata/<Konto>/<App-ID>/remotecache.vdf` (pro Cloud-Datei `syncstate`, 1 = im Einklang); „Your save is in the Steam Cloud. You can close your Mac.“ erst, wenn Steam die Datei nach dem Spielende neu geschrieben hat und alle Dateien auf 1 stehen – vorher „Steam is syncing …“ (alle 2 s geprüft), nach einer Minute ohne Bestätigung „Steam syncs your save in the background.“, ohne Datei „No Steam Cloud for this game – its saves are on this Mac.“ Test `tests/CloudSavesTest/`. Die Bedeutung der anderen `syncstate`-Werte ist nicht dokumentiert – deshalb nur „1“ als sicher. Offen: „Use ‚Most compatible‘ next time“ (braucht 2.3).
 
 - [ ] **3.2 Spielstand-Konflikt lösen, bevor etwas überschrieben wird** · `L` · Recherche
   - **Was:** Weichen lokaler und Cloud-Spielstand voneinander ab: Vor dem Start „Keep this Mac · today 14:02 (Newer)“ vs. „Keep the cloud · yesterday“; der andere wird als Backup im Spielordner behalten. Play zeigt bis dahin „Choose a save first“.
@@ -213,16 +213,16 @@
   - **Design:** `Parts.tsx` (`rollback`-Phase), `Detail.tsx` (Engine-Hinweis, Zeile „Engine … (held back)“).
   - **Fertig wenn:** Ein simuliertes kaputtes Engine-Update führt zu einem erfolgreichen Start mit der alten Version, ohne dass der Nutzer etwas tun muss.
 
-- [x] **3.4 Akku-Modus** · `S` · Branch `claude/ux-battery-3-4` (standardmäßig aus)
+- [x] **3.4 Akku-Modus** · `S` · PR #27 (standardmäßig aus)
   - **Was:** Ohne Netzteil (IOKit `IOPSCopyPowerSourcesInfo`): Bildrate auf 30 FPS begrenzen, Hinweis „On battery: capped at 30 FPS – about 1 h 40 min of play“, Akkustand in der Top-Bar. Abschaltbar in General. Grundlage für die Begrenzung: `FramePacing.swift`.
   - **Design:** `Parts.tsx` (`playHint` mit `onBattery`), Top-Bar-Akku.
-  - **Stand** (`claude/ux-battery-3-4`): `PowerSource.swift` (IOKit: Akku/Netzteil, Ladestand; alle paar Sekunden im bestehenden Lauf-Check). Schalter „Save battery when unplugged“ in General – **standardmäßig aus** (Abweichung, bitte entscheiden: du magst 60 FPS fest, deshalb nicht ungefragt eingeschaltet). Ist er an und der Mac im Akkubetrieb, startet ein Spiel mit höchstens 30 FPS (auch ohne eigene Grenze), und aus so einer Sitzung lernt `FramePacing` nichts. Top-Bar zeigt im Akkubetrieb den Ladestand (unter 20 % in der Akzentfarbe), die Spielseite die Zeile „On battery: games are capped at 30 FPS …“. Ohne Restzeit-Schätzung – macOS' Schätzung gilt für die aktuelle Last, nicht fürs Spielen. Test in `tests/LaunchHealthTest/`.
+  - **Stand:** `PowerSource.swift` (IOKit: Akku/Netzteil, Ladestand; alle paar Sekunden im bestehenden Lauf-Check). Schalter „Save battery when unplugged“ in General – **standardmäßig aus** (Abweichung, bitte entscheiden: du magst 60 FPS fest, deshalb nicht ungefragt eingeschaltet). Ist er an und der Mac im Akkubetrieb, startet ein Spiel mit höchstens 30 FPS (auch ohne eigene Grenze), und aus so einer Sitzung lernt `FramePacing` nichts. Top-Bar zeigt im Akkubetrieb den Ladestand (unter 20 % in der Akzentfarbe), die Spielseite die Zeile „On battery: games are capped at 30 FPS …“. Ohne Restzeit-Schätzung – macOS' Schätzung gilt für die aktuelle Last, nicht fürs Spielen. Test in `tests/LaunchHealthTest/`.
 
 ---
 
 ## Phase 4 – Speicherplatz & Downloads
 
-- [x] **4.1 Platz prüfen vor dem Download** · `M` · Branch `claude/ux-space-4-1`
+- [x] **4.1 Platz prüfen vor dem Download** · `M` · PR #27
   - **Was:** Ist zu wenig Platz frei: Dialog „<Spiel> needs 49.5 GB – 18.5 GB short“ mit (a) „Install on <externe SSD>“ und (b) „Make room“. Vorgeschlagen werden lange nicht gespielte Spiele (Größe, zuletzt gespielt, „saves stay in the cloud“), vorausgewählt bis es reicht → „Uninstall n & download“.
   - **Design:** `Overlays.tsx` → `SpaceDialog`.
   - **Fertig wenn:** Kein Download startet, der mangels Platz abbrechen würde.
@@ -232,7 +232,7 @@
   - **Was:** Steam-Bibliotheksordner auf externen Volumes anlegen/erkennen (`libraryfolders.vdf`), Spiele dorthin installieren und zwischen Laufwerken verschieben. Ist das Laufwerk nicht angeschlossen: Spiel ausgegraut mit „Connect Samsung T7 to play“.
   - **Design:** `Detail.tsx` (Stat „On“), `Dialogs.tsx` → Tab „Storage“ (Move to …).
 
-- [ ] **4.3 Speicher-Übersicht & sauber entfernen** · `M` · teilweise in `claude/ux-storage-4-3`
+- [ ] **4.3 Speicher-Übersicht & sauber entfernen** · `M` · teilweise in PR #27
   - **Was:** Tab „Storage“:
     - **Balken pro Laufwerk:** Spiele / Nightforge / Rest.
     - **Installierte Spiele:** nach Größe sortiert, jeweils mit „Move to …“.
@@ -241,13 +241,13 @@
   - **Design:** `Dialogs.tsx` → Tab „Storage“.
   - **Stand:** Tab „Storage“: Balken für das Laufwerk mit Nightforges Daten (Spiele / Nightforge ohne Spiele, im Hintergrund gemessen / Anderes / frei) und die Spiele auf dem Mac nach Größe mit „Im Finder zeigen“ und „Uninstall …“ (fragt im Hauptfenster). Offen: „Move to …“ (braucht 4.2), Shader-Caches leeren (Ordner recherchieren), „Remove Nightforge completely …“.
 
-- [ ] **4.4 Download-Warteschlange & Ruhezustand** · `M` · braucht 0.3 · teilweise in `claude/ux-downloads-4-4`
+- [ ] **4.4 Download-Warteschlange & Ruhezustand** · `M` · braucht 0.3 · teilweise in PR #27
   - **Was:**
     - **Top-Bar:** Download-Ring mit Anzahl (Taste D).
     - **Panel:** Reihenfolge („Download this next“), Pause/Fortsetzen, Geschwindigkeit/Restzeit, „Only download overnight (1–7 am)“.
     - **Ruhezustand:** Während eines Downloads verhindert eine `IOPMAssertion` das Einschlafen, mit Hinweis.
     - **Fertig:** Download fertig → Toast mit „Play“ + macOS-Mitteilung (5.1). *(Toast erledigt mit 1.4.)*
-  - **Stand** (`claude/ux-downloads-4-4`, teilweise): Ring in der Top-Bar (Durchschnitt aller Downloads, Anzahl in der Mitte, Taste D, per Pad erreichbar) mit Panel: je Spiel Fortschritt „42 % von 20 GB“ bzw. „Pausiert – zu wenig Platz“ und „Cancel“. Während Downloads laufen, hält `KeepAwake` eine `IOPMAssertion` gegen den Ruhezustand (der Bildschirm darf ausgehen) – das Panel sagt es. Fertig → Toast + Mitteilung (5.1). Offen: Reihenfolge, Pause/Fortsetzen, Geschwindigkeit/Restzeit, „Only download overnight“ – dafür erst recherchieren, was sich an Steams Warteschlange von außen steuern lässt. In der App nicht gesehen (gerade lädt nichts).
+  - **Stand** (teilweise): Ring in der Top-Bar (Durchschnitt aller Downloads, Anzahl in der Mitte, Taste D, per Pad erreichbar) mit Panel: je Spiel Fortschritt „42 % von 20 GB“ bzw. „Pausiert – zu wenig Platz“ und „Cancel“. Während Downloads laufen, hält `KeepAwake` eine `IOPMAssertion` gegen den Ruhezustand (der Bildschirm darf ausgehen) – das Panel sagt es. Fertig → Toast + Mitteilung (5.1). Offen: Reihenfolge, Pause/Fortsetzen, Geschwindigkeit/Restzeit, „Only download overnight“ – dafür erst recherchieren, was sich an Steams Warteschlange von außen steuern lässt. In der App nicht gesehen (gerade lädt nichts).
   - **Wo:** Steam-Download-Warteschlange über Steam steuern (recherchieren, was von außen geht), sonst eigene Reihenfolge.
   - **Design:** `Overlays.tsx` → `DownloadsPanel`.
 
@@ -256,16 +256,16 @@
 ## Phase 5 – macOS-Integration & Controller
 
 - [x] **5.1 Mitteilungen** · `S` — `UNUserNotificationCenter`: „<Spiel> is ready to play“ mit Aktion „Play“, auch wenn Nightforge geschlossen ist. Abschaltbar (General).
-  - **Stand** (`claude/ux-macos-5-1-5-2`): `MacIntegration.swift` – Mitteilung mit „Play“, wenn ein Download fertig wird und Nightforge nicht vorne ist (vorne: Toast). Klick auf die Mitteilung zeigt das Spiel, „Play“ startet es. Schalter „Notify me when downloads finish“ in General (an). macOS fragt beim ersten Mal nach der Erlaubnis. **Abweichung:** nur solange Nightforge läuft – „geschlossen“ ginge nur mit einem Hintergrunddienst, und „No background service“ steht in About. Noch nicht in der echten App angeklickt.
+  - **Stand:** `MacIntegration.swift` – Mitteilung mit „Play“, wenn ein Download fertig wird und Nightforge nicht vorne ist (vorne: Toast). Klick auf die Mitteilung zeigt das Spiel, „Play“ startet es. Schalter „Notify me when downloads finish“ in General (an). macOS fragt beim ersten Mal nach der Erlaubnis. **Abweichung:** nur solange Nightforge läuft – „geschlossen“ ginge nur mit einem Hintergrunddienst, und „No background service“ steht in About. Noch nicht in der echten App angeklickt.
 - [x] **5.2 Dock-Menü** · `S` — `applicationDockMenu`: die letzten 5 Spiele direkt startbar.
-  - **Stand** (`claude/ux-macos-5-1-5-2`): installierte, schon gespielte Spiele, zuletzt gespielt zuerst, ohne ausgeblendete (`MacIntegration.recentGames`, Test in `tests/NavigationTest/`). Ein Klick holt Nightforge nach vorne und startet das Spiel. Noch nicht in der echten App angeklickt.
-- [ ] **5.3 Spiele als Kurzbefehle** · `M` · teilweise in `claude/ux-shortcuts-5-3`
+  - **Stand:** installierte, schon gespielte Spiele, zuletzt gespielt zuerst, ohne ausgeblendete (`MacIntegration.recentGames`, Test in `tests/NavigationTest/`). Ein Klick holt Nightforge nach vorne und startet das Spiel. Noch nicht in der echten App angeklickt.
+- [ ] **5.3 Spiele als Kurzbefehle** · `M` · teilweise in PR #27
   - **Verknüpfungen:** `~/Applications/Nightforge Games/<Spiel>.app` (kleiner Starter mit Cover-Icon, der `nightforge://play/<id>` öffnet), damit Spotlight und Launchpad die Spiele finden.
   - **URL-Schema:** `nightforge://play/<id>` registrieren.
   - **Siri/Kurzbefehle:** App Intents für „Siri, play Hades II“.
   - **Detailseite:** Button „Add to Applications“.
-  - **Stand** (`claude/ux-shortcuts-5-3`, teilweise): `nightforge://play/<App-ID>` und `nightforge://show/<App-ID>` im Info.plist registriert (`AppDelegate.application(_:open:)`; kommt ein Link vor dem ersten Scan, wartet er darauf). Ein Link startet nur installierte Spiele, sonst öffnet er die Spielseite – er lädt nie etwas herunter. Detailseite: Knopf „Add to Applications“ legt `~/Applications/Nightforge Games/<Spiel>.app` an (Skript, das den Link öffnet, Cover als Icon, ohne Dock-Symbol); danach zeigt der Knopf die App im Finder. Test `tests/GameShortcutTest/`. Offen: App Intents für Siri/Kurzbefehle; in der echten App noch nicht durchgeklickt (Bildschirmfreigabe fehlte).
-- [x] **5.4 Controller-Tab** · `M` · Branch `claude/ux-controller-battery-5-4`
+  - **Stand** (teilweise): `nightforge://play/<App-ID>` und `nightforge://show/<App-ID>` im Info.plist registriert (`AppDelegate.application(_:open:)`; kommt ein Link vor dem ersten Scan, wartet er darauf). Ein Link startet nur installierte Spiele, sonst öffnet er die Spielseite – er lädt nie etwas herunter. Detailseite: Knopf „Add to Applications“ legt `~/Applications/Nightforge Games/<Spiel>.app` an (Skript, das den Link öffnet, Cover als Icon, ohne Dock-Symbol); danach zeigt der Knopf die App im Finder. Test `tests/GameShortcutTest/`. Offen: App Intents für Siri/Kurzbefehle; in der echten App noch nicht durchgeklickt (Bildschirmfreigabe fehlte).
+- [x] **5.4 Controller-Tab** · `M` · PR #27
   - **Anzeige:** Verbundene Controller mit Akkustand (`GCController.battery`).
   - **Koppeln:** „Pair a controller“ mit Anleitung je Hersteller. Direktes Bluetooth-Koppeln ist eingeschränkt → bei Bedarf die Bluetooth-Einstellungen öffnen und dort warten, bis der Controller erscheint.
   - **Tastensymbole:** „Like my controller / Xbox / PlayStation“ (`InputRouter.PadSymbols`).
@@ -276,7 +276,7 @@
 
 ## Phase 6 – Ersteinrichtung mit Aha-Moment
 
-- [ ] **6.1 Erster Start** · `M` · braucht 1.3 · teilweise in `claude/ux-first-start-6-1`
+- [ ] **6.1 Erster Start** · `M` · braucht 1.3 · teilweise in PR #27
   - **Was:** `SetupView` erweitern:
     - **Ablauf:** Welcome → Checkliste (vorhanden) → Steam-Login mit QR-Hinweis → „Checking your library … N of M games“.
     - **Die Enthüllung:** „**87 of your 104 games run here**“ mit Balken (great / tweaks / untested / need Windows) und den Gründen.
@@ -284,7 +284,7 @@
     - **Wiederholbar:** „Show the first start again“ in About.
   - **Wo:** `SetupView.swift`, `Setup.swift`.
   - **Design:** `Overlays.tsx` → `Onboarding`.
-  - **Stand** (`claude/ux-first-start-6-1`, teilweise): **Die Enthüllung** – nach dem Abschluss der Ersteinrichtung und dem ersten Scan erscheint „22 of your 105 games run here“ (bei diesem Mac: 21 great, 1 tweaks, 62 untested, 21 no) mit einem Balken in den Kompatibilitätsfarben und je Stufe eine Zeile, was sie heißt; bei „Doesn't run“ getrennt Anti-Cheat (davon n auf GeForce Now) und VR. „Let's Play“ schließt. **Wiederholbar:** „Show the First Start Again“ in Settings › About. Test `tests/LibraryRevealTest/`. Offen: Welcome-Seite und „Checking your library … N of M“ im Ablauf selbst, QR-Hinweis, „Also add Epic Games or GOG“ (Phase 7).
+  - **Stand** (teilweise): **Die Enthüllung** – nach dem Abschluss der Ersteinrichtung und dem ersten Scan erscheint „22 of your 105 games run here“ (bei diesem Mac: 21 great, 1 tweaks, 62 untested, 21 no) mit einem Balken in den Kompatibilitätsfarben und je Stufe eine Zeile, was sie heißt; bei „Doesn't run“ getrennt Anti-Cheat (davon n auf GeForce Now) und VR. „Let's Play“ schließt. **Wiederholbar:** „Show the First Start Again“ in Settings › About. Test `tests/LibraryRevealTest/`. Offen: Welcome-Seite und „Checking your library … N of M“ im Ablauf selbst, QR-Hinweis, „Also add Epic Games or GOG“ (Phase 7).
 
 ---
 

@@ -67,7 +67,9 @@ jobs:
               assert game.get("geforceNow") is None or isinstance(game["geforceNow"], str), (app_id, game.get("geforceNow"))
           blocked = sum(1 for game in doc["games"].values() if game.get("antiCheat"))
           assert blocked > 50, "suspiciously few anti-cheat games"
-          print("ok:", len(doc["games"]), "games,", blocked, "blocked by anti-cheat")
+          cloud = sum(1 for game in doc["games"].values() if game.get("geforceNow"))
+          assert cloud > 10, "suspiciously few GeForce Now games"
+          print("ok:", len(doc["games"]), "games,", blocked, "blocked by anti-cheat,", cloud, "on GeForce Now")
           PY
 
       # GitHub switches off scheduled workflows in public repos after 60 days without activity.

@@ -50,7 +50,7 @@ clang -arch x86_64 -mmacosx-version-min=11.0 -dynamiclib -framework AppKit -Wall
 # loaded by Wine's Vulkan loader).
 # Its MetalFX upscaling is Objective-C (wrapper/nightforge-vulkan-metalfx.m); MetalFX is weak-linked for older Macs.
 clang -arch x86_64 -mmacosx-version-min=11.0 -dynamiclib -fvisibility=hidden -fobjc-arc -O2 -Wall \
-  -I wrapper/vulkan-headers -I wrapper -framework Metal -framework QuartzCore -framework CoreGraphics -weak_framework MetalFX \
+  -I wrapper/vulkan-headers -I wrapper -framework AppKit -framework Metal -framework QuartzCore -framework CoreGraphics -weak_framework MetalFX \
   -o "$OUT/Contents/Resources/nightforge-vulkan-layer.dylib" wrapper/nightforge-vulkan-layer.c wrapper/nightforge-vulkan-metalfx.m
 
 if [ -f Resources/AppIcon.png ]; then

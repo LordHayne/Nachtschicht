@@ -18,11 +18,12 @@ struct FailedLaunch: Identifiable {
 /// "Doesn't run?": a GitHub issue filled in with what Nightforge knows about the game, opened in
 /// the player's browser. Nothing leaves the Mac unless the player submits it there.
 enum ProblemReport {
-    static func open(game: Game, insight: GameInsight?) {
-        if let url = url(game: game, insight: insight) { NSWorkspace.shared.open(url) }
+    /// `tried`: the ways a start that failed every time went through, in order.
+    static func open(game: Game, insight: GameInsight?, tried: [String] = []) {
+        if let url = url(game: game, insight: insight, tried: tried) { NSWorkspace.shared.open(url) }
     }
 
-    static func url(game: Game, insight: GameInsight?) -> URL? {
+    static func url(game: Game, insight: GameInsight?, tried: [String] = []) -> URL? {
         let options = GameOptionsStore.load(game.appID)
         var graphics = options.graphics.label
         if options.graphics == .automatic, let insight, !insight.attempts.isEmpty {
@@ -48,6 +49,7 @@ enum ProblemReport {
             "| Graphics | \(graphics) |",
             "| Frame limit / MetalFX | \(options.frameLimit.map(String.init) ?? "automatic") / \(options.upscaling.rawValue) |",
         ]
+        if !tried.isEmpty { lines.append("| Tried, each ended right away | \(tried.joined(separator: " → ")) |") }
         if !options.extraArgs.isEmpty { lines.append("| Launch options | `\(options.extraArgs)` |") }
         let learned = LearnedFixes.winetricks(game.appID)
         if !learned.isEmpty { lines.append("| Installed by itself | \(learned.joined(separator: ", ")) |") }

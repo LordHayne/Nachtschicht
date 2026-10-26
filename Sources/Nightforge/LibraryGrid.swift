@@ -1,9 +1,71 @@
 import SwiftUI
 
+/// The grid's groups, in the order it shows them; each one starts a row of its own.
+enum GridGroup: CaseIterable {
+    case installed, downloading, library, store
+
+    var title: String {
+        switch self {
+        case .installed: return L10n.t("Installed")
+        case .downloading: return L10n.t("Downloading")
+        case .library: return L10n.t("In your library")
+        case .store: return L10n.t("In the Steam Store")
+        }
+    }
+
+    func contains(_ state: InstallState) -> Bool {
+        switch (self, state) {
+        case (.installed, .installed), (.downloading, .downloading), (.library, .notInstalled), (.store, .inStore): return true
+        default: return false
+        }
+    }
+}
+
+/// Where each game sits in the grid, so ↑/↓ and ←/→ follow what's on screen: a search orders the
+/// games by match, and every group starts a new row, so neither is a plain step through the list.
+struct GridLayout {
+    /// Indices into the games, row by row.
+    let rows: [[Int]]
+
+    init(games: [Game], columns: Int) {
+        let columns = max(columns, 1)
+        rows = GridGroup.allCases.flatMap { group -> [[Int]] in
+            let members = games.indices.filter { group.contains(games[$0].install) }
+            return stride(from: 0, to: members.count, by: columns).map { Array(members[$0..<min($0 + columns, members.count)]) }
+        }
+    }
+
+    /// The games in reading order.
+    var order: [Int] { rows.flatMap { $0 } }
+
+    func position(of index: Int) -> (row: Int, column: Int)? {
+        for (row, members) in rows.enumerated() {
+            if let column = members.firstIndex(of: index) { return (row, column) }
+        }
+        return nil
+    }
+
+    /// The game `delta` rows up or down, in the same column or the last one of a shorter row;
+    /// nil past the first or last row.
+    func index(from index: Int, rows delta: Int) -> Int? {
+        guard let (row, column) = position(of: index), rows.indices.contains(row + delta) else { return nil }
+        let target = rows[row + delta]
+        return target[min(column, target.count - 1)]
+    }
+
+    /// The game `delta` places on in reading order, stopping at either end.
+    func index(from index: Int, steps delta: Int) -> Int? {
+        let order = self.order
+        guard let place = order.firstIndex(of: index) else { return order.first }
+        return order[max(0, min(order.count - 1, place + delta))]
+    }
+}
+
 /// The whole library at once: covers in a grid, grouped by installed / downloading / the rest.
 /// Picking a game here opens it in the big view, where its Play or Download button is.
 struct LibraryGrid: View {
     @EnvironmentObject private var model: LibraryModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let cardWidth: CGFloat = 154
     private static let spacing: CGFloat = 24
@@ -15,18 +77,11 @@ struct LibraryGrid: View {
     }
 
     private var sections: [Section] {
-        let indexed = Array(model.games.enumerated()).map { (index: $0.offset, game: $0.element) }
-        func items(_ match: (InstallState) -> Bool) -> [(index: Int, game: Game)] {
-            indexed.filter { match($0.game.install) }
+        GridGroup.allCases.compactMap { group in
+            let items = model.games.indices.filter { group.contains(model.games[$0].install) }
+                .map { (index: $0, game: model.games[$0]) }
+            return items.isEmpty ? nil : Section(id: "\(group)", title: group.title, items: items)
         }
-        return [
-            Section(id: "installed", title: L10n.t("Installed"), items: items { $0 == .installed }),
-            Section(id: "downloading", title: L10n.t("Downloading"), items: items {
-                if case .downloading = $0 { return true } else { return false }
-            }),
-            Section(id: "library", title: L10n.t("In your library"), items: items { $0 == .notInstalled }),
-            Section(id: "store", title: L10n.t("In the Steam Store"), items: items { $0 == .inStore }),
-        ].filter { !$0.items.isEmpty }
     }
 
     var body: some View {
@@ -75,7 +130,7 @@ struct LibraryGrid: View {
                 .onChange(of: columnCount) { _, count in model.gridColumns = count }
                 .onChange(of: model.selectedIndex) { _, _ in
                     guard let id = model.selected?.id else { return }
-                    withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .center) }
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .center) }
                 }
             }
         }

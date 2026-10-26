@@ -959,20 +959,31 @@ final class LibraryModel: ObservableObject {
         showingLibrary = false
     }
 
-    /// ↑/↓ in the grid move a whole row.
+    var gridLayout: GridLayout { GridLayout(games: games, columns: gridColumns) }
+
+    /// The selection is in the grid's first row, where ↑ leaves the grid.
+    var selectionInTopGridRow: Bool { (gridLayout.position(of: selectedIndex)?.row ?? 0) == 0 }
+
+    /// ↑/↓ in the grid move a whole row, keeping the column (or the last card of a shorter row).
     func moveRow(_ delta: Int) {
-        guard showingLibrary else { return }
-        move(delta * max(gridColumns, 1))
+        guard showingLibrary, let next = gridLayout.index(from: selectedIndex, rows: delta) else { return }
+        selectedIndex = next
     }
 
+    /// ←/→: the rail goes through the list, the grid through what it shows, group by group.
     func move(_ delta: Int) {
         guard !games.isEmpty else { return }
-        selectedIndex = max(0, min(games.count - 1, selectedIndex + delta))
+        if showingLibrary, let next = gridLayout.index(from: selectedIndex, steps: delta) {
+            selectedIndex = next
+        } else {
+            selectedIndex = max(0, min(games.count - 1, selectedIndex + delta))
+        }
     }
 
     func jump(toStart: Bool) {
         guard !games.isEmpty else { return }
-        selectedIndex = toStart ? 0 : games.count - 1
+        let order = showingLibrary ? gridLayout.order : Array(games.indices)
+        selectedIndex = (toStart ? order.first : order.last) ?? 0
     }
 
     func launchSelected() {
@@ -1300,8 +1311,8 @@ final class LibraryModel: ObservableObject {
     }
 
     /// Opens a pre-filled problem report for the game in the browser.
-    func reportProblem(for game: Game) {
-        Task { ProblemReport.open(game: game, insight: await insight(of: game)) }
+    func reportProblem(for game: Game, tried: [String] = []) {
+        Task { ProblemReport.open(game: game, insight: await insight(of: game), tried: tried) }
     }
 
     /// Steam starts the game in the background, and since macOS 14 an app can't push itself to

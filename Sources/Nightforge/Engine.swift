@@ -461,7 +461,8 @@ enum Engine {
             let target = lib.appendingPathComponent(arch, isDirectory: true)
             guard let files = try? fm.contentsOfDirectory(at: source, includingPropertiesForKeys: nil) else { continue }
             for file in files {
-                if file.lastPathComponent == "winemac.so" && !matchesEngine { continue }
+                // Wine's own unix libraries, rebuilt from this Wine version: only for that engine.
+                if ["winemac.so", "winebus.so"].contains(file.lastPathComponent) && !matchesEngine { continue }
                 let destination = target.appendingPathComponent(file.lastPathComponent)
                 try? fm.removeItem(at: destination)
                 try fm.copyItem(at: file, to: destination)

@@ -1,8 +1,8 @@
 name: Build graphics package
 
 # DXMT (Direct3D 10/11 → Metal) patched for Wine 11, plus Wine's Mac driver rebuilt with visible
-# symbols so DXMT can attach its Metal layer to game windows, and ntdll.so + wineserver with msync
-# (engine/patches/wine-*.patch). Published as one release asset that components/manifest.json points
+# symbols so DXMT can attach its Metal layer to game windows, ntdll.so + wineserver with msync
+# (engine/patches/wine-*.patch), and winebus.so with the SDL bus for controllers (winebus-*.patch). Published as one release asset that components/manifest.json points
 # to – from main only, so a run on another branch just checks that everything builds.
 # WINE_VERSION must match the engine pinned in sources.json.
 
@@ -195,8 +195,77 @@ jobs:
             build/dlls/ntdll/ntdll.so
             build/server/wineserver
 
+  winebus:
+    # Wine's HID bus with the SDL bus compiled in, which reads a DualSense, DualShock 4 or Switch pad
+    # (macOS keeps PlayStation pads in a report mode Wine's plain IOHID bus can't read), plus
+    # engine/patches/winebus-*.patch: a pad SDL maps reports itself as an Xbox 360 controller, so
+    # XInput games and engines that know the real pad (Unity's Input System) both take it.
+    runs-on: macos-15
+    env:
+      SDL_HEADERS_TAG: release-2.32.8  # the SDL the engine ships (libSDL2-2.0.0.dylib, dlopened by name)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: nightforge
+
+      - name: Tools and sources
+        run: |
+          brew install bison flex pkg-config mingw-w64 || true
+          git clone --depth 1 --branch "wine-$WINE_VERSION" https://gitlab.winehq.org/wine/wine.git wine
+          for patch in nightforge/engine/patches/winebus-*.patch; do
+            echo "Applying $patch"
+            git -C wine apply --verbose "$GITHUB_WORKSPACE/$patch"
+          done
+          git clone -q --depth 1 --branch "$SDL_HEADERS_TAG" https://github.com/libsdl-org/SDL.git sdl
+
+      - name: Configure (x86_64, SDL bus)
+        run: |
+          export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+          mkdir build && cd build
+          ../wine/configure --host=x86_64-apple-darwin --enable-win64 --disable-tests \
+            --without-freetype --without-x --without-gstreamer --without-cups --without-sane \
+            --without-krb5 --without-gssapi --without-usb --without-pcap --without-netapi --without-gnutls \
+            CC="clang -arch x86_64" CXX="clang++ -arch x86_64" \
+            SDL2_CFLAGS="-I$GITHUB_WORKSPACE/sdl/include" \
+            CFLAGS="-O2 -Wno-error -mmacosx-version-min=11.0" \
+            LDFLAGS="-mmacosx-version-min=11.0"
+          # configure can't link its x86_64 test against the runner's SDL; winebus only dlopens it
+          # by name at runtime, so the name is all it needs (the engine's).
+          if grep -q "SONAME_LIBSDL2" include/config.h; then
+            sed -i '' 's|^.*SONAME_LIBSDL2.*$|#define SONAME_LIBSDL2 "libSDL2-2.0.0.dylib"|' include/config.h
+          else
+            echo '#define SONAME_LIBSDL2 "libSDL2-2.0.0.dylib"' >> include/config.h
+          fi
+          # configure clears SDL2_CFLAGS when that link test fails; the SDL bus needs the headers.
+          if grep -q "^SDL2_CFLAGS" Makefile; then
+            sed -i '' "s|^SDL2_CFLAGS *=.*|SDL2_CFLAGS = -I$GITHUB_WORKSPACE/sdl/include|" Makefile
+          else
+            echo "SDL2_CFLAGS = -I$GITHUB_WORKSPACE/sdl/include" >> Makefile
+          fi
+
+      - name: Build winebus.so
+        working-directory: build
+        run: |
+          export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+          make -j"$(sysctl -n hw.logicalcpu)" dlls/winebus.sys/winebus.so
+          so=dlls/winebus.sys/winebus.so
+          strings "$so" | grep -q "libSDL2-2.0.0.dylib" || { echo "winebus.so without SDL"; exit 1; }
+          nm "$so" | grep -q "sdl_bus_init" || { echo "no SDL bus"; exit 1; }
+          strings "$so" | grep -q "XBOX 360 For Windows" || { echo "Xbox 360 IDs patch missing"; exit 1; }
+          # Where the engine's own winebus.so finds ntdll.so and SDL: next to it, and the engine's lib/
+          # (two levels up from lib/wine/x86_64-unix; the game bundle has links in the same places).
+          install_name_tool -add_rpath @loader_path/ "$so"
+          install_name_tool -add_rpath @loader_path/../../ "$so"
+          codesign -fs - "$so"
+          otool -L "$so"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: winebus
+          path: build/dlls/winebus.sys/winebus.so
+
   package:
-    needs: [dxmt, winemac]
+    needs: [dxmt, winemac, winebus]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -212,6 +281,8 @@ jobs:
           find artifacts/dxmt/install32 -name '*.dll' -exec cp {} "$root/i386-windows/" \;
           find artifacts/dxmt -name 'winemetal.so' -exec cp {} "$root/x86_64-unix/" \;
           find artifacts/winemac -name winemac.so -exec cp {} "$root/x86_64-unix/winemac.so" \;
+          find artifacts/winebus -name winebus.so -exec cp {} "$root/x86_64-unix/winebus.so" \;
+          test -s "$root/x86_64-unix/winebus.so"
           # msync's ntdll.so and wineserver only work together (server protocol 963), so they sit in a
           # folder of their own that only Nightforge versions which install both at once pick up.
           mkdir -p "$root/msync/x86_64-unix" "$root/msync/bin"
@@ -235,4 +306,4 @@ jobs:
           gh release create "graphics-${{ steps.assemble.outputs.version }}" "${{ steps.assemble.outputs.name }}" \
             --repo "$GITHUB_REPOSITORY" --latest=false \
             --title "Graphics ${{ steps.assemble.outputs.version }}" \
-            --notes "DXMT $DXMT_VERSION with Nightforge's Wine 11 patches, winemac.so from Wine $WINE_VERSION built with visible symbols, and ntdll.so + wineserver from Wine $WINE_VERSION with msync (from CodeWeavers' CrossOver sources). Licences: DXMT LGPL-2.1-or-later, Wine LGPL-2.1-or-later; sources: https://github.com/3Shain/dxmt, https://gitlab.winehq.org/wine/wine, patches in engine/patches."
+            --notes "DXMT $DXMT_VERSION with Nightforge's Wine 11 patches, winemac.so from Wine $WINE_VERSION built with visible symbols, ntdll.so + wineserver from Wine $WINE_VERSION with msync (from CodeWeavers' CrossOver sources), and winebus.so from Wine $WINE_VERSION with the SDL bus, pads reporting as Xbox 360 controllers. Licences: DXMT LGPL-2.1-or-later, Wine LGPL-2.1-or-later; sources: https://github.com/3Shain/dxmt, https://gitlab.winehq.org/wine/wine, patches in engine/patches."

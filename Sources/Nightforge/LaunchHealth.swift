@@ -24,6 +24,12 @@ enum LaunchHealth {
     /// Direct3D 12 runs on a Mac (DirectX 11 stays with DXMT and DXVK, which run it better).
     static func attempts(for analysis: GameAnalysis, profile: GameProfile?,
                          d3dMetal: Bool = Engine.d3dMetalReady) -> [LaunchAttempt] {
+        if analysis.usesD3D11, analysis.apis.contains(.d3d12), d3dMetal, profile?.graphics == .d3dmetal {
+            // Measured to run better on DirectX 12 through D3DMetal than on DirectX 11: no -dx11 then.
+            let arguments = analysis.preferD3D11Arguments
+            return [LaunchAttempt(graphics: .d3dmetal), LaunchAttempt(graphics: .dxmt, arguments: arguments),
+                    LaunchAttempt(graphics: .dxvk, arguments: arguments)]
+        }
         if analysis.usesD3D11 || analysis.apis.isEmpty {
             let arguments = analysis.preferD3D11Arguments
             let first = profile?.graphics.flatMap { $0 == .d3dmetal && !d3dMetal ? nil : $0 } ?? Engine.defaultGraphics

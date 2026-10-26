@@ -171,6 +171,14 @@ enum L10n {
         "Use the Windows Version": "Windows-Version verwenden",
         "Set Up Steam for Mac": "Steam für Mac einrichten",
         "Starting Steam for Mac …": "Steam für Mac startet …",
+        "Controller": "Controller",
+        "Full": "Voll",
+        "Partial": "Teilweise",
+        "Mouse & keyboard": "Maus & Tastatur",
+        "Full controller support – playable from the couch": "Volle Controller-Unterstützung – spielbar von der Couch",
+        "Partial controller support – some menus need a mouse or keyboard":
+            "Teilweise Controller-Unterstützung – manche Menüs brauchen Maus oder Tastatur",
+        "Made for mouse and keyboard": "Für Maus und Tastatur gemacht",
         "Signing in to Steam …": "Anmeldung bei Steam …",
         "%@ is still running and needs Steam. Steam can be signed in only once at a time, so quit the game first.":
             "%@ läuft noch und braucht Steam. Steam kann immer nur einmal angemeldet sein – beende das Spiel zuerst.",

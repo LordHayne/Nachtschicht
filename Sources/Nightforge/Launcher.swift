@@ -54,7 +54,9 @@ enum Prefs {
     }
 
     static var afterLaunch: AfterLaunch {
-        AfterLaunch(rawValue: UserDefaults.standard.string(forKey: Keys.afterLaunch) ?? "") ?? .quit
+        // Hidden, Nightforge keeps Steam out of sight while the game runs and is back the moment
+        // it ends; quitting frees a little memory and comes back too, a few seconds later.
+        AfterLaunch(rawValue: UserDefaults.standard.string(forKey: Keys.afterLaunch) ?? "") ?? .hide
     }
 }
 

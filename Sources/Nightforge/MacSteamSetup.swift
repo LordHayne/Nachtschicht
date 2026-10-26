@@ -65,7 +65,7 @@ final class MacSteamSetup: ObservableObject, Identifiable {
             // Steam opens its library after the sign-in; from now on it works in the background.
             NSApp.activate()
             onReady?(self)
-            await MacSteam.keepHidden(for: 20)
+            MacSteam.hide()
         } catch is CancellationError {
             return
         } catch {
@@ -127,7 +127,7 @@ struct MacSteamSetupView: View {
                 case .failed:
                     SetupButton(title: L10n.t("Try again"), symbol: "arrow.clockwise") { setup.start() }
                 case .signingIn:
-                    Button(L10n.t("Show Steam window again")) { MacSteam.show() }
+                    Button(L10n.t("Show Steam window again")) { MacSteam.show(keepFor: 600) }
                         .buttonStyle(.bordered)
                 case .installing:
                     EmptyView()

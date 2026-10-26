@@ -126,45 +126,52 @@ enum MacSteam {
     // MARK: - Running it
 
     /// Starts Steam in the background (hidden, without its main window), or brings it to the
-    /// front with its main window when `visible` – for signing in, or a question it waits on.
+    /// front with its main window when `visible` – for signing in.
     static func start(visible: Bool = false) {
         guard let app else { return }
         if visible && isRunning {
-            show()
+            show(keepFor: 600)
             return
         }
         if !isRunning { startedByNightforge = true }
-        if visible { markShown() }
+        if visible { allowVisible(for: 600) }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = visible
         configuration.hides = !visible
         configuration.arguments = visible ? [] : ["-silent"]
         NSWorkspace.shared.openApplication(at: app, configuration: configuration)
-        // Steam.app only hands over to the client in Steam's folder, which opens its own window.
-        if !visible { Task { @MainActor in await keepHidden(for: 45) } }
     }
 
-    /// Steam's main window in front, e.g. for a question it asks before starting a game.
-    static func show() {
+    /// Steam's main window in front, for something the player does there (a question, the
+    /// sign-in). The window guard leaves it up while Steam waits for the player, and `keepFor`
+    /// seconds besides.
+    static func show(keepFor seconds: TimeInterval = 0) {
         guard isRunning else { return start(visible: true) }
+        allowVisible(for: seconds)
         for app in running { app.unhide() }
         open("open/main", activate: true)
     }
 
-    /// When Nightforge last brought Steam's window up on purpose; keepHidden leaves it then.
-    private static let shownLock = NSLock()
-    private static var shownAt = Date.distantPast
-
-    private static func markShown() {
-        shownLock.lock()
-        shownAt = Date()
-        shownLock.unlock()
+    /// A Steam dialog the player answers (steam://install/… asks where to install).
+    static func ask(_ command: String) {
+        allowVisible(for: 300)
+        open(command, activate: true)
     }
 
-    private static func shown(since date: Date) -> Bool {
-        shownLock.lock()
-        defer { shownLock.unlock() }
-        return shownAt >= date
+    /// Until when Nightforge wants Steam's window up although Steam doesn't log that it waits.
+    private static let visibleLock = NSLock()
+    private static var visibleUntil = Date.distantPast
+
+    private static func allowVisible(for seconds: TimeInterval) {
+        visibleLock.lock()
+        visibleUntil = max(visibleUntil, Date().addingTimeInterval(seconds))
+        visibleLock.unlock()
+    }
+
+    private static var allowedVisible: Bool {
+        visibleLock.lock()
+        defer { visibleLock.unlock() }
+        return Date() < visibleUntil
     }
 
     /// Back to the background after the player has dealt with it.
@@ -172,28 +179,71 @@ enum MacSteam {
         for app in running { app.hide() }
     }
 
-    /// Steam opens its window when it starts, after signing in and when it starts a game – and that
-    /// window doesn't even know the games Nightforge plays through Wine. Keeps it out of sight for a
-    /// while, unless Nightforge shows it on purpose meanwhile (a question, the sign-in).
+    /// Keeps Steam for Mac out of sight while Nightforge runs. Its window comes up when it starts,
+    /// after signing in, when it starts a game and when a game ends (macOS hands it the focus),
+    /// and it doesn't even know the games Nightforge plays through Wine. It stays up only while
+    /// Steam waits for the player – a question before a start, a cloud conflict, its sign-in.
     @MainActor
-    static func keepHidden(for seconds: Int) async {
-        let started = Date()
-        for _ in 0..<seconds {
-            if shown(since: started) { return }
-            for app in running where !app.isHidden { app.hide() }
+    static func guardWindows() async {
+        while !Task.isCancelled {
+            if running.contains(where: { !$0.isHidden }), !allowedVisible, hasSignedIn, !waitingForPlayer {
+                hide()
+            }
             try? await Task.sleep(for: .seconds(1))
         }
+    }
+
+    /// Steam waits for the player: a question before a game starts ("waiting for user response"
+    /// in its console log), a cloud sync it couldn't finish, or its sign-in window.
+    static var waitingForPlayer: Bool {
+        let now = Date()
+        let console = logLines("console_log.txt")
+        if let last = console.last(where: { $0.contains("GameAction [AppID") }), last.contains("waiting for user response"),
+           let date = logDate(last), now.timeIntervalSince(date) < 600 {
+            return true
+        }
+        let cloud = logLines("cloud_log.txt").filter { $0.contains("[AppID") }
+        if let last = cloud.last(where: { ["Starting sync", "conflict", "Failed sync", "complete"].contains(where: $0.contains) }),
+           last.contains("conflict") || last.contains("Failed sync"), let date = logDate(last), now.timeIntervalSince(date) < 120 {
+            return true
+        }
+        // Still signed out a while after starting – and not because the Wine Steam signed in.
+        if !signedIn, !sessionReplaced, let launched = running.compactMap(\.launchDate).min(), now.timeIntervalSince(launched) > 25 {
+            return true
+        }
+        return false
+    }
+
+    private static func logLines(_ name: String) -> [Substring] {
+        guard let handle = try? FileHandle(forReadingFrom: root.appendingPathComponent("logs/\(name)")) else { return [] }
+        defer { try? handle.close() }
+        let size = (try? handle.seekToEnd()) ?? 0
+        try? handle.seek(toOffset: size > 32_768 ? size - 32_768 : 0)
+        let text = String(decoding: (try? handle.readToEnd()) ?? Data(), as: UTF8.self)
+        return text.split(whereSeparator: \.isNewline)
+    }
+
+    private static let logFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        return formatter
+    }()
+
+    /// "[2026-10-26 11:10:12] …"
+    private static func logDate(_ line: Substring) -> Date? {
+        guard line.hasPrefix("["), let close = line.firstIndex(of: "]") else { return nil }
+        return logFormatter.date(from: String(line[line.index(after: line.startIndex)..<close]))
     }
 
     /// Hands Steam a steam:// command ("run/275850"), which starts it if it isn't running.
     static func open(_ command: String, activate: Bool = false) {
         guard let app, let url = URL(string: "steam://" + command) else { return }
         if !isRunning { startedByNightforge = true }
-        if activate { markShown() }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = activate
         NSWorkspace.shared.open([url], withApplicationAt: app, configuration: configuration)
-        if !activate { Task { @MainActor in await keepHidden(for: 30) } }
     }
 
     /// Asks Steam to quit (it saves its state and cloud files) and ends it the hard way after 20 s.
@@ -218,7 +268,7 @@ enum MacSteam {
     static func download(appID: Int, name: String, installDir: String, macGameRunning: Bool) async throws {
         let written = { (try? manifest(appID).resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate }
         if isRunning, written() == nil, macGameRunning || !startedByNightforge {
-            open("install/\(appID)", activate: true)
+            ask("install/\(appID)")
             return
         }
         try Engine.requestDownload(appID: appID, name: name, installDir: installDir, steamapps: steamapps)

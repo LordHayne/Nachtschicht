@@ -19,6 +19,17 @@ struct CatalogApp: Hashable {
     var macSize: Int64 = 0
     /// Steam has a Windows version (nearly always; a few games are Mac or Linux only).
     var windows = true
+    var controller = ControllerSupport.none
+}
+
+/// What the Steam store says about playing a game with a controller.
+enum ControllerSupport: String {
+    /// Everything works with a controller: playable from the couch.
+    case full
+    /// Some parts (menus, typing) want a mouse or keyboard.
+    case partial
+    /// Not declared: made for mouse and keyboard.
+    case none
 }
 
 /// One Steam Cloud save location of a game: a folder under a Windows root ("WinAppDataRoaming",
@@ -217,6 +228,7 @@ enum SteamCatalog {
                                       vrOnly: common["onlyvrsupport"]?.int == 1,
                                       macNative: oslist.contains("macos"),
                                       windows: oslist.isEmpty || oslist.contains("windows"))
+                game.controller = controllerSupport(common)
                 if game.macNative {
                     (game.mac64, game.macAppleSilicon) = macBuild(common: common, depots: depots,
                                                                   launch: info["config"]?.object?["launch"]?.object)
@@ -227,6 +239,18 @@ enum SteamCatalog {
             reader.position = end
         }
         return games
+    }
+
+    /// common/controller_support ("full", "partial"), or the store categories that say the same:
+    /// 28 "Full controller support", 18 "Partial Controller Support".
+    private static func controllerSupport(_ common: [String: BinaryKV]) -> ControllerSupport {
+        if let declared = common["controller_support"]?.string.flatMap({ ControllerSupport(rawValue: $0.lowercased()) }) {
+            return declared
+        }
+        let categories = common["category"]?.object ?? [:]
+        if categories["category_28"] != nil { return .full }
+        if categories["category_18"] != nil { return .partial }
+        return .none
     }
 
     /// Whether the Mac version still runs on current macOS. Valve marks 64-bit Mac builds with

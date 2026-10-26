@@ -123,9 +123,9 @@ struct MacVersionTest {
             return .object([("config", .object(config)), ("manifests", .object([("public", .object([("size", .string(size))]))]))])
         }
         func app(_ name: String, oslist: String, extended: String = "", depots: [(String, KV)] = [],
-                 ufs: [(String, KV)] = []) -> [(String, KV)] {
+                 ufs: [(String, KV)] = [], store: [(String, KV)] = []) -> [(String, KV)] {
             [("common", .object([("name", .string(name)), ("type", .string("Game")), ("oslist", .string(oslist)),
-                                 ("osextended", .string(extended))])),
+                                 ("osextended", .string(extended))] + store)),
              ("config", .object([("installdir", .string(name))])),
              ("depots", .object(depots)),
              ("ufs", .object(ufs))]
@@ -150,11 +150,12 @@ struct MacVersionTest {
         let apps: [(Int, [(String, KV)])] = [
             (1001, app("Silicon", oslist: "windows,macos", extended: "macos64,macosapplesilicon,macosnotarized",
                        depots: [("10011", depot("windows", size: "3000")), ("10012", depot("macos", size: "2000"))],
-                       ufs: nmsCloud)),
+                       ufs: nmsCloud, store: [("controller_support", .string("full"))])),
             (1002, app("DepotArch", oslist: "windows,macos",
                        depots: [("10021", depot("macos", size: "500", arch: .int(64))),
                                 ("10022", depot("macos", size: "70", arch: .int(32), language: "hungarian")),
-                                ("10023", depot("", size: "100"))])),
+                                ("10023", depot("", size: "100"))],
+                       store: [("category", .object([("category_2", .int(1)), ("category_18", .int(1))]))])),
             (1003, app("OldPort", oslist: "windows,macos", depots: [("10031", depot("macos", size: "900", arch: .string("32")))])),
             (1004, app("WindowsOnly", oslist: "windows")),
             (1005, app("MacOnly", oslist: "macos", extended: "macos64")),
@@ -172,6 +173,8 @@ struct MacVersionTest {
         check(catalog[1002]?.macSize == 600, "Mac size: 64-bit depot plus shared content: \(catalog[1002]?.macSize ?? -1)")
         check(catalog[1003]?.macNative == true && catalog[1003]?.mac64 == false, "a 32-bit Mac depot doesn't")
         check(catalog[1004]?.macNative == false, "Windows only")
+        check(catalog[1001]?.controller == .full && catalog[1002]?.controller == .partial && catalog[1003]?.controller == ControllerSupport.none,
+              "controller support from the store's fields and categories")
         check(catalog[1005]?.windows == false && catalog[1005]?.mac64 == true, "Mac only")
 
         // MARK: Saves along when the version changes
@@ -246,17 +249,17 @@ struct MacVersionTest {
 
         // MARK: Merge
         var silicon1001 = game(1001, "Silicon", size: 3100)
-        silicon1001.adoptMacFacts(catalog[1001]!)
+        silicon1001.adoptCatalogFacts(catalog[1001]!)
         var old1003 = game(1003, "OldPort")
-        old1003.adoptMacFacts(catalog[1003]!)
+        old1003.adoptCatalogFacts(catalog[1003]!)
         var depot1002 = game(1002, "DepotArch", install: .notInstalled)
-        depot1002.adoptMacFacts(catalog[1002]!)
+        depot1002.adoptCatalogFacts(catalog[1002]!)
         var macOnly1005 = game(1005, "MacOnly", install: .notInstalled)
-        macOnly1005.adoptMacFacts(catalog[1005]!)
+        macOnly1005.adoptCatalogFacts(catalog[1005]!)
         let plain = game(1004, "WindowsOnly")
         let crossOver = Bottle(name: "Games", url: steam)
         var twice = game(1001, "Silicon", bottle: crossOver)
-        twice.adoptMacFacts(catalog[1001]!)
+        twice.adoptCatalogFacts(catalog[1001]!)
         let windows = [silicon1001, old1003, depot1002, macOnly1005, plain, twice]
 
         func merged(prefer: Set<Int> = [], choices: [Int: GameVersion] = [:], failed: Set<Int> = []) -> [Game] {
@@ -298,9 +301,9 @@ struct MacVersionTest {
               "still playable through its Windows copy, it stays with the installed games")
         // Played through its installed Windows version: it stays that way while the Mac version comes.
         var downloadingMac = game(1002, "DepotArch", size: 4000)
-        downloadingMac.adoptMacFacts(catalog[1002]!)
+        downloadingMac.adoptCatalogFacts(catalog[1002]!)
         var notYet = game(3001, "Fresh")
-        notYet.adoptMacFacts(catalog[1001]!)
+        notYet.adoptCatalogFacts(catalog[1001]!)
         let seamless = LibraryScanner.merge([downloadingMac, notYet], mac: onMac, preferWindows: [],
                                             choice: { _ in .automatic }, macFailed: { _ in false })
         let comingIn = seamless.first { $0.appID == 1002 }

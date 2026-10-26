@@ -394,6 +394,9 @@ private struct GameDetail: View {
                 if game.switchable {
                     Stat(label: L10n.t("Version"), value: game.platform == .mac ? "Mac" : "Windows")
                 }
+                if game.install != .inStore || game.controller != .none {
+                    Stat(label: L10n.t("Controller"), value: game.controller.label)
+                }
                 if !game.bottle.isBuiltIn && game.platform == .windows {  // only means something with several CrossOver bottles
                     Stat(label: "Bottle", value: game.bottle.name)
                 }
@@ -679,6 +682,20 @@ struct CoverCard: View {
                     .help(game.platform == .mac ? L10n.t("Uses the Mac version") : L10n.t("Steam also has a Mac version"))
             }
         }
+        .overlay(alignment: .bottomLeading) {
+            // From the couch: which games play with a controller, at a glance.
+            // Full support in the accent colour, so it reads across the room; partial in outline.
+            if game.controller != .none {
+                Image(systemName: game.controller == .full ? "gamecontroller.fill" : "gamecontroller")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(game.controller == .full ? Theme.sodium : Theme.ink.opacity(0.8))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Theme.night.opacity(0.82), in: Capsule())
+                    .padding(7)
+                    .help(game.controller.help)
+            }
+        }
         .overlay(alignment: .topLeading) {
             if isRunning {
                 HStack(spacing: 5) {
@@ -832,6 +849,24 @@ private struct EmptyLibrary: View {
                     .buttonStyle(.bordered)
             }
             .controlSize(.large)
+        }
+    }
+}
+
+extension ControllerSupport {
+    var label: String {
+        switch self {
+        case .full: return L10n.t("Full")
+        case .partial: return L10n.t("Partial")
+        case .none: return L10n.t("Mouse & keyboard")
+        }
+    }
+
+    var help: String {
+        switch self {
+        case .full: return L10n.t("Full controller support – playable from the couch")
+        case .partial: return L10n.t("Partial controller support – some menus need a mouse or keyboard")
+        case .none: return L10n.t("Made for mouse and keyboard")
         }
     }
 }

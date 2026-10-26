@@ -32,7 +32,9 @@ enum SaveTransfer {
     static func carryOver(to platform: Platform, rules: [SaveRule], places: Places) -> Int {
         var copied = 0
         for rule in rules {
-            guard let windows = windowsRoot(rule.root, places), let macRootName = rule.macRoot,
+            // Rules come from Steam's catalog and the online profiles: nothing may climb out of a save folder.
+            guard ![rule.path, rule.macAddPath].contains(where: { $0.split(whereSeparator: { $0 == "/" || $0 == "\\" }).contains("..") }),
+                  let windows = windowsRoot(rule.root, places), let macRootName = rule.macRoot,
                   let mac = macRoot(macRootName, places)
             else { continue }
             let (from, to) = platform == .mac

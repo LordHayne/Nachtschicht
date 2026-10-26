@@ -1,16 +1,18 @@
 import AppKit
+import GameController
 import SwiftUI
 
-/// Settings in tabs: where the games come from, how they run, and what Nightforge is
-/// built on. The tabs are a row of buttons, so the pad reaches them too.
+/// Settings in tabs: where the games come from, how they run, the controller, and what
+/// Nightforge is built on. The tabs are a row of buttons, so the pad reaches them too.
 struct SettingsView: View {
     enum Tab: CaseIterable {
-        case stores, general, storage, about
+        case stores, general, controller, storage, about
 
         var label: String {
             switch self {
             case .stores: return L10n.t("Stores")
             case .general: return L10n.t("General")
+            case .controller: return L10n.t("Controller")
             case .storage: return L10n.t("Storage")
             case .about: return L10n.t("About")
             }
@@ -32,6 +34,7 @@ struct SettingsView: View {
                 switch tab {
                 case .stores: StoresSettings()
                 case .general: GeneralSettings()
+                case .controller: ControllerSettings()
                 case .storage: StorageSettings()
                         .frame(height: 560)  // the list of games scrolls
                 case .about: AboutSettings()
@@ -202,6 +205,91 @@ private struct GeneralSettings: View {
             get: { Prefs.reduceMotion(system: systemReduceMotion, stored: reduceMotionSetting) },
             set: { reduceMotionSetting = $0 == systemReduceMotion ? "" : ($0 ? "on" : "off") }
         )
+    }
+}
+
+// MARK: - Controller
+
+private struct ControllerSettings: View {
+    @EnvironmentObject private var model: LibraryModel
+    @AppStorage(Prefs.Keys.padGlyphs) private var padGlyphs = PadSymbols.Style.automatic.rawValue
+    /// Bumped when a controller comes or goes, or its battery may have changed.
+    @State private var refresh = 0
+    @State private var pairing = false
+
+    private static let bluetoothSettings = URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings")!
+
+    var body: some View {
+        Form {
+            Section {
+                let pads = GCController.controllers().filter { $0.extendedGamepad != nil }
+                if pads.isEmpty {
+                    Text(L10n.t("No controller connected."))
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(Array(pads.enumerated()), id: \.offset) { _, pad in
+                    LabeledContent {
+                        if let battery = pad.battery, battery.batteryState != .unknown {
+                            Label("\(Int((battery.batteryLevel * 100).rounded())) %",
+                                  systemImage: battery.batteryState == .charging ? "battery.100.bolt" : Self.batterySymbol(battery.batteryLevel))
+                                .monospacedDigit()
+                                .foregroundStyle(battery.batteryLevel < 0.2 && battery.batteryState != .charging ? Theme.sodium : .primary)
+                                .help(L10n.t("Controller battery"))
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(pad.vendorName ?? pad.productCategory)
+                            Text(L10n.t("Connected · works in every game and in Nightforge"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .id(refresh)
+                if pairing {
+                    Text(L10n.t("PlayStation: hold PS and Create until the light flashes. Xbox: hold the pair button on top until the logo flashes. Nintendo: hold the sync button. Then choose it in the Bluetooth settings."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Button(L10n.t("Pair a Controller …"), action: pair)
+                    .padFocus("settings.pair", activate: pair)
+            } header: {
+                Text(L10n.t("Controllers"))
+            }
+
+            Section {
+                Picker(L10n.t("Button labels"), selection: $padGlyphs) {
+                    ForEach(PadSymbols.Style.allCases, id: \.self) { style in
+                        Text(style.label).tag(style.rawValue)
+                    }
+                }
+                .padFocus("settings.padGlyphs", selection: $padGlyphs, values: PadSymbols.Style.allCases.map(\.rawValue))
+                .onChange(of: padGlyphs) { _, _ in model.refreshPadSymbols() }
+                Text(L10n.t("What the hints at the bottom of Nightforge show for the buttons: ✕ ○ □ △ or A B X Y."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .GCControllerDidConnect)) { _ in refresh += 1; pairing = false }
+        .onReceive(NotificationCenter.default.publisher(for: .GCControllerDidDisconnect)) { _ in refresh += 1 }
+        .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in refresh += 1 }
+    }
+
+    /// Pairing happens in macOS: open its Bluetooth settings and say what to press on the controller.
+    private func pair() {
+        pairing = true
+        NSWorkspace.shared.open(Self.bluetoothSettings)
+    }
+
+    private static func batterySymbol(_ level: Float) -> String {
+        switch level {
+        case ..<0.13: return "battery.0percent"
+        case ..<0.38: return "battery.25percent"
+        case ..<0.63: return "battery.50percent"
+        case ..<0.88: return "battery.75percent"
+        default: return "battery.100percent"
+        }
     }
 }
 

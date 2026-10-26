@@ -1433,6 +1433,12 @@ private struct HintBar: View {
 
     var body: some View {
         HStack(spacing: 22) {
+            if model.controllerConnected, let status = model.controllerStatus {
+                Label(status.label, systemImage: status.symbol)
+                    .font(.system(size: 13, weight: .medium).monospacedDigit())
+                    .foregroundStyle(status.isLow ? Theme.sodium : Theme.muted)
+                    .help(L10n.t("Controller battery"))
+            }
             Spacer()
             let pad = model.padSymbols
             if let action = toasts.current?.action, focus.focused != Toasts.padID {

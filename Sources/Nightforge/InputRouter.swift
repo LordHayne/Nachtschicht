@@ -112,11 +112,24 @@ final class InputRouter {
 
     // MARK: - Gamepad
 
-    private func refreshConnected() {
+    func refreshConnected() {
         let pads = GCController.controllers().compactMap(\.extendedGamepad)
         model?.controllerConnected = !pads.isEmpty
         let current = GCController.current?.extendedGamepad ?? pads.first
-        if let current, model?.padSymbols != PadSymbols(current) { model?.padSymbols = PadSymbols(current) }
+        let symbols = Prefs.padGlyphs == .automatic ? current.map { PadSymbols($0) } : PadSymbols(style: Prefs.padGlyphs)
+        if let symbols, model?.padSymbols != symbols { model?.padSymbols = symbols }
+        refreshBattery()
+    }
+
+    /// The controller in use and its battery, for the hint bar ("DualSense · 80 %").
+    func refreshBattery() {
+        let controller = GCController.current ?? GCController.controllers().first { $0.extendedGamepad != nil }
+        let status = controller.map { pad -> ControllerStatus in
+            let battery = pad.battery.flatMap { $0.batteryState == .unknown ? nil : $0 }
+            return ControllerStatus(name: pad.vendorName ?? pad.productCategory, battery: battery?.batteryLevel,
+                                    charging: battery?.batteryState == .charging)
+        }
+        if model?.controllerStatus != status { model?.controllerStatus = status }
     }
 
     private func attach(_ controller: GCController?) {
@@ -362,6 +375,19 @@ final class InputRouter {
 /// The SF Symbols a controller gives its own buttons: ✕ ○ □ △ on a PlayStation pad, A B X Y on
 /// Xbox, the Nintendo layout on a Switch pad. The defaults are Xbox's.
 struct PadSymbols: Equatable {
+    /// What Settings › Controller › Button labels asks for.
+    enum Style: String, CaseIterable {
+        case automatic, xbox, playstation
+
+        var label: String {
+            switch self {
+            case .automatic: return L10n.t("Like my controller")
+            case .xbox: return "Xbox"
+            case .playstation: return "PlayStation"
+            }
+        }
+    }
+
     var confirm = "a.circle.fill"
     var back = "b.circle.fill"
     var library = "x.circle.fill"
@@ -369,6 +395,15 @@ struct PadSymbols: Equatable {
     var stick = "l.joystick.fill"
 
     init() {}
+
+    /// Always one maker's labels, whatever controller is in use.
+    init(style: Style) {
+        guard style == .playstation else { return }
+        confirm = "xmark.circle.fill"
+        back = "circle.circle.fill"
+        library = "square.circle.fill"
+        options = "triangle.circle.fill"
+    }
 
     @MainActor
     init(_ pad: GCExtendedGamepad) {
@@ -385,4 +420,34 @@ struct PadSymbols: Equatable {
         let fill = name.hasSuffix(".fill") ? name : name + ".fill"
         return NSImage(systemSymbolName: fill, accessibilityDescription: nil) != nil ? fill : name
     }
+}
+
+/// The controller in use, as the hint bar shows it.
+struct ControllerStatus: Equatable {
+    let name: String
+    /// 0…1; nil when the controller doesn't say.
+    let battery: Float?
+    var charging = false
+
+    /// "DualSense · 80 %" – the name shortened to its last word for the long ones Apple reports
+    /// ("DualSense Wireless Controller" → "DualSense").
+    var label: String {
+        let short = name.replacingOccurrences(of: " Wireless Controller", with: "").replacingOccurrences(of: " Controller", with: "")
+        guard let battery else { return short }
+        return "\(short) · \(Int((battery * 100).rounded())) %"
+    }
+
+    var symbol: String {
+        if charging { return "battery.100.bolt" }
+        switch battery ?? 1 {
+        case ..<0.13: return "battery.0percent"
+        case ..<0.38: return "battery.25percent"
+        case ..<0.63: return "battery.50percent"
+        case ..<0.88: return "battery.75percent"
+        default: return "battery.100percent"
+        }
+    }
+
+    /// Low enough to say so in the accent colour.
+    var isLow: Bool { (battery ?? 1) < 0.2 && !charging }
 }

@@ -23,6 +23,7 @@ enum Prefs {
         static let gameMode = "gameMode"
         static let sharpAndSmooth = "sharpAndSmooth"
         static let geforceNowExplained = "geforceNowExplained"
+        static let padGlyphs = "padGlyphs"
         static let notifyDownloads = "notifyDownloads"
         static let reduceMotion = "reduceMotion"
     }
@@ -39,6 +40,11 @@ enum Prefs {
     /// A macOS notification when a download finishes while Nightforge isn't in front. On by default.
     static var notifyDownloads: Bool {
         UserDefaults.standard.object(forKey: Keys.notifyDownloads) as? Bool ?? true
+    }
+
+    /// Button labels in hints: the connected controller's own, or always Xbox's or PlayStation's.
+    static var padGlyphs: PadSymbols.Style {
+        PadSymbols.Style(rawValue: UserDefaults.standard.string(forKey: Keys.padGlyphs) ?? "") ?? .automatic
     }
 
     /// "Sharp & smooth": MetalFX upscaling to full Retina sharpness and an even frame rate that

@@ -96,6 +96,8 @@ final class LibraryModel: ObservableObject {
     @Published var controllerConnected = false
     /// The buttons of the controller in use, as that controller labels them (InputRouter).
     @Published var padSymbols = PadSymbols()
+    /// The controller in use and its battery (InputRouter), for the hint bar.
+    @Published var controllerStatus: ControllerStatus?
     /// A newer Nightforge release, offered with one click in the top bar.
     @Published private(set) var availableUpdate: AppUpdate?
     @Published private(set) var updating = false
@@ -117,6 +119,11 @@ final class LibraryModel: ObservableObject {
 
     var selected: Game? {
         games.indices.contains(selectedIndex) ? games[selectedIndex] : nil
+    }
+
+    /// After the button labels changed in Settings.
+    func refreshPadSymbols() {
+        input.refreshConnected()
     }
 
     func startInput() {
@@ -163,6 +170,7 @@ final class LibraryModel: ObservableObject {
                 }
                 // Every few seconds while it matters (Nightforge in front, a game running or starting),
                 // otherwise less often: nothing waits on it then, and the Mac stays quieter.
+                if controllerConnected && NSApp.isActive { input.refreshBattery() }
                 let busy = NSApp.isActive || !found.isEmpty || launchingID != nil
                 try? await Task.sleep(for: .seconds(busy ? 3 : 10))
             }

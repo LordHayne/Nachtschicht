@@ -153,11 +153,11 @@
   - **Fertig wenn:** Filter kombinierbar, Zustand bleibt beim Wechsel Detail ↔ Bibliothek erhalten, alles per Controller bedienbar.
   - **Stand:** `LibraryFilters.swift` (Status All / On this Mac / Not downloaded, „Runs great“, „Controller“ = volle Unterstützung, „Mac version“; Sortierung Recently played / Name / Disk space) und `LibrarySection.make` (Suche = eine Trefferliste, beste zuerst; Hidden = nach Name; „Recently played“ gruppiert nach Installiert / Lädt / Rest; Name/Größe eine Liste; Store-Treffer zuletzt). Leiste über dem Raster (nicht mitscrollend): Titel + „n von m Spielen“, Hidden-Schalter, Sortierung; darunter Status und Filter – jedes Segment ein eigener Pad-Knopf (↑ aus der obersten Rasterzeile). Filter gelten nur in der Bibliothek (Home bleibt vollständig) und bleiben über Detailseite und Home hinweg erhalten. Leeres Ergebnis: „No games match these filters“ + „Clear filters“. Pro-Store-Filter kommt mit Phase 7 (heute nur Steam). Test `tests/LibraryFiltersTest/`.
 
-- [ ] **2.2 Einstellungen in Tabs** · `M` · Branches `claude/ux-settings-2-2`, `claude/ux-storage-4-3` (4 von 5 Tabs)
+- [x] **2.2 Einstellungen in Tabs** · `M` · Branches `claude/ux-settings-2-2`, `claude/ux-storage-4-3`
   - **Was:** Tabs `Stores` · `General` · `Controller` · `Storage` · `About`. Inhalte siehe 1.6, 4.3, 5.4, 2.5.
   - **Wo:** `SettingsViews.swift` (`SettingsView`).
   - **Design:** `Dialogs.tsx` → `SettingsDialog`.
-  - **Stand:** `SettingsView.swift` mit Tab-Leiste (eigene Pad-Knöpfe): **Stores** (Steam: angemeldet/Spiele, „Open Steam“; CrossOver/Whisky/eigenes Wine), **General** (wie bisher), **About** (1.6). `SettingsView(tab:)` öffnet direkt einen Tab. **Storage** seit `claude/ux-storage-4-3` (Teil von 4.3). In General inzwischen auch 5.1 (Mitteilungen) und 2.5 (Reduce motion); 3.4 fehlt noch. Offen: Tab **Controller** (kommt mit 5.4).
+  - **Stand:** `SettingsView.swift` mit Tab-Leiste (eigene Pad-Knöpfe): **Stores** (Steam: angemeldet/Spiele, „Open Steam“; CrossOver/Whisky/eigenes Wine), **General** (wie bisher), **Controller** (Teil von 5.4), **About** (1.6). `SettingsView(tab:)` öffnet direkt einen Tab. **Storage** seit `claude/ux-storage-4-3` (Teil von 4.3). In General inzwischen auch 5.1 (Mitteilungen) und 2.5 (Reduce motion); 3.4 fehlt noch.
 
 - [ ] **2.3 Grafik-Voreinstellungen in Klartext + Profil-Herkunft** · `M`
   - **Was:** In den Spieloptionen statt Einzelschaltern zuerst vier Voreinstellungen:
@@ -262,11 +262,12 @@
   - **Siri/Kurzbefehle:** App Intents für „Siri, play Hades II“.
   - **Detailseite:** Button „Add to Applications“.
   - **Stand** (`claude/ux-shortcuts-5-3`, teilweise): `nightforge://play/<App-ID>` und `nightforge://show/<App-ID>` im Info.plist registriert (`AppDelegate.application(_:open:)`; kommt ein Link vor dem ersten Scan, wartet er darauf). Ein Link startet nur installierte Spiele, sonst öffnet er die Spielseite – er lädt nie etwas herunter. Detailseite: Knopf „Add to Applications“ legt `~/Applications/Nightforge Games/<Spiel>.app` an (Skript, das den Link öffnet, Cover als Icon, ohne Dock-Symbol); danach zeigt der Knopf die App im Finder. Test `tests/GameShortcutTest/`. Offen: App Intents für Siri/Kurzbefehle; in der echten App noch nicht durchgeklickt (Bildschirmfreigabe fehlte).
-- [ ] **5.4 Controller-Tab** · `M`
+- [x] **5.4 Controller-Tab** · `M` · Branch `claude/ux-controller-battery-5-4`
   - **Anzeige:** Verbundene Controller mit Akkustand (`GCController.battery`).
   - **Koppeln:** „Pair a controller“ mit Anleitung je Hersteller. Direktes Bluetooth-Koppeln ist eingeschränkt → bei Bedarf die Bluetooth-Einstellungen öffnen und dort warten, bis der Controller erscheint.
   - **Tastensymbole:** „Like my controller / Xbox / PlayStation“ (`InputRouter.PadSymbols`).
   - **Design:** `Dialogs.tsx` → Tab „Controller“; HintBar zeigt „DualSense · 80 %“.
+  - **Stand:** Verbundene Controller mit Akkustand (alle 30 s und bei An-/Abmelden aktualisiert), „Pair a Controller …“ öffnet die Bluetooth-Einstellungen und zeigt die Tasten je Hersteller, „Button labels: Like my controller / Xbox / PlayStation“ (`Prefs.padGlyphs`, `PadSymbols(style:)`). Akku in der HintBar: links unten „DualSense · 80 %“ mit Akku-Symbol (unter 20 % in der Akzentfarbe, wie im Entwurf), aktualisiert bei An-/Abmelden und alle paar Sekunden, solange Nightforge vorne ist.
 
 ---
 

@@ -70,6 +70,12 @@ struct NavigationTest {
         check(dock.map(\.appID) == [1, 7], "only installed and played, hidden left out, latest first: \(dock.map(\.appID))")
         check(MacIntegration.recentGames(many).count == MacIntegration.dockLimit, "five at most")
 
+        // The hint bar's controller line.
+        check(ControllerStatus(name: "DualSense Wireless Controller", battery: 0.8).label == "DualSense · 80 %", "DualSense · 80 %")
+        check(ControllerStatus(name: "Xbox Wireless Controller", battery: nil).label == "Xbox", "no battery reported: the name alone")
+        check(ControllerStatus(name: "DualSense Wireless Controller", battery: 0.1).isLow, "below 20 % is low")
+        check(!ControllerStatus(name: "DualSense Wireless Controller", battery: 0.1, charging: true).isLow, "not while charging")
+
         // A game's page belongs to where it was opened; Back goes there.
         check(Route.detail(gameID: "x", from: .library).level == .library, "a page opened in the library is in the library")
         check(Route.detail(gameID: "x", from: .home).level == .home, "a page opened on Home is on Home")

@@ -361,6 +361,17 @@ enum L10n {
         "Not set up yet – Nightforge does it at the first start.": "Noch nicht eingerichtet – Nightforge macht das beim ersten Start.",
         "Signed in · %@": "Angemeldet · %@",
         "Not signed in · %@": "Nicht angemeldet · %@",
+        "Controllers": "Controller",
+        "No controller connected.": "Kein Controller verbunden.",
+        "Controller battery": "Akku des Controllers",
+        "Connected · works in every game and in Nightforge": "Verbunden · funktioniert in jedem Spiel und in Nightforge",
+        "Pair a Controller …": "Controller koppeln …",
+        "PlayStation: hold PS and Create until the light flashes. Xbox: hold the pair button on top until the logo flashes. Nintendo: hold the sync button. Then choose it in the Bluetooth settings.":
+            "PlayStation: PS und Create halten, bis das Licht blinkt. Xbox: die Kopplungstaste oben halten, bis das Logo blinkt. Nintendo: die Sync-Taste halten. Dann in den Bluetooth-Einstellungen auswählen.",
+        "Button labels": "Tastensymbole",
+        "Like my controller": "Wie mein Controller",
+        "What the hints at the bottom of Nightforge show for the buttons: ✕ ○ □ △ or A B X Y.":
+            "Was die Hinweise unten in Nightforge für die Tasten zeigen: ✕ ○ □ △ oder A B X Y.",
         "No account. No telemetry. No background service.": "Kein Konto. Keine Telemetrie. Kein Hintergrunddienst.",
         "Nothing leaves your Mac unless you send it – a problem report opens on GitHub, filled in, and goes nowhere until you submit it.":
             "Nichts verlässt deinen Mac, außer du schickst es ab – ein Problembericht öffnet sich ausgefüllt auf GitHub und geht nirgendwohin, bis du ihn absendest.",

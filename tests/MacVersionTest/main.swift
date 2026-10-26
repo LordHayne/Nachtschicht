@@ -321,6 +321,23 @@ struct MacVersionTest {
         // MARK: Settings
         let profile = try? JSONDecoder().decode(GameProfile.self, from: Data(#"{"name": "X", "preferWindows": true}"#.utf8))
         check(profile?.preferWindows == true, "profiles read preferWindows")
+        let withSaves = try? JSONDecoder().decode(GameProfile.self, from: Data(#"""
+            {"saves": [{"root": "WinAppDataRoaming", "path": "7DaysToDie/Saves", "mac": "MacAppSupport"}]}
+            """#.utf8))
+        let profileRules = withSaves?.saves ?? []
+        check(profileRules == [SaveRule(root: "WinAppDataRoaming", path: "7DaysToDie/Saves", pattern: "*", recursive: true,
+                                        macRoot: "MacAppSupport", macAddPath: "")], "profiles read save folders: \(profileRules)")
+        var sevenDays = SaveTransfer.Places()
+        sevenDays.prefix = steam.appendingPathComponent("7dtd-prefix", isDirectory: true)
+        sevenDays.windowsUser = "player"
+        sevenDays.macHome = steam.appendingPathComponent("7dtd-home", isDirectory: true)
+        let world = sevenDays.prefix.appendingPathComponent("drive_c/users/player/AppData/Roaming/7DaysToDie/Saves/Navezgane/My Game/Player")
+        try? fm.createDirectory(at: world, withIntermediateDirectories: true)
+        try? Data("player".utf8).write(to: world.appendingPathComponent("76561198118309630.ttp"))
+        check(SaveTransfer.carryOver(to: .mac, rules: profileRules, places: sevenDays) == 1
+              && fm.fileExists(atPath: sevenDays.macHome.appendingPathComponent(
+                "Library/Application Support/7DaysToDie/Saves/Navezgane/My Game/Player/76561198118309630.ttp").path),
+              "a profile's save folder comes along with its subfolders")
         let defaults = String(decoding: (try? JSONEncoder().encode(GameOptions())) ?? Data(), as: UTF8.self)
         check(!defaults.contains("version"), "Automatic isn't stored: \(defaults)")
         var options = GameOptions()
@@ -420,6 +437,49 @@ struct MacVersionTest {
         _ = macWatcher.poll()
         check(macWatcher.rejectedCommands == 1 && !macWatcher.steamReceivedLaunch, "the turned-away run command is seen")
         check(Engine.startupFinished(steamRoot: steam), "then Steam has finished starting")
+
+        // MARK: Quit script: back to Nightforge when the game ends
+        // A stand-in game (a process whose path lies in the Mac library), `open` and `pgrep` replaced
+        // so nothing real is opened and no running Nightforge counts as "opened again".
+        let sandbox = steam.appendingPathComponent("quit-script", isDirectory: true)
+        let shims = sandbox.appendingPathComponent("bin", isDirectory: true)
+        let library = sandbox.appendingPathComponent("Steam/steamapps", isDirectory: true)
+        try? fm.createDirectory(at: shims, withIntermediateDirectories: true)
+        let opened = sandbox.appendingPathComponent("opened.txt")
+        let script = sandbox.appendingPathComponent("steam-shutdown.sh")
+        try? Engine.steamShutdownScript.write(to: script, atomically: true, encoding: .utf8)
+        for (name, body) in [("open", "echo \"$@\" > '\(opened.path)'"),
+                             ("pgrep", "case \"$*\" in *Nightforge.app*) exit 1;; esac; exec /usr/bin/pgrep \"$@\"")] {
+            let shim = shims.appendingPathComponent(name)
+            try? "#!/bin/bash\n\(body)\n".write(to: shim, atomically: true, encoding: .utf8)
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: shim.path)
+        }
+        func runScript() -> Process {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/bash")
+            process.arguments = [script.path, "", sandbox.appendingPathComponent("Prefix").path, library.path, "0", "/Fake/Nightforge.app"]
+            process.environment = ["PATH": shims.path + ":/usr/bin:/bin:/usr/sbin:/sbin"]
+            try? process.run()
+            return process
+        }
+        let fakeGame = Process()
+        fakeGame.executableURL = URL(fileURLWithPath: "/bin/bash")
+        fakeGame.arguments = ["-c", "exec -a '\(library.path)/common/Fake Game/Fake.app/Contents/MacOS/Fake' /bin/sleep 3"]
+        try? fakeGame.run()
+        Thread.sleep(forTimeInterval: 0.5)
+        let waiting = runScript()
+        let started = Date()
+        while waiting.isRunning && Date().timeIntervalSince(started) < 30 { Thread.sleep(forTimeInterval: 0.5) }
+        let reopenedAfter = Date().timeIntervalSince(started)
+        check((try? String(contentsOf: opened, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) == "/Fake/Nightforge.app"
+              && reopenedAfter > 4 && reopenedAfter < 20,
+              "the quit script brings Nightforge back once the game has ended (after \(Int(reopenedAfter)) s)")
+        try? fm.removeItem(at: opened)
+        let idle = runScript()  // no game: it waits to shut Steam down instead
+        Thread.sleep(forTimeInterval: 3)
+        check(idle.isRunning && !fm.fileExists(atPath: opened.path), "without a game it doesn't open Nightforge")
+        idle.terminate()
+        if waiting.isRunning { waiting.terminate() }
 
         // tests/MacVersionTest/run.sh --progress 275850: what Nightforge reads from the real Steam for Mac.
         if let flag = CommandLine.arguments.firstIndex(of: "--progress"), let appID = Int(CommandLine.arguments[flag + 1]) {

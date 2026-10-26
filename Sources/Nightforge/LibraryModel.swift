@@ -178,15 +178,18 @@ final class LibraryModel: ObservableObject {
 
         var result: [String: pid_t] = [:]
         for line in output.split(separator: "\n") {
-            let lower = line.lowercased()
+            let fields = line.drop { $0 == " " }.split(separator: " ", maxSplits: 1)
+            guard fields.count == 2, let pid = pid_t(fields[0]) else { continue }
+            let command = fields[1].lowercased()
             // Steam's crash handler and similar helpers live in the same folder; the game's
-            // own process is the first .exe there that isn't one of those. Mac versions run
-            // straight from their folder ("/…/steamapps/common/Game/Game.app/Contents/MacOS/Game").
-            guard !lower.contains("crashhandler"), !lower.contains("unitycrash") else { continue }
-            let windowsProgram = lower.contains(".exe")
-            for (folder, id) in folders where result[id] == nil && lower.contains(folder) && (windowsProgram || folder.hasPrefix("/")) {
-                let fields = line.split(separator: " ", maxSplits: 1)
-                if let pid = fields.first.flatMap({ pid_t($0) }) { result[id] = pid }
+            // own process is the first .exe there that isn't one of those.
+            guard !command.contains("crashhandler"), !command.contains("unitycrash") else { continue }
+            let windowsProgram = command.contains(".exe")
+            for (folder, id) in folders where result[id] == nil {
+                // Mac versions: the program itself runs from the folder ("/…/steamapps/common/Game/
+                // Game.app/Contents/MacOS/Game"); a script that merely names the folder doesn't count.
+                let matches = folder.hasPrefix("/") ? command.hasPrefix(folder) : windowsProgram && command.contains(folder)
+                if matches { result[id] = pid }
             }
         }
         return result
@@ -196,6 +199,23 @@ final class LibraryModel: ObservableObject {
     private var runningScanned = false
     /// The first library scan has finished.
     private var libraryLoaded = false
+
+    /// The name of the program a process runs ("No Man's Sky"), as crash reports are named.
+    nonisolated private static func programName(_ pid: pid_t) -> String? {
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
+        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
+        return URL(fileURLWithPath: String(cString: buffer)).lastPathComponent
+    }
+
+    /// macOS wrote a crash report for `program` since `date` (~/Library/Logs/DiagnosticReports).
+    nonisolated private static func crashed(_ program: String, since date: Date) -> Bool {
+        let reports = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/DiagnosticReports")
+        let files = (try? FileManager.default.contentsOfDirectory(at: reports, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        return files.contains { file in
+            ["ips", "crash"].contains(file.pathExtension) && file.lastPathComponent.hasPrefix(program)
+                && ((try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) >= date
+        }
+    }
 
     func isRunning(_ game: Game) -> Bool { running[game.id] != nil }
 
@@ -266,6 +286,33 @@ final class LibraryModel: ObservableObject {
         if !macSteamPrewarmed, macDownload, MacSteam.isReady, !anyRunning(.windows) {
             macSteamPrewarmed = true
             if !MacSteam.isRunning { MacSteam.start() }
+        }
+        takeTurnsDownloading()
+    }
+
+    /// One Steam can be signed in at a time, and a signed-out one soon gets no download servers
+    /// any more ("Failed to get list of download sources"). With downloads waiting in both, the
+    /// signed-in one finishes first, then the other is signed in – not while a game runs or starts.
+    private var lastSignInSwitch = Date.distantPast
+
+    private func takeTurnsDownloading() {
+        guard launchingID == nil, running.isEmpty, Date().timeIntervalSince(lastSignInSwitch) > 120 else { return }
+        let macDownload = allGames.contains { game in
+            (game.platform == .mac && Self.isDownloading(game.install)) || Self.isDownloading(game.macPending)
+        }
+        let windowsDownload = allGames.contains { $0.platform == .windows && $0.bottle.isBuiltIn && Self.isDownloading($0.install) }
+        if macDownload, MacSteam.isReady, !MacSteam.signedIn, !(windowsDownload && Engine.steamSignedIn) {
+            lastSignInSwitch = Date()
+            Task {
+                if MacSteam.isRunning { await MacSteam.quit() }
+                MacSteam.start()
+            }
+        } else if windowsDownload, Engine.isSteamRunning, Engine.sessionReplaced(), !(macDownload && MacSteam.signedIn) {
+            lastSignInSwitch = Date()
+            Task {
+                guard let wine = await Engine.installedWine() else { return }
+                try? await Engine.restartSteamInBackground(wine)
+            }
         }
     }
 
@@ -602,6 +649,7 @@ final class LibraryModel: ObservableObject {
                 : "//" + (arguments.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "")
             await takeSavesAlong(game, to: .mac)
             let watcher = LaunchWatcher(steamRoot: MacSteam.root, appID: game.appID)
+            let launchStarted = Date()
             let run = { MacSteam.open("run/\(game.appID)" + extra) }
             run()
             let start = await waitForMacStart(game, watcher: watcher, send: run)
@@ -623,10 +671,16 @@ final class LibraryModel: ObservableObject {
 
             // The first start of a Mac version: does it run past its first seconds? Only judged
             // when its process was seen at all – Steam may know better where a game runs from.
+            // Ending early alone isn't a fail (the player may have closed it, or a launcher window);
+            // a crash report from macOS is.
             if start == .processSeen && !MacHealth.confirmed(game.appID) {
+                let folders = Self.processFolders([game])
+                let program = await Task.detached(priority: .utility) {
+                    Self.runningGames(folders)[game.id].flatMap(Self.programName)
+                }.value
                 if await survivesFirstSeconds(game) {
                     MacHealth.confirm(game.appID)
-                } else if fallBackToWindows(game) {
+                } else if let program, Self.crashed(program, since: launchStarted), fallBackToWindows(game) {
                     return
                 }
             }
@@ -644,10 +698,12 @@ final class LibraryModel: ObservableObject {
         guard game.macNative else { return }
         let appID = game.appID
         let installDir = game.installDirName
+        let profileRules = await ProfileStore.shared.profile(for: appID)?.saves ?? []
         await Task.detached(priority: .userInitiated) {
             let macCatalog = MacSteam.root.appendingPathComponent("appcache/appinfo.vdf")
             let rules = SteamCatalog.saveRules(
                 appID: appID, steamRoot: FileManager.default.fileExists(atPath: macCatalog.path) ? MacSteam.root : Engine.steamRoot)
+                + profileRules
             var places = SaveTransfer.Places()
             places.windowsInstall = Engine.steamRoot.appendingPathComponent("steamapps/common/\(installDir)", isDirectory: true)
             places.macInstall = MacSteam.steamapps.appendingPathComponent("common/\(installDir)", isDirectory: true)

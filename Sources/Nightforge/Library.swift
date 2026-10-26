@@ -48,6 +48,8 @@ struct Game: Identifiable, Hashable {
     var controller = ControllerSupport.none
     /// Its anti-cheat stops it on a Mac (Windows versions only).
     var antiCheatBlock: AntiCheatBlock?
+    /// Steam lists no single-player mode: there's nothing to play without going online.
+    var onlineOnly = false
     /// The version Nightforge runs: Windows through Wine, or Mac through Steam for Mac.
     var platform = Platform.windows
     /// Steam has both versions and Nightforge can run either, so the options offer the choice.
@@ -78,6 +80,7 @@ extension Game {
     mutating func adoptCatalogFacts(_ app: CatalogApp) {
         isVROnly = app.vrOnly
         controller = app.controller
+        onlineOnly = !app.singlePlayer
         macNative = app.macNative
         mac64 = app.mac64
         macAppleSilicon = app.macAppleSilicon
@@ -284,6 +287,7 @@ enum LibraryScanner {
         games.map { game in
             var game = game
             guard game.platform == .windows, game.install != .inStore, let block = blocks[game.appID],
+                  !block.onlineOnly || game.onlineOnly,
                   SteamCatalog.antiCheatOffArguments(appID: game.appID, steamRoot: game.steamRoot).isEmpty
             else { return game }
             game.antiCheatBlock = block

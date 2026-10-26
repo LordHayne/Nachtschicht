@@ -35,9 +35,9 @@ struct LaunchHealthTest {
         FileManager.default.createFile(atPath: url.path, contents: Data(bytes))
     }
 
-    static func ids(_ analysis: GameAnalysis, _ profileJSON: String? = nil) -> [String] {
+    static func ids(_ analysis: GameAnalysis, _ profileJSON: String? = nil, d3dMetal: Bool = false) -> [String] {
         let profile = profileJSON.flatMap { try? JSONDecoder().decode(GameProfile.self, from: Data($0.utf8)) }
-        return LaunchHealth.attempts(for: analysis, profile: profile).map(\.id)
+        return LaunchHealth.attempts(for: analysis, profile: profile, d3dMetal: d3dMetal).map(\.id)
     }
 
     static func main() {
@@ -52,6 +52,21 @@ struct LaunchHealthTest {
         check(ids(GameAnalysis(apis: [.vulkan])) == ["dxmt"], "Vulkan has one way")
         check(ids(GameAnalysis(apis: [.d3d12])) == ["dxmt"] && GameAnalysis(apis: [.d3d12]).onlyD3D12, "DirectX 12 only")
         check(ids(GameAnalysis()) == ["dxmt", "dxvk"], "nothing detected: the DirectX 11 ladder")
+
+        // With D3DMetal in the engine, DirectX 12 has a way to run; DirectX 11 keeps DXMT first.
+        check(ids(GameAnalysis(apis: [.d3d12]), d3dMetal: true) == ["d3dmetal"], "DirectX 12 only: D3DMetal")
+        check(ids(GameAnalysis(apis: [.d3d11, .d3d12], engine: .unreal), d3dMetal: true) == ["dxmt -dx11", "dxvk -dx11", "d3dmetal"],
+              "Unreal: DirectX 11 on DXMT first, DirectX 12 on D3DMetal last")
+        check(ids(GameAnalysis(apis: [.d3d11, .d3d12]), d3dMetal: true) == ["dxmt", "dxvk", "d3dmetal"],
+              "unknown engine with DirectX 12: D3DMetal after the DirectX 11 ladder")
+        check(ids(GameAnalysis(apis: [.d3d11]), d3dMetal: true) == ["dxmt", "dxvk"], "DirectX 11 only: unchanged")
+        check(ids(GameAnalysis(apis: [.d3d11, .d3d12], engine: .unreal), #"{"graphics": "d3dmetal"}"#, d3dMetal: true)
+              == ["d3dmetal", "dxmt -dx11", "dxvk -dx11"], "a profile that measured DirectX 12 better starts there, without -dx11")
+        check(ids(GameAnalysis(apis: [.d3d11, .d3d12], engine: .unreal), #"{"graphics": "d3dmetal"}"#, d3dMetal: false).first == "dxmt -dx11",
+              "…but not on an engine without D3DMetal")
+        check(ids(GameAnalysis(apis: [.d3d9]), d3dMetal: true) == ["dxvk", "wined3d"], "DirectX 9: unchanged")
+        check(ids(GameAnalysis(apis: [.d3d12]), #"{"graphics": "dxvk"}"#, d3dMetal: true) == ["d3dmetal"],
+              "a DirectX 11 layer in a profile doesn't apply to a DirectX 12 game")
 
         // MARK: State
         let app = 990_001
@@ -202,6 +217,9 @@ struct LaunchHealthTest {
               "frame rates: full minutes of the game's own programs, DXMT without .exe")
         check(FramePacing.candidates(refreshRate: 120, upTo: 60) == [60, 40, 30], "120 Hz: 60, 40, 30")
         check(FramePacing.candidates(refreshRate: 60, upTo: 60) == [60, 30], "60 Hz: 60, 30")
+        check(FramePacing.Context(refreshRate: 120, upscaling: true, graphics: .dxmt)
+              != FramePacing.Context(refreshRate: 120, upscaling: true, graphics: .d3dmetal),
+              "a limit learned on one layer doesn't carry over to another")
         let context = FramePacing.Context(refreshRate: 120, upscaling: true)
         var pacing = FramePacing.State(context: context, ranWith: 60)
         check(FramePacing.next(pacing, rates: [59.8, 60], standard: 60) == pacing, "two minutes say nothing")

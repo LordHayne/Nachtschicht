@@ -403,6 +403,8 @@ private struct GameDetail: View {
                     }
                 case .installed:
                     Stat(label: L10n.t("Size"), value: Format.bytes(game.sizeOnDisk))
+                case .notInstalled where game.playsInCloud:
+                    Stat(label: L10n.t("Plays on"), value: "GeForce Now")
                 case .notInstalled:
                     Stat(label: L10n.t("Download"), value: game.sizeOnDisk > 0
                          ? L10n.t("up to %@", Format.bytes(game.sizeOnDisk)) : "–")
@@ -478,10 +480,10 @@ private struct GameDetail: View {
         }
     }
 
-    /// Not downloaded and nothing a Mac can run: the button says why instead.
+    /// Nothing a Mac can run (VR only, anti-cheat): the button says why instead.
     private var unavailable: PlayButton.Unavailable? {
-        guard game.install == .notInstalled else { return nil }
-        if game.isVROnly { return .init(title: L10n.t("VR only"), symbol: "visionpro") }
+        guard game.install == .notInstalled || game.install == .installed, !model.isRunning(game) else { return nil }
+        if game.isVROnly && game.install == .notInstalled { return .init(title: L10n.t("VR only"), symbol: "visionpro") }
         if game.antiCheatBlock != nil && !game.playsInCloud {
             return .init(title: L10n.t("Doesn't run on a Mac"), symbol: "shield.slash")
         }
@@ -536,7 +538,7 @@ private struct PlayButton: View {
     var needsConfirmation = false
     /// What the launch is busy with, when it's more than waiting for Steam.
     var status: String?
-    /// Not downloaded and nothing a Mac can run (VR only, anti-cheat): what the button says instead.
+    /// Nothing a Mac can run (VR only, anti-cheat): what the button says instead.
     var unavailable: Unavailable?
     /// Streams from GeForce Now instead (anti-cheat games it carries).
     var cloud = false
@@ -686,7 +688,7 @@ struct GameContextMenu: ViewModifier {
             switch game.install {
             case _ where game.playsInCloud:
                 Button(L10n.t("Play on GeForce Now")) { select(); model.primaryAction() }
-            case .installed:
+            case .installed where game.antiCheatBlock == nil || model.isRunning(game):
                 Button(model.isRunning(game) ? L10n.t("Switch to Game") : L10n.t("Play")) { select(); model.primaryAction() }
             case .notInstalled where !game.isVROnly && game.antiCheatBlock == nil:
                 Button(L10n.t("Download")) { select(); model.primaryAction() }
@@ -1058,7 +1060,7 @@ private struct GameInsightNotes: View {
                let healed = LaunchHealth.note(game.appID, insight.attempts) {
                 note(healed, systemImage: "wand.and.stars")
             }
-            if insight.analysis.onlyD3D12 {
+            if insight.analysis.onlyD3D12, !insight.attempts.contains(where: { $0.graphics == .d3dmetal }) {
                 note(L10n.t("This game uses DirectX 12 only, which runs on a Mac in part at best."), systemImage: "exclamationmark.triangle")
             }
             if let launcher = insight.analysis.launcher {

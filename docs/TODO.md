@@ -56,15 +56,21 @@ Die Tests vom 26.10. liefen größtenteils noch auf Wine 11.18 (Gcenx). Seit PR 
 ## Mac-Versionen
 
 - **Windows-Fallback** hat noch nie wirklich ausgelöst (keine Mac-Version ist bisher abgestürzt).
-- **Batman: Arkham City** wurde noch nicht über das neue Nightforge gestartet. Dabei sollte die
-  `GCSyntheticDevice`-Einstellung erstmals automatisch gesetzt werden.
+- **Speicherplatz vor dem Download prüfen.** Steam für Mac hat Batman bei einem Auto-Update geleert und
+  dann wegen Platzmangel pausiert. Nightforge zeigt das jetzt an und bietet „Weiter laden“
+  (`Engine.unpauseDownload`). Besser wäre, vor einem Download oder Update vor knappem Platz zu warnen
+  (`LibraryModel.freeSpace`, Steams `BytesToStage`).
 
 ## Controller
 
 - **DualSense in Windows-Spielen auf winecx:** OxyRail funktioniert seit dem Xbox-360-ID-Patch (PR #8).
-  Noch offen: Hotplug (Pad erst nach Spielstart eingeschaltet) und weitere Spiele (XInput-Spiele, Unreal).
-- **Winebus-Patch für die 11.18-Engine** liegt nur auf Branch `claude/batman-controller-not-recognized-ea9ebd`.
-  Er fehlt in `main`, falls 11.18 bleibt.
+  Noch offen: Hotplug auf winecx (auf 11.18 geprüft: SDL nimmt den Pad nach Aus/An wieder auf) und weitere
+  Spiele (reine XInput-Spiele, Unreal, DirectInput-Spiele).
+- **Preis des Xbox-360-ID-Patches:** Windows-Spiele mit eigener DualSense-Unterstützung zeigen Xbox-Symbole,
+  adaptive Trigger, Lichtleiste und Bewegungssensor fehlen. Ein besserer Weg bräuchte beides: den rohen Pad
+  für solche Spiele und einen XInput-Pad für den Rest (`engine/patches/winebus-*-xbox360-ids.patch`).
+- **Mac-Ports mit dem synthetischen Xbox-Pad** (`ControllerCompatibility`): bisher nur mit Batman geprüft.
+  Andere alte Ports (Feral, Aspyr) wären gute Kandidaten.
 
 ## Darstellung und Leistung
 

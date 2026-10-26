@@ -155,9 +155,11 @@ auf dem Main-Thread und sich überholende Rescans.
 - **Build-Eingaben ohne Prüfsumme.** In `graphics.yml` sind das `WINE_TOOLCHAIN_URL`, das Gcenx-Archiv, der
   inotify-Header und Klone per Tag, in `tools.yml` das cabextract-Archiv. Dazu kommt `brew install … || true`.
   Die Actions sind per Tag statt per SHA festgelegt, Dependabot fehlt.
-- **LGPL beim Grafik-Paket.** Das `graphics-*`-Release bringt gepatchte Wine- und DXMT-Binaries ohne Lizenztexte
-  und ohne Quellarchiv. Lizenzdateien ins Tarball legen und das Quellarchiv mit Patches und Commit anhängen.
-  Bei cabextract (GPL, `tools.yml`) genauso.
+- **Lizenztexte und Quellen der eigenen Pakete** sind in `graphics.yml`, `gamepad.yml` und `tools.yml` eingebaut
+  (Lizenzen im Paket, Quellarchiv als zweites Release-Asset). Wirksam erst mit dem nächsten Lauf auf `main`: die
+  bestehenden Releases `graphics-*`, `gamepad-winecx*` und `cabextract-*` haben noch keine. Nach dem Lauf prüfen,
+  dass `update-components.py` weiter genau ein Asset findet. DXMT v0.80 ist MIT (nicht LGPL, wie die alten
+  Release-Notes sagen), erst neuere DXMT-Versionen sind LGPL. Beim nächsten DXMT-Update die Lizenzdateien prüfen.
 - **Lizenzhinweise im App-Bundle.** Es fehlen die Lizenz der Vulkan-Headers (im Vulkan-Layer einkompiliert) und
   die mingw-Runtime im `steamwebhelper.exe`. Eine `THIRD_PARTY_NOTICES` in `build.sh` mitkopieren.
 - **Problembericht.** `GameLog` entfernt nur `$HOME`. Windows-Pfade wie `C:\users\<name>` oder

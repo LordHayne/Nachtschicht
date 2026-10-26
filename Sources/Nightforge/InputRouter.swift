@@ -79,6 +79,7 @@ final class InputRouter {
             if model.showingLibrary { model.showSelectedGame() } else { model.primaryAction() }
             return true
         case 53:                                         // Esc
+            if model.awaitingSteam { model.cancelLaunch(); return true }
             if model.showingLibrary { model.showingLibrary = false; return true }
             if !model.searchText.isEmpty { model.searchText = ""; return true }
             return false
@@ -159,6 +160,8 @@ final class InputRouter {
                     } else {
                         Self.press(53, "\u{1B}", in: dialog)
                     }
+                } else if model.awaitingSteam {
+                    model.cancelLaunch()  // stop waiting for a game Steam hasn't started
                 } else {
                     model.showingLibrary = false
                 }

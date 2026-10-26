@@ -72,7 +72,9 @@ final class SetupModel: ObservableObject {
             step = .engine
             phase = .running(.engine)
             let manifest = try await ComponentStore.shared.manifest()
-            guard let engineComponent = manifest.component(Engine.engineID),
+            // The engine every later start uses (winecx when the list has it), so a new Mac doesn't
+            // download one engine for setup and switch to another at the first start.
+            guard let engineComponent = Engine.engineComponent(in: manifest),
                   let graphicsComponent = Engine.graphicsComponent(in: manifest)
             else { throw ComponentError.noManifest }
 
@@ -81,13 +83,11 @@ final class SetupModel: ObservableObject {
             let engineDir = try await ComponentStore.shared.install(engineComponent) { value in
                 Task { @MainActor in self.progress = value * engineShare }
             }
-            let graphicsDir = try await ComponentStore.shared.install(graphicsComponent) { value in
+            _ = try await ComponentStore.shared.install(graphicsComponent) { value in
                 Task { @MainActor in self.progress = engineShare + value * (1 - engineShare) }
             }
             progress = nil
             guard let wine = Engine.wineBinary(in: engineDir) else { throw SetupError.engineBroken }
-            try Engine.installGraphics(graphicsDir, into: wine,
-                                       matchesEngine: graphicsComponent.version.hasPrefix(engineComponent.version + "-"))
 
             step = .environment
             phase = .running(.environment)
@@ -95,13 +95,9 @@ final class SetupModel: ObservableObject {
                 try FileManager.default.createDirectory(at: Engine.prefix, withIntermediateDirectories: true)
                 guard try await Engine.run(wine, ["wineboot", "--init"]) == 0 else { throw SetupError.environmentFailed }
             }
-            Engine.installGameBundle(wine: wine)
-            Engine.detachUserFolders()
-
-            if let dxvk = manifest.component(Engine.dxvkID) {
-                try Engine.installDXVK(try await ComponentStore.shared.install(dxvk), wine: wine)
-            }
-            Engine.applyGameEnvironment(wine: wine)  // games started from the first Steam need it too
+            // Graphics layers, D3DMetal, the controller package and the game environment, the same way
+            // every later start checks them (off the main thread: it copies files and runs regedit).
+            _ = try await Engine.ensureEngine()
 
             step = .steam
             phase = .running(.steam)
@@ -176,7 +172,7 @@ final class SetupModel: ObservableObject {
             // Steam unpacks its browser during the first update and starts it right away – still
             // unwrapped, i.e. black. Wrap it and restart Steam once that happens.
             if Engine.installWebHelperWrapper() {
-                Engine.stopAll(wine)
+                await Engine.offMain { Engine.stopAll(wine) }
                 try Engine.startSteam(wine)
                 lastRestart = Date()
                 continue
@@ -197,7 +193,7 @@ final class SetupModel: ObservableObject {
             if stalled || gone {
                 restarts += 1
                 guard restarts <= 5 else { throw SetupError.steamWontStart }
-                if stalled { Engine.stopAll(wine) }
+                if stalled { await Engine.offMain { Engine.stopAll(wine) } }
                 try Engine.startSteam(wine)
                 lastRestart = Date()
             }

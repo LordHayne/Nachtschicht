@@ -1,0 +1,42 @@
+name: Build and test
+
+# Every push to main and every pull request: the app builds and all tests pass, so a broken build
+# shows up here and not only when a release is cut.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Build the app
+        run: ./build.sh
+
+      - name: Swift tests
+        run: |
+          failed=0
+          for test in tests/*/run.sh; do
+            # CatalogProbe only prints what it finds in a real Steam install.
+            [ "$test" = tests/CatalogProbe/run.sh ] && continue
+            echo "::group::$test"
+            bash "$test" || failed=1
+            echo "::endgroup::"
+          done
+          exit "$failed"
+
+      - name: Profile builder tests
+        run: python3 -m unittest tests/test_build_profiles.py
+
+      - name: Component list
+        run: python3 -I scripts/validate-manifest.py

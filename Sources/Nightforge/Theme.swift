@@ -37,6 +37,7 @@ enum Format {
     static func playtime(_ minutes: Int) -> String {
         if minutes < 60 { return "\(minutes) " + L10n.t("min") }
         let hours = Double(minutes) / 60
-        return hours.formatted(.number.precision(.fractionLength(0...1)).locale(L10n.locale)) + " " + L10n.t("hrs")
+        let amount = hours.formatted(.number.precision(.fractionLength(0...1)).locale(L10n.locale))
+        return amount + " " + (amount == "1" ? L10n.t("hr") : L10n.t("hrs"))
     }
 }

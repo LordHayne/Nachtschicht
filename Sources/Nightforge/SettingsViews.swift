@@ -160,7 +160,7 @@ private extension GameOptionsSheet {
         dismiss()
     }
 
-    var refreshRate: Int { NSScreen.main?.maximumFramesPerSecond ?? 60 }
+    var refreshRate: Int { GameDisplay.screen?.maximumFramesPerSecond ?? 60 }
 
     func automaticLabel(_ value: String) -> String { L10n.t("Automatic (%@)", value) }
 

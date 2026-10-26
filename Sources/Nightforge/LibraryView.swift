@@ -95,12 +95,14 @@ struct LibraryView: View {
             ),
             presenting: model.failedLaunch,
             actions: { failed in
-                Button(L10n.t("Report problem")) { model.reportProblem(for: failed.game) }
+                Button(L10n.t("Report problem")) { model.reportProblem(for: failed.game, tried: failed.tried) }
+                // A on a controller is Return: it closes the box rather than opening a browser.
                 Button("OK", role: .cancel) {}
+                    .keyboardShortcut(.defaultAction)
             },
             message: { failed in
-                Text(L10n.t("It ended right after starting, with every way Nightforge knows: %@. A problem report helps get it running – it opens on GitHub, filled in with what Nightforge found.",
-                            failed.tried.joined(separator: ", ")))
+                // The ways it tried (graphics layers, launch options) go into the report, not into this box.
+                Text(L10n.t("It ended right after starting, with every way Nightforge knows to start it. A problem report helps get it running – it opens on GitHub, filled in with what Nightforge found."))
             }
         )
         .alert(
@@ -115,7 +117,7 @@ struct LibraryView: View {
                 Button(L10n.t("Cancel"), role: .cancel) {}
             },
             message: { _ in
-                Text(L10n.t("Its anti-cheat doesn't run on a Mac, so it runs on NVIDIA's servers and streams to your Mac – with the copy you own on Steam. The first time, sign in to GeForce Now with an NVIDIA account and link Steam there. Free play lasts an hour at a time, with ads and a queue; GeForce Now's paid plans lift that."))
+                Text(L10n.t("Its anti-cheat doesn't run on a Mac, so it runs on NVIDIA's servers and streams to your Mac – with the copy you own on Steam. The first time, sign in to GeForce Now with an NVIDIA account and link Steam there. Free play lasts an hour at a time, with ads and a queue; GeForce Now's paid plans lift that. GeForce Now forgets the game while you sign in: afterwards, press Play on GeForce Now here once more."))
             }
         )
         .alert(
@@ -129,7 +131,9 @@ struct LibraryView: View {
                 Button(game.isInstalled ? L10n.t("Uninstall") : L10n.t("Cancel Download"), role: .destructive) {
                     model.confirmUninstall()
                 }
+                // Return (and A) keeps the game; uninstalling takes a deliberate click or a pad move first.
                 Button(L10n.t("Keep"), role: .cancel) {}
+                    .keyboardShortcut(.defaultAction)
             },
             message: { game in
                 Text(game.isInstalled
@@ -147,6 +151,7 @@ struct LibraryView: View {
             actions: { _ in
                 Button(L10n.t("Remove"), role: .destructive) { model.confirmLeftoverRemoval() }
                 Button(L10n.t("Keep"), role: .cancel) {}
+                    .keyboardShortcut(.defaultAction)
             },
             message: { game in
                 Text(L10n.t("Nightforge uses the Mac version of this game now. Removing the Windows version frees %@; you can switch back and download it again any time.",
@@ -282,10 +287,11 @@ private struct TopBar: View {
             }
             .buttonStyle(.plain)
             .help(L10n.t("Settings (⌘,)"))
+            .accessibilityLabel(L10n.t("Settings"))
             .padFocus("top.settings", cornerRadius: 17, activate: { openSettings() })
 
             TimelineView(.everyMinute) { context in
-                Text(context.date, format: .dateTime.hour().minute())
+                Text(context.date, format: .dateTime.hour().minute().locale(L10n.locale))  // the app's language, not the Mac's
                     .font(.system(size: 15, weight: .semibold).monospacedDigit())
                     .foregroundStyle(Theme.ink)
             }
@@ -301,7 +307,7 @@ private struct TopBar: View {
             return total == 1 ? L10n.t("1 game") : L10n.t("%ld games", total)
         }
         let matches = model.games.filter { $0.install != .inStore }.count  // store hits aren't yours
-        return L10n.t("%ld of %ld games", matches, total)
+        return total == 1 ? L10n.t("%ld of 1 game", matches) : L10n.t("%ld of %ld games", matches, total)
     }
 }
 
@@ -335,12 +341,14 @@ private struct SearchField: View {
                 }
                 .buttonStyle(.plain)
                 .help(L10n.t("Clear search"))
+                .accessibilityLabel(L10n.t("Clear search"))
             }
         }
         .padding(.horizontal, 12)
         .frame(width: 230, height: 34)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(Theme.sodium.opacity(focused ? 0.8 : 0), lineWidth: 1.5))
+        .padFocus("top.search", cornerRadius: 17, activate: { focused = true })
         .onChange(of: model.searchFocusRequest) { _, _ in focused = true }
         .help(L10n.t("Search (⌘F)"))
     }
@@ -357,6 +365,7 @@ private struct NoResults: View {
             Button(L10n.t("Clear search")) { model.searchText = "" }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
+                .padFocus("noResults.clear", activate: { model.searchText = "" })
         }
     }
 }
@@ -367,6 +376,10 @@ private struct GameDetail: View {
     let game: Game
     @EnvironmentObject private var model: LibraryModel
     @State private var logo: NSImage?
+
+    static func openBatterySettings() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension")!)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -405,6 +418,8 @@ private struct GameDetail: View {
                     }
                 case .installed:
                     Stat(label: L10n.t("Size"), value: Format.bytes(game.sizeOnDisk))
+                case .notInstalled where game.playsInCloud:
+                    Stat(label: L10n.t("Plays on"), value: "GeForce Now")
                 case .notInstalled:
                     Stat(label: L10n.t("Download"), value: game.sizeOnDisk > 0
                          ? L10n.t("up to %@", Format.bytes(game.sizeOnDisk)) : "–")
@@ -418,7 +433,7 @@ private struct GameDetail: View {
                     Stat(label: L10n.t("Controller"), value: game.controller.label)
                 }
                 if !game.bottle.isBuiltIn && game.platform == .windows {  // only means something with several CrossOver bottles
-                    Stat(label: "Bottle", value: game.bottle.name)
+                    Stat(label: L10n.t("Bottle"), value: game.bottle.name)
                 }
             }
 
@@ -438,14 +453,22 @@ private struct GameDetail: View {
                     Label(L10n.t("Low Power Mode is on – games run much slower with it."), systemImage: "battery.25percent")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.sodium)
-                    Button(L10n.t("Battery Settings")) {
-                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension")!)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    Button(L10n.t("Battery Settings"), action: Self.openBatterySettings)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .padFocus("detail.battery", activate: Self.openBatterySettings)
                 }
             }
             VersionNotes(game: game)
+            if let needed = game.downloadNeedsSpace {
+                Label(L10n.t("Not enough space: Steam needs %@ to download this game, your Mac has %@ free. Make some room, then continue.",
+                             Format.bytes(needed), Format.bytes(LibraryModel.freeSpace(at: game.installDir.deletingLastPathComponent()))),
+                      systemImage: "externaldrive.badge.exclamationmark")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: 620, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack(spacing: 14) {
                 PlayButton(install: game.install, isLaunching: model.launchingID == game.id,
@@ -453,7 +476,8 @@ private struct GameDetail: View {
                            isRunning: model.isRunning(game),
                            needsConfirmation: model.launchNeedsConfirmation,
                            status: model.launchStatus,
-                           unavailable: unavailable, cloud: game.playsInCloud) {
+                           unavailable: unavailable, cloud: game.playsInCloud,
+                           noSpace: game.downloadNeedsSpace != nil) {
                     model.primaryAction()
                 }
                 .padFocus("play", cornerRadius: 34, activate: { model.primaryAction() })
@@ -480,10 +504,10 @@ private struct GameDetail: View {
         }
     }
 
-    /// Not downloaded and nothing a Mac can run: the button says why instead.
+    /// Nothing a Mac can run (VR only, anti-cheat): the button says why instead.
     private var unavailable: PlayButton.Unavailable? {
-        guard game.install == .notInstalled else { return nil }
-        if game.isVROnly { return .init(title: L10n.t("VR only"), symbol: "visionpro") }
+        guard game.install == .notInstalled || game.install == .installed, !model.isRunning(game) else { return nil }
+        if game.isVROnly && game.install == .notInstalled { return .init(title: L10n.t("VR only"), symbol: "visionpro") }
         if game.antiCheatBlock != nil && !game.playsInCloud {
             return .init(title: L10n.t("Doesn't run on a Mac"), symbol: "shield.slash")
         }
@@ -538,16 +562,18 @@ private struct PlayButton: View {
     var needsConfirmation = false
     /// What the launch is busy with, when it's more than waiting for Steam.
     var status: String?
-    /// Not downloaded and nothing a Mac can run (VR only, anti-cheat): what the button says instead.
+    /// Nothing a Mac can run (VR only, anti-cheat): what the button says instead.
     var unavailable: Unavailable?
     /// Streams from GeForce Now instead (anti-cheat games it carries).
     var cloud = false
+    /// Steam stopped the download for lack of disk space: the button carries on with it.
+    var noSpace = false
     let action: () -> Void
     @State private var hovering = false
 
     private var busy: Bool {
         if isLaunching || unavailable != nil || isUninstalling { return true }
-        if case .downloading = install { return true }
+        if case .downloading = install, !noSpace { return true }
         return false
     }
 
@@ -558,6 +584,7 @@ private struct PlayButton: View {
         if isRunning { return L10n.t("Running – switch to game") }
         if let unavailable { return unavailable.title }
         if cloud { return L10n.t("Play on GeForce Now") }
+        if noSpace { return L10n.t("Continue Download") }
         switch install {
         case .installed: return L10n.t("Play")
         case .notInstalled: return L10n.t("Download")
@@ -578,6 +605,9 @@ private struct PlayButton: View {
                 } else if cloud {
                     Image(systemName: "cloud.fill")
                         .font(.system(size: 15, weight: .bold))
+                } else if noSpace {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 15, weight: .bold))
                 } else if busy {
                     ProgressView()
                         .controlSize(.small)
@@ -596,7 +626,7 @@ private struct PlayButton: View {
             .background(
                 ZStack(alignment: .leading) {
                     Capsule().fill(Theme.sodium.opacity(busy ? 0.55 : 1))
-                    if case .downloading(let fraction?) = install {
+                    if case .downloading(let fraction?) = install, !noSpace {
                         GeometryReader { geo in
                             Capsule().fill(Theme.sodium).frame(width: max(52, geo.size.width * fraction))
                         }
@@ -637,6 +667,8 @@ struct RoundIconButton: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        // Spoken without the shortcut in brackets ("Rescan library", not "arrow.clockwise").
+        .accessibilityLabel(help.replacingOccurrences(of: #" \(.*\)$"#, with: "", options: .regularExpression))
         .padFocus("round.\(symbol)", cornerRadius: size / 2, activate: action)
     }
 }
@@ -645,6 +677,7 @@ struct RoundIconButton: View {
 
 private struct CoverRail: View {
     @EnvironmentObject private var model: LibraryModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -669,7 +702,7 @@ private struct CoverRail: View {
             .frame(height: 290)
             .onChange(of: model.selectedIndex) { _, _ in
                 guard let id = model.selected?.id else { return }
-                withAnimation(.easeOut(duration: 0.22)) {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
                     proxy.scrollTo(id, anchor: UnitPoint(x: 0.3, y: 0.5))
                 }
             }
@@ -688,7 +721,7 @@ struct GameContextMenu: ViewModifier {
             switch game.install {
             case _ where game.playsInCloud:
                 Button(L10n.t("Play on GeForce Now")) { select(); model.primaryAction() }
-            case .installed:
+            case .installed where game.antiCheatBlock == nil || model.isRunning(game):
                 Button(model.isRunning(game) ? L10n.t("Switch to Game") : L10n.t("Play")) { select(); model.primaryAction() }
             case .notInstalled where !game.isVROnly && game.antiCheatBlock == nil:
                 Button(L10n.t("Download")) { select(); model.primaryAction() }
@@ -719,6 +752,7 @@ struct CoverCard: View {
     let isSelected: Bool
     var isRunning = false
     @State private var cover: NSImage?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -783,14 +817,32 @@ struct CoverCard: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(Theme.sodium, lineWidth: isSelected ? 3 : 0)
         )
-        .scaleEffect(isSelected ? 1.08 : 1)
+        .scaleEffect(isSelected && !reduceMotion ? 1.08 : 1)
         .opacity(isSelected ? 1 : 0.6)
         .shadow(color: .black.opacity(isSelected ? 0.55 : 0.25), radius: isSelected ? 22 : 8, y: isSelected ? 12 : 4)
-        .animation(.spring(response: 0.28, dampingFraction: 0.82), value: isSelected)
+        .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82), value: isSelected)
         .help(game.name)
+        // VoiceOver reads a cover as one button: the game and what its badges show.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spokenDescription)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .task(id: game.id) {
             cover = await ArtworkStore.shared.image(for: game, kind: .cover)
         }
+    }
+
+    private var spokenDescription: String {
+        var parts = [game.name]
+        switch game.install {
+        case .installed: parts.append(L10n.t("Installed"))
+        case .downloading: parts.append(L10n.t("Downloading"))
+        case .notInstalled: parts.append(L10n.t("In your library"))
+        case .inStore: parts.append(L10n.t("In the Steam Store"))
+        }
+        if game.platform == .mac { parts.append(L10n.t("Uses the Mac version")) }
+        if game.controller != .none { parts.append(game.controller.help) }
+        if isRunning { parts.append(L10n.t("Running")) }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder private var installBadge: some View {
@@ -994,12 +1046,16 @@ private struct VersionNotes: View {
                         Button(L10n.t("Cancel")) { model.cancelMacVersion(of: game) }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
+                            .padFocus("detail.cancelMac", enabled: model.uninstallingID == nil,
+                                      activate: { model.cancelMacVersion(of: game) })
                     } else {
                         Button(game.macSize > 0 ? L10n.t("Load Mac Version (%@)", Format.bytes(game.macSize)) : L10n.t("Load Mac Version")) {
                             model.loadMacVersion(of: game)
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+                        .padFocus("detail.loadMac", enabled: model.uninstallingID == nil,
+                                  activate: { model.loadMacVersion(of: game) })
                     }
                 }
                 .padding(.leading, 26)
@@ -1017,6 +1073,8 @@ private struct VersionNotes: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                         .disabled(model.uninstallingID != nil || model.launchingID != nil)
+                        .padFocus("detail.removeLeftover", enabled: model.uninstallingID == nil && model.launchingID == nil,
+                                  activate: { model.requestLeftoverRemoval(game) })
                 }
             }
         }

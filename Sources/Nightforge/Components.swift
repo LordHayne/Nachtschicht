@@ -15,6 +15,16 @@ struct Component: Codable, Identifiable, Hashable {
     let size: Int64
     let license: String
     let source: URL
+
+    /// id, version and the file name become paths under Application Support and the url is
+    /// downloaded: a changed list may not point them elsewhere (`..`) or at a plain-HTTP or local file.
+    var isSafeToInstall: Bool {
+        func plainName(_ text: String) -> Bool {
+            !text.isEmpty && !text.hasPrefix(".") && text.count <= 128
+                && text.unicodeScalars.allSatisfy { ($0.isASCII && CharacterSet.alphanumerics.contains($0)) || "._+-".unicodeScalars.contains($0) }
+        }
+        return url.scheme == "https" && plainName(id) && plainName(version) && plainName(url.lastPathComponent)
+    }
 }
 
 struct ComponentManifest: Codable {
@@ -24,8 +34,31 @@ struct ComponentManifest: Codable {
     let generated: String
     let components: [Component]
 
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, generated, components
+    }
+
+    /// One entry this version doesn't understand (a new kind, a changed field) or can't install safely
+    /// is left out; the rest of the list still counts.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        generated = (try? container.decode(String.self, forKey: .generated)) ?? ""
+        components = try container.decode([Lenient<Component>].self, forKey: .components)
+            .compactMap(\.value).filter(\.isSafeToInstall)
+    }
+
     func component(_ id: String) -> Component? {
         components.first { $0.id == id }
+    }
+}
+
+/// A list element that decodes to nil instead of failing the whole list.
+private struct Lenient<Value: Decodable>: Decodable {
+    let value: Value?
+
+    init(from decoder: Decoder) throws {
+        value = try? Value(from: decoder)
     }
 }
 
@@ -96,12 +129,17 @@ actor ComponentStore {
                 return manifest
             }
         }
+        // A damaged or too-new cached copy mustn't hide the one bundled with the app.
+        var failure: Error = ComponentError.noManifest
         for local in [cachedManifestURL, bundledManifestURL].compactMap({ $0 }) {
-            if let data = try? Data(contentsOf: local) {
+            guard let data = try? Data(contentsOf: local) else { continue }
+            do {
                 return try decode(data)
+            } catch {
+                failure = error
             }
         }
-        throw ComponentError.noManifest
+        throw failure
     }
 
     private func decode(_ data: Data) throws -> ComponentManifest {

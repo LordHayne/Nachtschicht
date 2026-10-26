@@ -35,8 +35,10 @@ struct GameProfile: Decodable, Equatable {
     /// Anti-cheat that stops the game's Windows version on a Mac ("BattlEye", …), from
     /// AreWeAntiCheatYet; an empty list (a Mac profile) means it runs after all.
     var antiCheat: [String]?
-    /// Its id on GeForce Now, NVIDIA's cloud gaming, where such a game can be streamed instead.
-    var geforceNow: Int?
+    /// Anti-cheat that only stops online play on a Mac: it blocks games that have nothing else.
+    var antiCheatOnline: [String]?
+    /// Its game id on GeForce Now, NVIDIA's cloud gaming, where such a game can be streamed instead.
+    var geforceNow: String?
     /// false: the game crashes when Rosetta advertises AVX/AVX2, so it starts without.
     var avx: Bool?
     /// Changes to the game's own settings files before it starts, for settings that crash it on a
@@ -59,7 +61,7 @@ struct GameProfile: Decodable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case source, note
         case name, graphics, arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX, frameLimit
-        case vulkanSamplers, preferWindows, saves, antiCheat, geforceNow, avx, fileEdits
+        case vulkanSamplers, preferWindows, saves, antiCheat, antiCheatOnline, geforceNow, avx, fileEdits
     }
 
     /// {"root": "WinAppDataRoaming", "path": "7DaysToDie/Saves", "pattern": "*", "recursive": true, "mac": "MacAppSupport"}
@@ -93,7 +95,8 @@ struct GameProfile: Decodable, Equatable {
                      macRoot: $0.mac, macAddPath: $0.macPath ?? "")
         }
         antiCheat = try? container.decodeIfPresent([String].self, forKey: .antiCheat)
-        geforceNow = try? container.decodeIfPresent(Int.self, forKey: .geforceNow)
+        antiCheatOnline = try? container.decodeIfPresent([String].self, forKey: .antiCheatOnline)
+        geforceNow = try? container.decodeIfPresent(String.self, forKey: .geforceNow)
         avx = try? container.decodeIfPresent(Bool.self, forKey: .avx)
         fileEdits = try? container.decodeIfPresent([FileEdit].self, forKey: .fileEdits)
     }
@@ -103,12 +106,22 @@ struct GameProfile: Decodable, Equatable {
 /// run it, and getting around it would get the player banned.
 struct AntiCheatBlock: Hashable {
     let antiCheat: [String]
-    /// Its GeForce Now id, when it can be streamed there instead.
-    let geforceNow: Int?
+    /// Its GeForce Now game id, when it can be streamed there instead.
+    let geforceNow: String?
+    /// The anti-cheat only stops online play, so this blocks only games that are online only.
+    var onlineOnly = false
 
-    /// GeForce Now opens the game's page from this link, in its app or the browser.
+    /// GeForce Now's deep link to the game's page, where it can be played
+    /// (NVIDIA GeForce NOW SDK, doc/GfnSdk-Deep-Linking.md).
     var geforceNowURL: URL? {
-        geforceNow.flatMap { URL(string: "https://play.geforcenow.com/mall/#/deeplink?game-id=\($0)") }
+        guard let geforceNow else { return nil }
+        var link = URLComponents(string: "https://play.geforcenow.com/games")
+        link?.queryItems = [
+            URLQueryItem(name: "game-id", value: geforceNow),
+            URLQueryItem(name: "utm_source", value: "nightforge"),
+            URLQueryItem(name: "utm_campaign", value: "library"),
+        ]
+        return link?.url
     }
 }
 
@@ -159,8 +172,13 @@ actor ProfileStore {
     func antiCheatBlocks() -> [Int: AntiCheatBlock] {
         loadLocalIfNeeded()
         return (profiles ?? [:]).compactMapValues { profile in
-            guard let antiCheat = profile.antiCheat, !antiCheat.isEmpty else { return nil }
-            return AntiCheatBlock(antiCheat: antiCheat, geforceNow: profile.geforceNow)
+            if let antiCheat = profile.antiCheat, !antiCheat.isEmpty {
+                return AntiCheatBlock(antiCheat: antiCheat, geforceNow: profile.geforceNow)
+            }
+            if let antiCheat = profile.antiCheatOnline, !antiCheat.isEmpty {
+                return AntiCheatBlock(antiCheat: antiCheat, geforceNow: profile.geforceNow, onlineOnly: true)
+            }
+            return nil
         }
     }
 

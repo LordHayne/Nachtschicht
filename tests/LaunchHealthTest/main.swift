@@ -1,4 +1,5 @@
 // Checks GameAnalysis, LaunchHealth, GameLog and FramePacing: tests/LaunchHealthTest/run.sh [Steam folder]
+import AppKit
 import Foundation
 
 @main
@@ -76,7 +77,8 @@ struct LaunchHealthTest {
         LaunchHealth.recordStart(app, ladder)
         check(LaunchHealth.advance(app, ladder), "there is a second way")
         check(LaunchHealth.current(app, ladder) == (1, false), "moved to DXVK")
-        check(LaunchHealth.note(app, ladder)?.contains("DXVK") == true, "the note names the new way")
+        // The note says it was handled in plain words; which layer it is shows in the game's options.
+        check(LaunchHealth.note(app, ladder) != nil, "a game on another way gets a note")
         LaunchHealth.confirm(app, ladder)
         check(LaunchHealth.current(app, ladder) == (1, true), "DXVK confirmed")
         check(!LaunchHealth.advance(app, ladder) && LaunchHealth.current(app, ladder) == (0, false), "after the last way it starts over")
@@ -240,6 +242,64 @@ struct LaunchHealthTest {
         check(steady.limit == 30, "far below 40 → 30")
 
         // MARK: Installed games
+        // Registry keys from the online fixes: a game's own settings and drive letters, nothing that
+        // reaches every program in the prefix, and no key that could start lines of its own.
+        for key in [#"HKEY_CURRENT_USER\Software\Sierra On-Line\Gabriel Knight 3"#,
+                    #"HKEY_LOCAL_MACHINE\Software\Wow6432Node\Ubisoft\Launcher"#,
+                    #"HKEY_LOCAL_MACHINE\System\MountedDevices"#] {
+            check(Engine.isAllowedRegistryKey(key), "registry key \(key) allowed")
+        }
+        for key in [#"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run"#,
+                    #"HKEY_LOCAL_MACHINE\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\RunOnce"#,
+                    #"HKEY_CURRENT_USER\Software\Classes\exefile\shell"#, #"HKEY_CURRENT_USER\Software\Wine\Drivers"#,
+                    #"HKEY_CLASSES_ROOT\exefile"#, #"HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services"#,
+                    "HKEY_CURRENT_USER\\Software\\Game]\n[HKEY_CURRENT_USER\\Software\\Microsoft", #"HKEY_CURRENT_USER\Software\"#] {
+            check(!Engine.isAllowedRegistryKey(key), "registry key \(key.debugDescription) refused")
+        }
+
+        // Migration from Nachtschicht into a Nightforge folder that already exists: the prefix it lacks
+        // comes over, what it has stays its own.
+        let migration = fm.temporaryDirectory.appendingPathComponent("nf-migration-\(UUID().uuidString)")
+        let oldFolder = migration.appendingPathComponent("Nachtschicht"), newFolder = migration.appendingPathComponent("Nightforge")
+        for folder in [oldFolder.appendingPathComponent("Prefix/drive_c"), oldFolder.appendingPathComponent("Components"),
+                       newFolder.appendingPathComponent("Components")] {
+            try? fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        try? "old".write(to: oldFolder.appendingPathComponent("Components/manifest.json"), atomically: true, encoding: .utf8)
+        try? "new".write(to: newFolder.appendingPathComponent("Components/manifest.json"), atomically: true, encoding: .utf8)
+        check(LegacyMigration.moveContents(of: oldFolder, into: newFolder), "migration into an existing folder succeeds")
+        check(fm.fileExists(atPath: newFolder.appendingPathComponent("Prefix/drive_c").path), "the old prefix comes over")
+        check((try? String(contentsOf: newFolder.appendingPathComponent("Components/manifest.json"), encoding: .utf8)) == "new",
+              "what the new folder has stays")
+        try? fm.removeItem(at: migration)
+
+        // A problem report leaves out who the player is.
+        let line = GameLog.redacted(#"err:module:open C:\users\Thomas\Documents\x.dll and /Users/thomas/Library/y, drive_c/users/thomas/z, [U:1:158043902] 76561198118309630"#,
+                                    home: "/Users/thomas", user: "thomas")
+        check(!line.lowercased().contains("thomas"), "the account name is gone: \(line)")
+        check(!line.contains("158043902") && !line.contains("76561198118309630"), "Steam ids are gone: \(line)")
+        check(line.contains(#"C:\users\<user>\Documents"#) && line.contains("~/Library"), "the rest of the path stays: \(line)")
+
+        // Winetricks verbs from the online fixes: install verbs pass, commands and options don't.
+        for verb in ["vcrun2019", "d3dcompiler_47", "xact_x64"] {
+            check(Engine.isSafeWinetricksVerb(verb), "winetricks verb \(verb) allowed")
+        }
+        for verb in ["annihilate", "list", "--self-update", "-q", "../x.verb", "a b", "VCRUN", ""] {
+            check(!Engine.isSafeWinetricksVerb(verb), "winetricks verb \(verb) refused")
+        }
+
+        // Covers are kept at the size they're drawn, other art as it is.
+        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1200, pixelsHigh: 1800, bitsPerSample: 8,
+                                      samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                      bytesPerRow: 0, bitsPerPixel: 0)!
+        let jpeg = bitmap.representation(using: .jpeg, properties: [:])!
+        func pixels(_ image: NSImage?) -> (Int, Int)? {
+            image?.cgImage(forProposedRect: nil, context: nil, hints: nil).map { ($0.width, $0.height) }
+        }
+        let cover = pixels(ArtworkStore.decode(jpeg, kind: .cover))
+        check(cover.map { $0 == (427, 640) } == true, "a cover comes down to 427×640: \(String(describing: cover))")
+        check(pixels(ArtworkStore.decode(jpeg, kind: .hero)).map { $0 == (1200, 1800) } == true, "hero art keeps its size")
+
         if CommandLine.arguments.count > 1 {
             let root = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
             let common = root.appendingPathComponent("steamapps/common")

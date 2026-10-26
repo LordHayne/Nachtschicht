@@ -384,7 +384,10 @@ struct MacVersionTest {
         if let started = run?.started {
             let sum = MacSteamProgress.received(since: started, log: contentLog, now: started.addingTimeInterval(161))
             // 40 s ramp-up at half of 18 MB/s, 31 s at 20 MB/s, 60 s at 21 MB/s, 30 s at 21 MB/s
-            let expected: Int64 = 40 * 9_000_000 + 31 * 20_000_000 + 60 * 21_000_000 + 30 * 21_000_000
+            // Summed step by step: one long literal expression is too much for the type checker on CI's compiler.
+            let rampUp: Int64 = 40 * 9_000_000
+            let steady: Int64 = 31 * 20_000_000 + 90 * 21_000_000
+            let expected = rampUp + steady
             check(sum == expected, "logged rates add up: \(sum)")
         }
 

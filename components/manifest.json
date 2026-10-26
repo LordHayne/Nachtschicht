@@ -35,10 +35,10 @@
     {
       "id": "gamepad",
       "kind": "graphics",
-      "version": "4.7.3-1",
-      "url": "https://github.com/LordHayne/Nightforge/releases/download/gamepad-winecx4.7.3-1/nightforge-gamepad-winecx-4.7.3-1.tar.gz",
-      "sha256": "6d7c1b72564aea569afbf72c8afd34a176211ffa2d5c5f34b5026fcdbbd4d085",
-      "size": 623653,
+      "version": "4.7.3-7",
+      "url": "https://github.com/LordHayne/Nightforge/releases/download/gamepad-winecx4.7.3-7/nightforge-gamepad-winecx-4.7.3-7.tar.gz",
+      "sha256": "6e411c21b03535cf7cbde3a4d9eda828c5cd053735c553a8a038c5dee489dced",
+      "size": 623707,
       "license": "LGPL-2.1-or-later AND Zlib",
       "source": "https://github.com/LordHayne/Nightforge"
     },
@@ -55,10 +55,10 @@
     {
       "id": "graphics",
       "kind": "graphics",
-      "version": "11.18-dxmt0.80-9",
-      "url": "https://github.com/LordHayne/Nightforge/releases/download/graphics-11.18-dxmt0.80-9/nightforge-graphics-11.18-dxmt0.80-9.tar.gz",
-      "sha256": "cb90d6291e1d785426790e25233f2c006e038242c5aa4e78b70019581adbe439",
-      "size": 19648839,
+      "version": "11.18-dxmt0.80-13",
+      "url": "https://github.com/LordHayne/Nightforge/releases/download/graphics-11.18-dxmt0.80-13/nightforge-graphics-11.18-dxmt0.80-13.tar.gz",
+      "sha256": "cd434a33c0387d125b8e54a4bfac82824ba6e16ebaa2b432739070ab1a6133cf",
+      "size": 19673869,
       "license": "LGPL-2.1-or-later",
       "source": "https://github.com/LordHayne/Nightforge"
     },

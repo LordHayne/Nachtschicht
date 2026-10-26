@@ -9,8 +9,9 @@ final class InputRouter {
     private var keyMonitor: Any?
     private var observers: [NSObjectProtocol] = []
     private var repeatTimer: Timer?
-    private var held = 0
-    private var stickDirection = 0
+    private var held = Step()
+    private var dpadStep = Step()
+    private var stickStep = Step()
 
     func start(model: LibraryModel) {
         self.model = model
@@ -41,6 +42,18 @@ final class InputRouter {
             MainActor.assumeIsolated { self?.attach(controller) }
         })
         observers.append(center.addObserver(forName: .GCControllerDidDisconnect, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.letGo()
+                self?.refreshConnected()
+            }
+        })
+        // In the background (a game in front) GameController delivers nothing, not even the
+        // release of a held stick – without this the selection would run on by itself.
+        observers.append(center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.letGo() }
+        })
+        // The pad last touched becomes current: its own button labels go into the hints.
+        observers.append(center.addObserver(forName: .GCControllerDidBecomeCurrent, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshConnected() }
         })
 
@@ -89,43 +102,66 @@ final class InputRouter {
     // MARK: - Gamepad
 
     private func refreshConnected() {
-        model?.controllerConnected = GCController.controllers().contains { $0.extendedGamepad != nil }
+        let pads = GCController.controllers().compactMap(\.extendedGamepad)
+        model?.controllerConnected = !pads.isEmpty
+        let current = GCController.current?.extendedGamepad ?? pads.first
+        if let current, model?.padSymbols != PadSymbols(current) { model?.padSymbols = PadSymbols(current) }
     }
 
     private func attach(_ controller: GCController?) {
         guard let pad = controller?.extendedGamepad else { return }
         refreshConnected()
 
-        pad.dpad.left.pressedChangedHandler = { [weak self] _, _, pressed in
-            MainActor.assumeIsolated { self?.dpad(-1, pressed: pressed) }
+        // D-pad and left stick both move in all four directions, repeating while held.
+        pad.dpad.valueChangedHandler = { [weak self] _, x, y in
+            MainActor.assumeIsolated { self?.steer(.dpad, x: x, y: y) }
         }
-        pad.dpad.right.pressedChangedHandler = { [weak self] _, _, pressed in
-            MainActor.assumeIsolated { self?.dpad(1, pressed: pressed) }
-        }
-        pad.dpad.up.pressedChangedHandler = { [weak self] _, _, pressed in
-            guard pressed else { return }
-            MainActor.assumeIsolated { self?.model?.moveRow(-1) }
-        }
-        pad.dpad.down.pressedChangedHandler = { [weak self] _, _, pressed in
-            guard pressed else { return }
-            MainActor.assumeIsolated { self?.model?.moveRow(1) }
+        pad.leftThumbstick.valueChangedHandler = { [weak self] _, x, y in
+            MainActor.assumeIsolated { self?.steer(.stick, x: x, y: y) }
         }
         pad.buttonX.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
-            MainActor.assumeIsolated { self?.model?.toggleLibrary() }
+            MainActor.assumeIsolated {
+                guard self?.dialog == nil else { return }
+                self?.model?.toggleLibrary()
+            }
         }
-        pad.leftThumbstick.xAxis.valueChangedHandler = { [weak self] _, value in
-            MainActor.assumeIsolated { self?.stick(value) }
-        }
+        // A presses the highlighted control (PadFocus). Otherwise, in a dialog or sheet, A and B
+        // are its Return and Esc: confirm, or cancel and close.
         pad.buttonA.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
-            MainActor.assumeIsolated { self?.primary() }
+            MainActor.assumeIsolated {
+                if let key = NSApp.keyWindow, let item = PadFocus.shared.focusedItem(in: key) {
+                    item.activate()
+                } else if let window = self?.padWindow, window !== Self.mainWindow {
+                    // Nothing highlighted yet: the first press shows where you are, it doesn't save.
+                    PadFocus.shared.move(dx: 0, dy: 1, in: window)
+                } else if let dialog = self?.dialog {
+                    Self.press(36, "\r", in: dialog)
+                } else {
+                    self?.primary()
+                }
+            }
         }
         pad.buttonB.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
             MainActor.assumeIsolated {
-                guard let model = self?.model else { return }
-                if model.showingOptions { model.showingOptions = false } else { model.showingLibrary = false }
+                guard let self, let model = self.model else { return }
+                let main = Self.mainWindow
+                if let key = NSApp.keyWindow, key === main, PadFocus.shared.focusedItem(in: key) != nil {
+                    PadFocus.shared.clear()  // from the buttons back to the games
+                } else if model.showingOptions, NSApp.modalWindow == nil {
+                    model.showingOptions = false
+                } else if let dialog = self.dialog {
+                    // A window of its own (Settings) closes; a sheet or alert cancels.
+                    if dialog.sheetParent == nil, NSApp.modalWindow == nil {
+                        dialog.performClose(nil)
+                    } else {
+                        Self.press(53, "\u{1B}", in: dialog)
+                    }
+                } else {
+                    model.showingLibrary = false
+                }
             }
         }
         pad.buttonY.pressedChangedHandler = { [weak self] _, _, pressed in
@@ -138,12 +174,70 @@ final class InputRouter {
         }
         pad.leftShoulder.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
-            MainActor.assumeIsolated { self?.model?.move(-5) }
+            MainActor.assumeIsolated {
+                guard self?.dialog == nil else { return }
+                self?.model?.move(-5)
+            }
         }
         pad.rightShoulder.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
-            MainActor.assumeIsolated { self?.model?.move(5) }
+            MainActor.assumeIsolated {
+                guard self?.dialog == nil else { return }
+                self?.model?.move(5)
+            }
         }
+        // L2/R2: first and last game, like Home and End on the keyboard.
+        pad.leftTrigger.pressedChangedHandler = { [weak self] _, _, pressed in
+            guard pressed else { return }
+            MainActor.assumeIsolated {
+                guard self?.dialog == nil else { return }
+                self?.model?.jump(toStart: true)
+            }
+        }
+        pad.rightTrigger.pressedChangedHandler = { [weak self] _, _, pressed in
+            guard pressed else { return }
+            MainActor.assumeIsolated {
+                guard self?.dialog == nil else { return }
+                self?.model?.jump(toStart: false)
+            }
+        }
+    }
+
+    /// The window in front of the library when it's an alert or sheet (game options, Steam for
+    /// Mac setup, a question): controller input belongs to it, not to the library behind.
+    private var dialog: NSWindow? {
+        guard let main = Self.mainWindow else { return nil }
+        if let sheet = main.attachedSheet { return sheet }
+        if let modal = NSApp.modalWindow { return modal }
+        if let key = NSApp.keyWindow, key !== main, key.isVisible { return key }
+        return nil
+    }
+
+    private static var mainWindow: NSWindow? { NSApp.windows.first { $0.title == "Nightforge" } }
+
+    /// The key window when its controls are on PadFocus's map (options, settings, setup sheets).
+    private var padWindow: NSWindow? {
+        guard let key = NSApp.keyWindow, PadFocus.shared.hasItems(in: key) else { return nil }
+        return key
+    }
+
+    /// One key press (down and up) into `window`, as if typed.
+    private static func press(_ keyCode: UInt16, _ characters: String, in window: NSWindow) {
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            guard let event = NSEvent.keyEvent(
+                with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode
+            ) else { continue }
+            NSApp.postEvent(event, atStart: false)
+        }
+    }
+
+    /// Forgets every held direction and stops the repeat.
+    private func letGo() {
+        dpadStep = Step()
+        stickStep = Step()
+        setHeld(Step())
     }
 
     private func primary() {
@@ -153,45 +247,125 @@ final class InputRouter {
 
     private func toggleOptions() {
         guard let model, let game = model.selected, game.install != .inStore else { return }
+        // Opens over the library only; closes its own sheet but never one behind a question.
+        guard model.showingOptions ? NSApp.modalWindow == nil : dialog == nil else { return }
         model.showingOptions.toggle()
     }
 
-    private func dpad(_ direction: Int, pressed: Bool) {
-        if pressed {
-            setHeld(direction)
-        } else if held == direction {
-            setHeld(0)
-        }
+    private enum Source { case dpad, stick }
+
+    /// A step on the grid: left/right within a row, up/down a whole row.
+    private struct Step: Equatable {
+        var dx = 0, dy = 0
+        var isNone: Bool { dx == 0 && dy == 0 }
     }
 
-    private func stick(_ value: Float) {
-        let direction = value > 0.55 ? 1 : (value < -0.55 ? -1 : 0)
-        guard direction != stickDirection else { return }
-        stickDirection = direction
-        setHeld(direction)
+    /// The stronger axis wins, so a slightly diagonal stick still moves straight.
+    private func steer(_ source: Source, x: Float, y: Float) {
+        var step = Step()
+        if abs(x) >= abs(y) {
+            step.dx = x > 0.55 ? 1 : (x < -0.55 ? -1 : 0)
+        } else {
+            step.dy = y > 0.55 ? -1 : (y < -0.55 ? 1 : 0)  // stick up is +y, a row up is -1
+        }
+        switch source {
+        case .dpad: dpadStep = step
+        case .stick: stickStep = step
+        }
+        // The one just moved leads; letting go of it hands over to the other if that's still held.
+        setHeld(step.isNone ? (source == .dpad ? stickStep : dpadStep) : step)
+    }
+
+    /// Down on the start page opens the library; up from its top row goes back. Returns true when
+    /// the view changed: holding on then mustn't run on through the other view.
+    @discardableResult
+    private func perform(_ step: Step) -> Bool {
+        guard let model else { return false }
+        if let window = padWindow {
+            let focus = PadFocus.shared
+            if window !== Self.mainWindow {
+                focus.move(dx: step.dx, dy: step.dy, in: window)
+                return false
+            }
+            // Main window: the games have the pad until up on the start page enters the buttons
+            // above them; down past the lowest button hands back to the games.
+            if focus.focusedItem(in: window) != nil {
+                if !focus.move(dx: step.dx, dy: step.dy, in: window), step.dy > 0 {
+                    focus.clear()
+                    return true
+                }
+                return false
+            }
+            if step.dy < 0, !model.showingLibrary {
+                focus.move(dx: 0, dy: -1, in: window)
+                return true
+            }
+        }
+        if step.dx != 0 { model.move(step.dx) }
+        if step.dy > 0, !model.showingLibrary {
+            model.showingLibrary = true
+            return true
+        }
+        if step.dy < 0, model.showingLibrary, model.selectedIndex < max(model.gridColumns, 1) {
+            model.showingLibrary = false
+            return true
+        }
+        if step.dy != 0 { model.moveRow(step.dy) }
+        return false
     }
 
     /// First step immediately, then a short pause, then fast repeat while held.
-    private func setHeld(_ direction: Int) {
-        guard direction != held else { return }
-        held = direction
+    private func setHeld(_ step: Step) {
+        guard step != held else { return }
+        held = step
         repeatTimer?.invalidate()
         repeatTimer = nil
-        guard direction != 0, let model, !model.showingOptions else { return }
+        guard !step.isNone, model != nil, dialog == nil || padWindow != nil else { return }
 
-        model.move(direction)
+        guard !perform(step) else { return }
         repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.38, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.startFastRepeat() }
         }
     }
 
     private func startFastRepeat() {
-        guard held != 0 else { return }
+        guard !held.isNone else { return }
         repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.11, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, self.held != 0 else { return }
-                self.model?.move(self.held)
+                guard let self, !self.held.isNone else { return }
+                if self.perform(self.held) {
+                    self.repeatTimer?.invalidate()
+                    self.repeatTimer = nil
+                }
             }
         }
+    }
+}
+
+/// The SF Symbols a controller gives its own buttons: ✕ ○ □ △ on a PlayStation pad, A B X Y on
+/// Xbox, the Nintendo layout on a Switch pad. The defaults are Xbox's.
+struct PadSymbols: Equatable {
+    var confirm = "a.circle.fill"
+    var back = "b.circle.fill"
+    var library = "x.circle.fill"
+    var options = "y.circle.fill"
+    var stick = "l.joystick.fill"
+
+    init() {}
+
+    @MainActor
+    init(_ pad: GCExtendedGamepad) {
+        confirm = Self.filled(pad.buttonA.sfSymbolsName) ?? confirm
+        back = Self.filled(pad.buttonB.sfSymbolsName) ?? back
+        library = Self.filled(pad.buttonX.sfSymbolsName) ?? library
+        options = Self.filled(pad.buttonY.sfSymbolsName) ?? options
+        stick = Self.filled(pad.leftThumbstick.sfSymbolsName) ?? stick
+    }
+
+    /// The filled variant where one exists (they read better at hint size), else the symbol itself.
+    private static func filled(_ name: String?) -> String? {
+        guard let name, NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil else { return nil }
+        let fill = name.hasSuffix(".fill") ? name : name + ".fill"
+        return NSImage(systemSymbolName: fill, accessibilityDescription: nil) != nil ? fill : name
     }
 }

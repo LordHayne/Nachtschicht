@@ -129,6 +129,7 @@ struct MacSteamSetupView: View {
                 case .signingIn:
                     Button(L10n.t("Show Steam window again")) { MacSteam.show(keepFor: 600) }
                         .buttonStyle(.bordered)
+                        .padFocus("macSetup.showSteam", activate: { MacSteam.show(keepFor: 600) })
                 case .installing:
                     EmptyView()
                 }
@@ -136,10 +137,12 @@ struct MacSteamSetupView: View {
                     if let useWindows, setup.phase == .intro || isFailed {
                         Button(L10n.t("Use the Windows Version"), action: useWindows)
                             .buttonStyle(.bordered)
+                            .padFocus("macSetup.windows", activate: useWindows)
                     }
                     Button(L10n.t("Cancel"), action: close)
                         .buttonStyle(.bordered)
                         .keyboardShortcut(.cancelAction)
+                        .padFocus("macSetup.cancel", activate: close)
                 }
             }
             .controlSize(.large)

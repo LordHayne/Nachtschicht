@@ -215,6 +215,7 @@ private struct Backdrop: View {
 
 private struct TopBar: View {
     @EnvironmentObject private var model: LibraryModel
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         HStack(spacing: 16) {
@@ -249,6 +250,7 @@ private struct TopBar: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(model.updating)
+                .padFocus("top.update", enabled: !model.updating, cornerRadius: 17, activate: { model.installUpdate() })
                 .help(L10n.t("Installs the new version and restarts Nightforge. Your games and settings stay."))
             }
 
@@ -278,6 +280,7 @@ private struct TopBar: View {
             }
             .buttonStyle(.plain)
             .help(L10n.t("Settings (⌘,)"))
+            .padFocus("top.settings", cornerRadius: 17, activate: { openSettings() })
 
             TimelineView(.everyMinute) { context in
                 Text(context.date, format: .dateTime.hour().minute())
@@ -453,6 +456,7 @@ private struct GameDetail: View {
                            unavailable: unavailable, cloud: game.playsInCloud) {
                     model.primaryAction()
                 }
+                .padFocus("play", cornerRadius: 34, activate: { model.primaryAction() })
                 if game.install != .inStore {
                     RoundIconButton(symbol: "slider.horizontal.3", help: L10n.t("Options for this game (O)")) {
                         model.showingOptions = true
@@ -633,6 +637,7 @@ struct RoundIconButton: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .padFocus("round.\(symbol)", cornerRadius: size / 2, activate: action)
     }
 }
 
@@ -833,19 +838,26 @@ struct CoverCard: View {
 
 private struct HintBar: View {
     @EnvironmentObject private var model: LibraryModel
+    @ObservedObject private var focus = PadFocus.shared
 
     var body: some View {
         HStack(spacing: 22) {
             Spacer()
-            if model.showingLibrary {
-                Hint(symbol: model.controllerConnected ? "a.circle.fill" : "return", text: L10n.t("Open"))
-                Hint(symbol: "arrow.up.and.down.and.arrow.left.and.right", text: L10n.t("Select"))
-                Hint(symbol: model.controllerConnected ? "b.circle.fill" : "escape", text: L10n.t("Back"))
+            let pad = model.padSymbols
+            if model.controllerConnected && focus.focused != nil {
+                Hint(symbol: pad.confirm, text: L10n.t("Select"))
+                Hint(symbol: pad.stick, text: L10n.t("Move"))
+                Hint(symbol: pad.back, text: L10n.t("Back"))
+            } else if model.showingLibrary {
+                Hint(symbol: model.controllerConnected ? pad.confirm : "return", text: L10n.t("Open"))
+                Hint(symbol: model.controllerConnected ? pad.stick : "arrow.up.and.down.and.arrow.left.and.right",
+                     text: L10n.t("Select"))
+                Hint(symbol: model.controllerConnected ? pad.back : "escape", text: L10n.t("Back"))
             } else if model.controllerConnected {
-                Hint(symbol: "a.circle.fill", text: L10n.t("Play"))
-                Hint(symbol: "y.circle.fill", text: L10n.t("Options"))
-                Hint(symbol: "x.circle.fill", text: L10n.t("Library"))
-                Hint(symbol: "arrow.left.and.right", text: L10n.t("Select"))
+                Hint(symbol: pad.confirm, text: L10n.t("Play"))
+                Hint(symbol: pad.options, text: L10n.t("Options"))
+                Hint(symbol: pad.library, text: L10n.t("Library"))
+                Hint(symbol: pad.stick, text: L10n.t("Select"))
             } else {
                 Hint(symbol: "return", text: L10n.t("Play"))
                 Hint(symbol: "o.square", text: L10n.t("Options"))
@@ -893,10 +905,12 @@ private struct EmptyLibrary: View {
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 12) {
                 Button(L10n.t("Open Steam")) { model.openSteam() }
+                    .padFocus("empty.openSteam", activate: { model.openSteam() })
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.sodium)
                     .foregroundStyle(Theme.night)
                 Button(L10n.t("Rescan")) { model.reload() }
+                    .padFocus("empty.rescan", activate: { model.reload() })
                     .buttonStyle(.bordered)
             }
             .controlSize(.large)
@@ -919,10 +933,12 @@ private struct EmptyLibrary: View {
                 .textSelection(.enabled)
             HStack(spacing: 12) {
                 Button(L10n.t("Rescan")) { model.reload() }
+                    .padFocus("empty.rescan", activate: { model.reload() })
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.sodium)
                     .foregroundStyle(Theme.night)
                 Button(L10n.t("Choose Another Folder …")) { model.chooseBottlesFolder() }
+                    .padFocus("empty.chooseFolder", activate: { model.chooseBottlesFolder() })
                     .buttonStyle(.bordered)
             }
             .controlSize(.large)

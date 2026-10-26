@@ -31,6 +31,7 @@ struct GameOptionsSheet: View {
                         Text("Mac").tag(GameVersion.mac)
                         Text("Windows").tag(GameVersion.windows)
                     }
+                    .padFocus("options.version", selection: $options.version, values: [.automatic, .mac, .windows])
                     Text(game.platform == .mac
                          ? L10n.t("Mac runs Steam's native Mac version through Steam for Mac, without any Windows translation; its graphics settings are in the game itself. Windows runs the Windows version through Wine. Automatic takes the Mac version when it runs on current Macs.")
                          : L10n.t("Mac runs Steam's native Mac version through Steam for Mac, without any Windows translation. Windows runs the Windows version through Wine. Automatic takes the Mac version when it runs on current Macs."))
@@ -50,6 +51,7 @@ struct GameOptionsSheet: View {
                     }
                 }
                 .toggleStyle(.switch)
+                .padFocus("options.hud", toggle: $options.metalHUD)
             }
 
             if game.bottle.isBuiltIn {
@@ -62,6 +64,7 @@ struct GameOptionsSheet: View {
                                 Text(layer == .automatic ? automaticLabel(automaticWay.shortLabel) : layer.label).tag(layer)
                             }
                         }
+                        .padFocus("options.graphics", selection: $options.graphics, values: layers)
                     }
                     Text(graphicsCaption)
                         .font(.caption)
@@ -71,19 +74,26 @@ struct GameOptionsSheet: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Picker(L10n.t("Frame limit"), selection: $options.frameLimit) {
-                        Text(automaticLabel(GameOptions().effectiveFrameLimit(displayRefreshRate: refreshRate, profile: profile).fpsLabel))
+                        // What the next start uses, including what Nightforge learned (FramePacing).
+                        Text(automaticLabel(FramePacing.automaticLimit(
+                            appID: game.appID, options: { var o = options; o.frameLimit = nil; return o }(),
+                            profile: profile, refreshRate: refreshRate).limit.fpsLabel))
                             .tag(Int?.none)
                         ForEach(GameOptions.frameLimits, id: \.self) { limit in
                             Text(limit.fpsLabel).tag(Int?.some(limit))
                         }
                     }
+                    .padFocus("options.frameLimit", selection: $options.frameLimit,
+                              values: [Int?.none] + GameOptions.frameLimits.map { Int?.some($0) })
                     Picker(L10n.t("MetalFX upscaling"), selection: $options.upscaling) {
                         Text(automaticLabel(GameOptions().effectiveUpscaling(profile: profile) ? L10n.t("On") : L10n.t("Off"))).tag(Choice.automatic)
                         Text(L10n.t("On")).tag(Choice.on)
                         Text(L10n.t("Off")).tag(Choice.off)
                     }
                     .disabled(!drawsWith.upscales || layers.isEmpty)
-                    Text(L10n.t("Automatic follows “Sharp & smooth” in Settings. The frame limit keeps frames even; MetalFX (DXMT only) upscales the picture to full Retina sharpness – set a lower resolution in the game for more FPS."))
+                    .padFocus("options.upscaling", enabled: drawsWith.upscales && !layers.isEmpty,
+                              selection: $options.upscaling, values: [.automatic, .on, .off])
+                    Text(L10n.t("Automatic follows “Sharp & smooth” in Settings. The frame limit keeps frames even; MetalFX upscales the picture to full Retina sharpness (not with WineD3D) – set a lower resolution in the game for more FPS."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -100,6 +110,8 @@ struct GameOptionsSheet: View {
                 }
                 .toggleStyle(.switch)
                 .disabled(drawsWith == .dxmt && insight?.analysis.apis.contains(.vulkan) != true)
+                .padFocus("options.hdr", enabled: !(drawsWith == .dxmt && insight?.analysis.apis.contains(.vulkan) != true),
+                          toggle: $options.hdr)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -113,23 +125,17 @@ struct GameOptionsSheet: View {
 
             HStack {
                 if game.bottle.isBuiltIn {
-                    Button(L10n.t("Report problem …")) {
-                        report()
-                        dismiss()
-                    }
+                    Button(L10n.t("Report problem …"), action: reportProblem)
+                        .padFocus("options.report", activate: reportProblem)
                     .help(L10n.t("Opens a problem report on GitHub, filled in with what Nightforge knows about the game. Nothing is sent until you submit it there."))
                 }
                 Spacer()
                 Button(L10n.t("Cancel")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button(L10n.t("Save")) {
-                    // Picking a layer or version by hand overrides what self-healing learned.
-                    if options.graphics != .automatic { LaunchHealth.reset(game.appID) }
-                    if options.version != GameOptionsStore.load(game.appID).version { MacHealth.reset(game.appID) }
-                    GameOptionsStore.save(options, for: game.appID)
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
+                    .padFocus("options.cancel", activate: { dismiss() })
+                Button(L10n.t("Save"), action: save)
+                    .keyboardShortcut(.defaultAction)
+                    .padFocus("options.save", activate: save)
             }
         }
         .padding(28)
@@ -141,6 +147,19 @@ struct GameOptionsSheet: View {
 }
 
 private extension GameOptionsSheet {
+    func reportProblem() {
+        report()
+        dismiss()
+    }
+
+    func save() {
+        // Picking a layer or version by hand overrides what self-healing learned.
+        if options.graphics != .automatic { LaunchHealth.reset(game.appID) }
+        if options.version != GameOptionsStore.load(game.appID).version { MacHealth.reset(game.appID) }
+        GameOptionsStore.save(options, for: game.appID)
+        dismiss()
+    }
+
     var refreshRate: Int { NSScreen.main?.maximumFramesPerSecond ?? 60 }
 
     func automaticLabel(_ value: String) -> String { L10n.t("Automatic (%@)", value) }
@@ -212,6 +231,7 @@ struct SettingsView: View {
                         Text(option.label).tag(option.rawValue)
                     }
                 }
+                .padFocus("settings.language", selection: $language, values: AppLanguage.allCases.map(\.rawValue))
                 Toggle(isOn: $sharpAndSmooth) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(L10n.t("Sharp & smooth"))
@@ -221,6 +241,7 @@ struct SettingsView: View {
                     }
                 }
                 .toggleStyle(.switch)
+                .padFocus("settings.sharp", toggle: $sharpAndSmooth)
                 Toggle(isOn: $gameMode) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(L10n.t("Game Mode"))
@@ -231,6 +252,7 @@ struct SettingsView: View {
                 }
                 .toggleStyle(.switch)
                 .onChange(of: gameMode) { _, _ in model.applySteamSettings() }
+                .padFocus("settings.gameMode", toggle: $gameMode)
                 Toggle(isOn: $performanceHUD) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(L10n.t("Performance HUD in games"))
@@ -241,23 +263,26 @@ struct SettingsView: View {
                 }
                 .toggleStyle(.switch)
                 .onChange(of: performanceHUD) { _, _ in model.applySteamSettings() }
+                .padFocus("settings.hud", toggle: $performanceHUD)
                 Picker(L10n.t("After Launch"), selection: $afterLaunch) {
                     ForEach(AfterLaunch.allCases) { option in
                         Text(option.label).tag(option.rawValue)
                     }
                 }
+                .padFocus("settings.afterLaunch", selection: $afterLaunch, values: AfterLaunch.allCases.map(\.rawValue))
             } header: {
                 Text(L10n.t("General"))
             }
 
             // Only for players who bring their own Wine setup; Nightforge needs none of it.
             Section {
-                DisclosureGroup(L10n.t("CrossOver, Whisky and your own Wine"), isExpanded: $showAdvanced) {
+                DisclosureGroup(isExpanded: $showAdvanced) {
                     LabeledContent(L10n.t("Bottles Folder")) {
                         HStack {
                             TextField("", text: $bottlesRoot, prompt: Text(LibraryScanner.defaultBottlesRoot().path))
                                 .labelsHidden()
                             Button(L10n.t("Choose …")) { model.chooseBottlesFolder() }
+                                .padFocus("settings.chooseBottles", activate: { model.chooseBottlesFolder() })
                         }
                     }
                     LabeledContent("Wine") {
@@ -269,6 +294,10 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Button(L10n.t("Rescan Library")) { model.reload() }
+                        .padFocus("settings.rescan", activate: { model.reload() })
+                } label: {
+                    Text(L10n.t("CrossOver, Whisky and your own Wine"))
+                        .padFocus("settings.advanced", toggle: $showAdvanced)
                 }
             } header: {
                 Text(L10n.t("Advanced"))

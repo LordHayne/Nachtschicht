@@ -43,6 +43,7 @@ struct SetupView: View {
             Button(L10n.t("Show Steam window again")) { setup.reopenSteam() }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
+                .padFocus("setup.showSteam", activate: { setup.reopenSteam() })
 
         case .failed(_, let message):
             Note(message, isError: true)
@@ -165,5 +166,6 @@ struct SetupButton: View {
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.15), value: hovering)
         .keyboardShortcut(.defaultAction)
+        .padFocus("setup.\(symbol)", cornerRadius: 26, activate: action)
     }
 }

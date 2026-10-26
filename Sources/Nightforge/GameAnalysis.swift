@@ -111,6 +111,11 @@ extension GameAnalysis {
                 analysis.apis.formUnion((PEImports.dlls(of: library) ?? []).compactMap(api(forDLL:)))
             }
         }
+        // Source games (Left 4 Dead 2, Team Fortress 2, …) load their renderer at run time from
+        // bin/shaderapi*.dll, so no import names it; Direct3D 9 is the one they use.
+        if analysis.apis.isEmpty, contents.hasItem(named: "shaderapidx9.dll") {
+            analysis.apis.insert(.d3d9)
+        }
         if analysis.engine == .other, programs.contains(where: { $0.lastPathComponent.lowercased().contains("-win64-shipping") })
             || fm.fileExists(atPath: installDir.appendingPathComponent("Engine/Binaries").path) {
             analysis.engine = .unreal

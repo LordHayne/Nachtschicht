@@ -32,7 +32,7 @@ enum GameLog {
         (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? UInt64 ?? 0
     }
 
-    private static func text(since mark: UInt64) -> String {
+    static func text(since mark: UInt64) -> String {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return "" }
         defer { try? handle.close() }
         let end = (try? handle.seekToEnd()) ?? 0
@@ -90,6 +90,19 @@ enum GameLog {
             (["openal32"], "openal"),
         ]
         return table.first { entry in entry.prefixes.contains { name.hasPrefix($0) } }?.verb
+    }
+
+    /// Whether the Direct3D layer gave up since `mark`: DXVK couldn't create its device or its
+    /// buffers on MoltenVK. The game then shows its own error box ("Failed to create D3D device")
+    /// and stays open, so running past its first seconds doesn't mean it started.
+    static func graphicsFailed(since mark: UInt64) -> Bool {
+        graphicsFailed(in: text(since: mark))
+    }
+
+    static func graphicsFailed(in text: String) -> Bool {
+        let signs = ["dxvkadapter: failed to create device", "dxvkbuffer: failed to create buffer"]
+        let lower = text.lowercased()
+        return signs.contains { lower.contains($0) }
     }
 
     /// The error lines since `mark`, for a problem report: Wine, DXVK and MoltenVK errors, without

@@ -1,4 +1,4 @@
-// Checks GameAnalysis, LaunchHealth and GameLog: tests/LaunchHealthTest/run.sh [Steam folder]
+// Checks GameAnalysis, LaunchHealth, GameLog and FramePacing: tests/LaunchHealthTest/run.sh [Steam folder]
 import Foundation
 
 @main
@@ -144,6 +144,16 @@ struct LaunchHealthTest {
         check(errors.first?.hasPrefix("err:module") == true, "thread ids dropped: \(errors.first ?? "")")
         check(errors.contains("err:   DXGI: Failed to create swap chain"), "DXVK's own error lines kept")
 
+        // MARK: Programs that get the Direct3D layer
+        let unreal = FileManager.default.temporaryDirectory.appendingPathComponent("lht-unreal-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: unreal.appendingPathComponent("Pal/Binaries/Win64"), withIntermediateDirectories: true)
+        for path in ["Palworld.exe", "Pal/Binaries/Win64/Palworld-Win64-Shipping.exe"] {
+            FileManager.default.createFile(atPath: unreal.appendingPathComponent(path).path, contents: Data())
+        }
+        check(Engine.executables(in: unreal) == ["Palworld-Win64-Shipping.exe", "Palworld.exe"],
+              "Unreal's game program four levels down gets the layer: \(Engine.executables(in: unreal))")
+        try? FileManager.default.removeItem(at: unreal)
+
         // MARK: Analysis of a made-up game folder
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("lht-game-\(UUID().uuidString)", isDirectory: true)
         let fm = FileManager.default
@@ -165,8 +175,51 @@ struct LaunchHealthTest {
         analysis = GameAnalysis.analyze(installDir: folder, launchExecutable: "Game.exe")
         check(analysis.launcher == "EA app" && analysis.usesD3D9 && !analysis.usesDotNet, "EA app and DirectX 9: \(analysis)")
         try? fm.removeItem(at: folder)
+        // A Source game: the program imports no graphics library, the renderer sits in bin/.
+        try? fm.createDirectory(at: folder.appendingPathComponent("bin"), withIntermediateDirectories: true)
+        writePE(folder.appendingPathComponent("left4dead2.exe"), imports: ["KERNEL32.dll"])
+        fm.createFile(atPath: folder.appendingPathComponent("bin/shaderapidx9.dll").path, contents: Data())
+        analysis = GameAnalysis.analyze(installDir: folder, launchExecutable: "left4dead2.exe")
+        check(analysis.apis == [.d3d9] && ids(analysis) == ["dxvk", "wined3d"], "Source game: DirectX 9 ladder: \(analysis)")
+        try? fm.removeItem(at: folder)
+        check(GameLog.graphicsFailed(in: "warn:  DXVK: No state cache file found\nerr:   DxvkBuffer: Failed to create buffer:\nerr:     size:  65536"),
+              "DXVK's failed buffer counts as a failed start")
+        check(GameLog.graphicsFailed(in: "err:   DxvkAdapter: Failed to create device"), "DXVK's failed device counts as a failed start")
+        check(!GameLog.graphicsFailed(in: "warn:  DXVK: No state cache file found\nerr:   DXGI: Failed to create swap chain"),
+              "other DXVK errors don't end a game")
         check(GameLog.missingRuntimes(in: "0040:err:mscoree:CLRRuntimeInfo_GetRuntimeHost Wine Mono is not installed", gameFolder: "x")
               == [GameLog.wineMono], "missing Mono recognised")
+
+        // MARK: Frame pacing
+        let paceLog = """
+        info:  [nightforge-dxmt] Game: 41.0 FPS over 10 s, frames 24.4 ms on average, slowest 60 ms
+        info:  [nightforge-dxmt] Game: 52.5 FPS over 60 s, frames 19.0 ms on average, slowest 48 ms
+        [nightforge-vulkan] GAME.EXE: 55.0 FPS over 60 s, frames 18.2 ms on average, slowest 40 ms
+        [nightforge-vulkan] Other.exe: 120.0 FPS over 60 s, frames 8.3 ms on average, slowest 9 ms
+        [nightforge-vulkan] swapchain 1512x982 format 44 colour space 0
+        """
+        check(FramePacing.rates(in: paceLog, programs: ["Game.exe"]) == [52.5, 55.0],
+              "frame rates: full minutes of the game's own programs, DXMT without .exe")
+        check(FramePacing.candidates(refreshRate: 120, upTo: 60) == [60, 40, 30], "120 Hz: 60, 40, 30")
+        check(FramePacing.candidates(refreshRate: 60, upTo: 60) == [60, 30], "60 Hz: 60, 30")
+        let context = FramePacing.Context(refreshRate: 120, upscaling: true)
+        var pacing = FramePacing.State(context: context, ranWith: 60)
+        check(FramePacing.next(pacing, rates: [59.8, 60], standard: 60) == pacing, "two minutes say nothing")
+        pacing = FramePacing.next(pacing, rates: [50, 52, 55, 58, 59], standard: 60)
+        check(pacing.limit == 40, "can't hold 60 → 40")
+        pacing.ranWith = 40
+        for _ in 0..<2 { pacing = FramePacing.next(pacing, rates: [40, 40, 39.9], standard: 60) }
+        check(pacing.limit == 40 && !pacing.trying, "holding 40 keeps it for a while")
+        pacing = FramePacing.next(pacing, rates: [40, 40, 39.9], standard: 60)
+        check(pacing.limit == nil && pacing.trying, "after three sessions, 60 is tried again")
+        pacing.ranWith = 60
+        pacing = FramePacing.next(pacing, rates: [50, 51, 53, 60], standard: 60)
+        check(pacing.limit == 40 && pacing.waitBeforeTrying == 6, "the try failed: back to 40, next try later")
+        var steady = FramePacing.State(context: context, ranWith: 60)
+        steady = FramePacing.next(steady, rates: [59.6, 60, 60, 45], standard: 60)
+        check(steady.limit == nil, "a short dip doesn't lower the limit")
+        steady = FramePacing.next(FramePacing.State(context: context, ranWith: 60), rates: [33, 34, 35], standard: 60)
+        check(steady.limit == 30, "far below 40 → 30")
 
         // MARK: Installed games
         if CommandLine.arguments.count > 1 {

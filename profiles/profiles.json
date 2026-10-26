@@ -18,6 +18,11 @@
   }
  },
  "games": {
+  "550": {
+   "name": "Left 4 Dead 2",
+   "note": "Tested 2026-10-26 on M5: DXVK fails (MoltenVK rejects its buffers, 'Failed to create D3D device'), Nightforge switches to WineD3D by itself. Menu and play work, but it crashed after about a minute twice; -vulkan (Valve's DXVK) and WineD3D's Vulkan renderer don't start.",
+   "source": "mac"
+  },
   "1930": {
    "name": "Two Worlds Epic Edition - ID 1930\nhttps://www.protondb.com/app/1930",
    "winetricks": [
@@ -3497,6 +3502,12 @@
     "Easy Anti-Cheat"
    ]
   },
+  "1422450": {
+   "name": "Deadlock",
+   "graphics": "dxvk",
+   "note": "Tested 2026-10-26 on M5: plays with DXVK at 60-120 FPS (the Vulkan layer's count). Steam may first ask about controller firmware; Nightforge shows that window.",
+   "source": "mac"
+  },
   "1426440": {
    "name": "MicroVolts: Recharged",
    "source": "anticheat",
@@ -3678,6 +3689,12 @@
     "msxml3"
    ],
    "source": "umu"
+  },
+  "1623730": {
+   "name": "Palworld",
+   "graphics": "dxmt",
+   "note": "Tested 2026-10-26 on M5: steady 60 FPS (frame limit) with DXMT and -dx11. With DXVK only the HUD showed over a black world. Steam asks for the EULA once.",
+   "source": "mac"
   },
   "1635450": {
    "name": "Longvinter",
@@ -4657,5 +4674,5 @@
    "source": "umu"
   }
  },
- "generated": "2026-10-26T16:30:34Z"
+ "generated": "2026-10-26T16:32:00Z"
 }

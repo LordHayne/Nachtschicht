@@ -369,7 +369,11 @@ final class LibraryModel: ObservableObject {
             // Let the running-game check see the processes before deciding on a restart – or on
             // replacing the engine's files, which ends the Wine session a game would run in.
             while !runningScanned { try? await Task.sleep(for: .milliseconds(100)) }
-            guard let wine = try? await Engine.ensureEngine(gameRunning: !running.isEmpty) else { return }
+            // A new engine that can't be fetched now (offline, broken download): Steam starts with
+            // the one already installed, and the new one is tried again at the next start.
+            var ensured = try? await Engine.ensureEngine(gameRunning: !running.isEmpty)
+            if ensured == nil { ensured = await Engine.installedWine() }
+            guard let wine = ensured else { return }
             // Signing in would sign out the Steam for Mac a running Mac game uses; Play starts it later.
             guard !macSteamBusy else { return }
             try? await Engine.ensureSteamRunning(wine, busy: !running.isEmpty)
@@ -1026,6 +1030,7 @@ final class LibraryModel: ObservableObject {
                                  wine: URL, showStatus: Bool) async {
         let learned = LearnedFixes.winetricks(game.appID)
         let missing = Engine.missingWinetricks((profile?.winetricks ?? []) + learned.filter { $0 != GameLog.wineMono })
+            .filter(Engine.isSafeWinetricksVerb)
         if !missing.isEmpty {
             if showStatus { launchStatus = L10n.t("Setting up the game …") }
             await Engine.installWinetricks(missing, wine: wine)
@@ -1259,8 +1264,8 @@ final class LibraryModel: ObservableObject {
                 reload(quiet: true)
             }
             do {
-                guard let wine = await Engine.installedWine() else { return }
-                try await Engine.uninstall(appID: game.appID, installDirName: game.installDirName, wine: wine)
+                guard let wine = await Engine.installedWine(), let leftover = game.windowsLeftoverDir else { return }
+                try await Engine.uninstall(appID: game.appID, installDir: leftover, wine: wine)
             } catch {
                 errorMessage = L10n.t("%@ could not be uninstalled: %@", game.name, error.localizedDescription)
             }
@@ -1287,7 +1292,7 @@ final class LibraryModel: ObservableObject {
                     return
                 }
                 guard let wine = await Engine.installedWine() else { return }
-                try await Engine.uninstall(appID: game.appID, installDirName: game.installDirName, wine: wine)
+                try await Engine.uninstall(appID: game.appID, installDir: game.installDir, wine: wine)
             } catch {
                 errorMessage = L10n.t("%@ could not be uninstalled: %@", game.name, error.localizedDescription)
             }

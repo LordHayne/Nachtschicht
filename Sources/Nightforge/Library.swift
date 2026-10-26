@@ -56,6 +56,8 @@ struct Game: Identifiable, Hashable {
     var versionReason: VersionChoice.Reason?
     /// Mac version in use while the Windows one is still installed in Nightforge's own Steam: its size.
     var windowsLeftover: Int64?
+    /// … and where that Windows version lies.
+    var windowsLeftoverDir: URL?
     /// The Mac version Nightforge switches to once it's on the Mac, while the installed Windows
     /// version is still the one played: not downloaded yet, or downloading.
     var macPending: InstallState?
@@ -319,7 +321,10 @@ enum LibraryScanner {
         entry.versionReason = game.versionReason
         entry.listID = game.id
         entry.macPending = nil
-        if game.isInstalled && game.bottle.isBuiltIn { entry.windowsLeftover = game.sizeOnDisk }
+        if game.isInstalled && game.bottle.isBuiltIn {
+            entry.windowsLeftover = game.sizeOnDisk
+            entry.windowsLeftoverDir = game.installDir
+        }
         return entry
     }
 

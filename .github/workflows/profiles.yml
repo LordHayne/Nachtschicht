@@ -54,8 +54,9 @@ jobs:
       - name: Validate
         run: |
           python3 -I - <<'PY'
-          import json
+          import json, re
           doc = json.load(open("profiles/profiles.json"))
+          commands = {"annihilate", "apps", "benchmarks", "dlls", "fonts", "games", "settings", "list", "help", "version"}
           assert doc["formatVersion"] == 1
           assert len(doc["games"]) > 50, "suspiciously few games"
           for app_id, game in doc["games"].items():
@@ -65,6 +66,8 @@ jobs:
               assert game.get("frameLimit") is None or isinstance(game["frameLimit"], int), (app_id, game.get("frameLimit"))
               assert game.get("antiCheat") is None or isinstance(game["antiCheat"], list), (app_id, game.get("antiCheat"))
               assert game.get("geforceNow") is None or isinstance(game["geforceNow"], int), (app_id, game.get("geforceNow"))
+              for verb in game.get("winetricks") or []:
+                  assert re.fullmatch(r"[a-z0-9_]{1,64}", verb) and verb not in commands, (app_id, verb)
           blocked = sum(1 for game in doc["games"].values() if game.get("antiCheat"))
           assert blocked > 50, "suspiciously few anti-cheat games"
           print("ok:", len(doc["games"]), "games,", blocked, "blocked by anti-cheat")

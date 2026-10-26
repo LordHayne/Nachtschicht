@@ -12,6 +12,8 @@ enum FramePacing {
     struct Context: Codable, Equatable {
         var refreshRate: Int
         var upscaling: Bool
+        /// The layer the game draws through: DXMT and D3DMetal hold very different rates.
+        var graphics: GraphicsLayer?
     }
 
     struct State: Codable, Equatable {
@@ -38,7 +40,8 @@ enum FramePacing {
         guard options.frameLimit == nil, Prefs.sharpAndSmooth, profile?.frameLimit == nil, standard > 0 else {
             return (standard, false)
         }
-        let context = Context(refreshRate: refreshRate, upscaling: options.effectiveUpscaling(profile: profile))
+        let context = Context(refreshRate: refreshRate, upscaling: options.effectiveUpscaling(profile: profile),
+                              graphics: options.graphics)
         guard let state = load(appID), state.context == context, let learned = state.limit else { return (standard, true) }
         return (min(learned, standard), true)
     }
@@ -46,7 +49,8 @@ enum FramePacing {
     /// Remembers a start, so its session can be read at the next one.
     static func recordStart(appID: Int, options: GameOptions, profile: GameProfile?, refreshRate: Int,
                             logMark: UInt64, limit: Int, learning: Bool) {
-        let context = Context(refreshRate: refreshRate, upscaling: options.effectiveUpscaling(profile: profile))
+        let context = Context(refreshRate: refreshRate, upscaling: options.effectiveUpscaling(profile: profile),
+                              graphics: options.graphics)
         var state = load(appID).flatMap { $0.context == context ? $0 : nil } ?? State(context: context)
         state.mark = logMark
         state.ranWith = learning ? limit : nil

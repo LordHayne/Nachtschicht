@@ -45,8 +45,9 @@ struct EngineLayoutTest {
         check(Engine.layerOverrides(.dxmt, d3dMetalEngine: false) == ["dxgi": "builtin", "d3d11": "builtin", "d3d10core": "builtin"],
               "Gcenx: DXMT is the builtin")
         check(Engine.layerOverrides(.dxvk, d3dMetalEngine: false).isEmpty, "Gcenx: DXVK is the default native")
-        check(Engine.layerOverrides(.dxmt, d3dMetalEngine: true) == ["dxgi": "native", "d3d11": "native", "d3d10core": "native"],
-              "winecx: DXMT is the native in system32")
+        check(Engine.layerOverrides(.dxmt, d3dMetalEngine: true) == ["dxgi": "native", "d3d11": "native", "d3d10core": "native",
+                                                                    "d3d12": "native", "d3d12core": "native"],
+              "winecx: DXMT is the native in system32, and D3DMetal's d3d12 stays away from it")
         check(Engine.layerOverrides(.dxvk, d3dMetalEngine: true)["d3d11"] == "native", "winecx: DXVK is native (next to the game)")
         let metal = Engine.layerOverrides(.d3dmetal, d3dMetalEngine: true)
         check(["dxgi", "d3d11", "d3d12", "d3d12core"].allSatisfy { metal[$0] == "builtin" }, "D3DMetal takes the builtins")
@@ -89,6 +90,13 @@ struct EngineLayoutTest {
         check(fm.fileExists(atPath: windows.appendingPathComponent("syswow64/dxgi.dll").path), "32-bit DXMT goes to syswow64")
         check(!fm.fileExists(atPath: windows.appendingPathComponent("system32/winemetal.dll").path),
               "winemetal stays a builtin in the engine")
+
+        let engineLib = work.appendingPathComponent("wcx/Libraries/Wine/lib/wine/x86_64-windows", isDirectory: true)
+        write(dll("wine's d3d12", builtin: true), engineLib.appendingPathComponent("d3d12.dll.wine"))
+        try? Engine.installWineD3D12Natives(wine: work.appendingPathComponent("wcx/Libraries/Wine/bin/wine"), windows: windows)
+        let wineD3D12 = (try? Data(contentsOf: windows.appendingPathComponent("system32/d3d12.dll"))) ?? Data()
+        check(wineD3D12.suffix(12) == Data("wine's d3d12".utf8) && wineD3D12.subdata(in: 0x40..<0x50) == Data(count: 16),
+              "Wine's own d3d12 waits in system32 as a native for games on DXMT and DXVK")
 
         // MARK: DXVK next to the game
         let dxvk = work.appendingPathComponent("dxvk/dxvk-1.10.3", isDirectory: true)

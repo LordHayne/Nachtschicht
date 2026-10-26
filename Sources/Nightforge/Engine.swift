@@ -353,12 +353,15 @@ enum Engine {
         excludeGamesFromBackup()
         let prefixStamp = stamp(in: prefix, name: "setup")
         let dxvk = manifest.component(dxvkID)
-        let prefixWanted = "\(engine.version) \(dxvk?.version ?? "-") \(gptk ? graphics.version : "-") "
+        let prefixWanted = "\(engine.version) \(dxvk?.version ?? "-") \(gptk ? graphics.version + " d3dmetal " + (d3dMetal?.version ?? "-") : "-") "
             + gameEnvironment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")
         if readStamp(prefixStamp) != prefixWanted {
             applyGameEnvironment(wine: wine)
             if let dxvk { try installDXVK(try await store.install(dxvk), wine: wine, d3d9Only: gptk) }
-            if gptk { try installDXMTNatives(graphicsDir) }
+            if gptk {
+                try installDXMTNatives(graphicsDir)
+                try installWineD3D12Natives(wine: wine)
+            }
             writeStamp(prefixStamp, prefixWanted)
         }
         return wine
@@ -544,6 +547,16 @@ enum Engine {
                 let destination = target.appendingPathComponent(file.lastPathComponent)
                 try writeAsNative(try Data(contentsOf: file), to: destination)
             }
+        }
+    }
+
+    /// Wine's own Direct3D 12, which D3DMetal took the place of in the engine (kept as *.wine), as
+    /// natives in system32: for games on DXMT or DXVK that look for Direct3D 12 (`layerOverrides`).
+    static func installWineD3D12Natives(wine: URL, windows: URL = prefix.appendingPathComponent("drive_c/windows", isDirectory: true)) throws {
+        let engine = wine.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib/wine/x86_64-windows")
+        for name in ["d3d12.dll", "d3d12core.dll"] {
+            guard let original = try? Data(contentsOf: engine.appendingPathComponent(name + ".wine")) else { continue }
+            try writeAsNative(original, to: windows.appendingPathComponent("system32/\(name)"))
         }
     }
 
@@ -886,11 +899,15 @@ enum Engine {
     /// finds before system32.
     static func layerOverrides(_ layer: GraphicsLayer, d3dMetalEngine: Bool) -> [String: String] {
         switch layer {
-        case .dxmt:
-            // d3d9 stays with DXVK: DXMT only covers Direct3D 10/11.
-            return Dictionary(uniqueKeysWithValues: ["dxgi", "d3d11", "d3d10core"].map { ($0, d3dMetalEngine ? "native" : "builtin") })
-        case .dxvk:
-            return d3dMetalEngine ? ["dxgi": "native", "d3d11": "native", "d3d10core": "native"] : [:]
+        case .dxmt, .dxvk:
+            guard d3dMetalEngine else {
+                // d3d9 stays with DXVK: DXMT only covers Direct3D 10/11.
+                return layer == .dxmt ? ["dxgi": "builtin", "d3d11": "builtin", "d3d10core": "builtin"] : [:]
+            }
+            // Games that probe for Direct3D 12 at start (Unity does, through a delay-load that
+            // needs the DLL to exist) would get D3DMetal's, which crashes against DXMT's or DXVK's
+            // dxgi. Wine's own (`installWineD3D12Natives`) just answers that there's none.
+            return ["dxgi": "native", "d3d11": "native", "d3d10core": "native", "d3d12": "native", "d3d12core": "native"]
         case .d3dmetal:
             return Dictionary(uniqueKeysWithValues: ["dxgi", "d3d10", "d3d10core", "d3d11", "d3d12", "d3d12core", "nvapi64", "nvngx"]
                 .map { ($0, "builtin") })

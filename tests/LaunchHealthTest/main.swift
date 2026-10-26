@@ -217,6 +217,9 @@ struct LaunchHealthTest {
               "frame rates: full minutes of the game's own programs, DXMT without .exe")
         check(FramePacing.candidates(refreshRate: 120, upTo: 60) == [60, 40, 30], "120 Hz: 60, 40, 30")
         check(FramePacing.candidates(refreshRate: 60, upTo: 60) == [60, 30], "60 Hz: 60, 30")
+        check(FramePacing.Context(refreshRate: 120, upscaling: true, graphics: .dxmt)
+              != FramePacing.Context(refreshRate: 120, upscaling: true, graphics: .d3dmetal),
+              "a limit learned on one layer doesn't carry over to another")
         let context = FramePacing.Context(refreshRate: 120, upscaling: true)
         var pacing = FramePacing.State(context: context, ranWith: 60)
         check(FramePacing.next(pacing, rates: [59.8, 60], standard: 60) == pacing, "two minutes say nothing")

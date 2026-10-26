@@ -267,16 +267,45 @@ enum Engine {
                 }
             }
         }
-        try installGraphics(graphicsDir, into: wine, matchesEngine: graphics.version.hasPrefix(engine.version + "-"))
+        // Copying the graphics files again would give them new inodes and so rebuild the game
+        // bundle Steam runs from, and every regedit starts Wine: each part is only redone when what
+        // it installs has changed. The stamps live in what they describe, so a fresh engine or
+        // prefix starts without one.
+        let matchesEngine = graphics.version.hasPrefix(engine.version + "-")
+        let graphicsStamp = stamp(in: wine.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lib/wine", isDirectory: true), name: "graphics")
+        let graphicsWanted = "\(graphics.id) \(graphics.version) engine-match \(matchesEngine)"
+        if readStamp(graphicsStamp) != graphicsWanted {
+            try installGraphics(graphicsDir, into: wine, matchesEngine: matchesEngine)
+            writeStamp(graphicsStamp, graphicsWanted)
+        }
         installGameBundle(wine: wine)  // after the graphics: its links must point at the new files
         detachUserFolders()
         trimSteamLogs()
         excludeGamesFromBackup()
-        applyGameEnvironment(wine: wine)
-        if let dxvk = manifest.component(dxvkID) {
-            try installDXVK(try await store.install(dxvk), wine: wine)
+        let prefixStamp = stamp(in: prefix, name: "setup")
+        let dxvk = manifest.component(dxvkID)
+        let prefixWanted = "\(engine.version) \(dxvk?.version ?? "-") " + gameEnvironment.sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }.joined(separator: " ")
+        if readStamp(prefixStamp) != prefixWanted {
+            applyGameEnvironment(wine: wine)
+            if let dxvk { try installDXVK(try await store.install(dxvk), wine: wine) }
+            writeStamp(prefixStamp, prefixWanted)
         }
         return wine
+    }
+
+    /// What `ensureEngine` last set up in a folder (the engine's lib/wine, the prefix).
+    private static func stamp(in folder: URL, name: String) -> URL {
+        folder.appendingPathComponent(".nightforge-\(name)")
+    }
+
+    private static func readStamp(_ file: URL) -> String? {
+        try? String(contentsOf: file, encoding: .utf8)
+    }
+
+    private static func writeStamp(_ file: URL, _ text: String) {
+        try? text.write(to: file, atomically: true, encoding: .utf8)
     }
 
     /// The engine's wine binary without async work (for app shutdown): the newest installed copy.
@@ -917,8 +946,8 @@ enum Engine {
 
     /// Game files can be downloaded again any time; backing up tens of gigabytes of them would
     /// only make Time Machine busy (and the disk with it) while you play. Saves live elsewhere.
-    static func excludeGamesFromBackup() {
-        let steamapps = steamRoot.appendingPathComponent("steamapps", isDirectory: true)
+    /// Steam for Mac's library gets the same (LibraryModel, after each scan).
+    static func excludeGamesFromBackup(steamapps: URL = steamRoot.appendingPathComponent("steamapps", isDirectory: true)) {
         for name in ["common", "downloading", "shadercache", "temp"] {
             var folder = steamapps.appendingPathComponent(name, isDirectory: true)
             guard FileManager.default.fileExists(atPath: folder.path),

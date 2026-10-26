@@ -273,6 +273,13 @@ struct LaunchHealthTest {
               "what the new folder has stays")
         try? fm.removeItem(at: migration)
 
+        // A problem report leaves out who the player is.
+        let line = GameLog.redacted(#"err:module:open C:\users\Thomas\Documents\x.dll and /Users/thomas/Library/y, drive_c/users/thomas/z, [U:1:158043902] 76561198118309630"#,
+                                    home: "/Users/thomas", user: "thomas")
+        check(!line.lowercased().contains("thomas"), "the account name is gone: \(line)")
+        check(!line.contains("158043902") && !line.contains("76561198118309630"), "Steam ids are gone: \(line)")
+        check(line.contains(#"C:\users\<user>\Documents"#) && line.contains("~/Library"), "the rest of the path stays: \(line)")
+
         // Winetricks verbs from the online fixes: install verbs pass, commands and options don't.
         for verb in ["vcrun2019", "d3dcompiler_47", "xact_x64"] {
             check(Engine.isSafeWinetricksVerb(verb), "winetricks verb \(verb) allowed")

@@ -1,0 +1,37 @@
+Nightforge – third-party notices
+
+Nightforge itself is free software under the GNU General Public License v3.0 (LICENSE).
+
+Inside the app
+--------------
+
+Vulkan-Headers (The Khronos Group Inc.), compiled into nightforge-vulkan-layer.dylib.
+  Apache-2.0 or MIT: licenses/Vulkan-Headers-LICENSE.md, licenses/Apache-2.0.txt, licenses/MIT.txt.
+  https://github.com/KhronosGroup/Vulkan-Headers
+
+mingw-w64 runtime, statically linked into steamwebhelper.exe (built with x86_64-w64-mingw32-gcc).
+  Its runtime and headers are under permissive licences (public domain, ZPL 2.1, MIT-style); see
+  COPYING.MinGW-w64-runtime.txt in the mingw-w64 sources. https://www.mingw-w64.org
+
+Game fixes in profiles.json
+  Derived from umu-protonfixes: BSD-2-Clause, LICENSE-umu-protonfixes.
+  Anti-cheat status from AreWeAntiCheatYet: MIT, LICENSE-areweanticheatyet.
+
+Downloaded by Nightforge (not inside the app)
+----------------------------------------------
+
+Each package comes with its own licence and, where its licence asks for it, its source:
+
+  Wine (Gcenx builds, winecx)     LGPL-2.1-or-later
+  DXMT 0.80                       MIT (with DXVK code, zlib, and NVIDIA NVAPI headers, MIT)
+  DXVK-macOS                      zlib
+  MoltenVK                        Apache-2.0
+  winetricks                      LGPL-2.1-or-later
+  cabextract                      GPL-3.0-or-later
+  D3DMetal                        Apple's licence (License.rtf beside the files); not Nightforge's, not under the GPL
+
+Nightforge's own builds of Wine parts, DXMT and cabextract carry their licence texts inside the
+package and their corresponding source as a second asset of the same GitHub release.
+
+Nightforge is not affiliated with Valve or Apple. Steam is a trademark of Valve Corporation; Mac and
+macOS are trademarks of Apple Inc.

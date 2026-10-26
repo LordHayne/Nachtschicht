@@ -119,7 +119,10 @@ final class LibraryModel: ObservableObject {
                     restartSteamWhenIdle = false
                     if let wine = await Engine.installedWine() { try? await Engine.restartSteamInBackground(wine) }
                 }
-                try? await Task.sleep(for: .seconds(3))
+                // Every few seconds while it matters (Nightforge in front, a game running or starting),
+                // otherwise less often: nothing waits on it then, and the Mac stays quieter.
+                let busy = NSApp.isActive || !found.isEmpty || launchingID != nil
+                try? await Task.sleep(for: .seconds(busy ? 3 : 10))
             }
         }
     }
@@ -1321,16 +1324,22 @@ final class LibraryModel: ObservableObject {
     }
 
     /// What a game's files reveal (read once per game and app run) and the ways to start it.
+    private var analyzing: [Int: Task<GameAnalysis, Never>] = [:]
+
     func insight(of game: Game) async -> GameInsight? {
         guard game.bottle.isBuiltIn, game.isInstalled else { return nil }
         let analysis: GameAnalysis
         if let known = analyses[game.appID] {
             analysis = known
         } else {
-            analysis = await Task.detached(priority: .utility) {
+            // Scrolling through the covers asks again before the first look is done: one look per game.
+            let running = analyzing[game.appID] ?? Task.detached(priority: .utility) {
                 GameAnalysis.analyze(installDir: game.installDir,
                                      launchExecutable: SteamCatalog.launchExecutable(appID: game.appID, steamRoot: game.steamRoot))
-            }.value
+            }
+            analyzing[game.appID] = running
+            analysis = await running.value
+            analyzing[game.appID] = nil
             analyses[game.appID] = analysis
         }
         let profile = await ProfileStore.shared.profile(for: game.appID)

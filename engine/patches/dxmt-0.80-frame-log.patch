@@ -1,0 +1,57 @@
+diff --git a/src/d3d11/d3d11_swapchain.cpp b/src/d3d11/d3d11_swapchain.cpp
+index b159f96..5bd4b18 100644
+--- a/src/d3d11/d3d11_swapchain.cpp
++++ b/src/d3d11/d3d11_swapchain.cpp
+@@ -24,6 +24,7 @@
+ #include "dxmt_presenter.hpp"
+ #include <atomic>
+ #include <cfloat>
++#include <chrono>
+ #include <format>
+ 
+ /**
+@@ -824,9 +825,32 @@ public:
+ 
+     cmd_queue.PresentBoundary();
+ 
++    LogFrameRate();
+     return hr;
+   };
+ 
++  // Nightforge: the frame rate goes to the log (Nightforge's wine.log) every 10 s for the first two
++  // minutes, then every minute, the way Nightforge's Vulkan layer does it. Nightforge learns from
++  // it which frame limit a game holds on this Mac.
++  void LogFrameRate() {
++    double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
++    if (frame_log_started_ == 0)
++      frame_log_started_ = frame_log_period_start_ = frame_log_last_ = now;
++    frame_log_slowest_ = std::max(frame_log_slowest_, now - frame_log_last_);
++    frame_log_last_ = now;
++    frame_log_frames_++;
++    double period = now - frame_log_started_ < 120 ? 10 : 60;
++    double seconds = now - frame_log_period_start_;
++    if (seconds < period)
++      return;
++    Logger::info(std::format("[nightforge-dxmt] {}: {:.1f} FPS over {:.0f} s, frames {:.1f} ms on average, slowest {:.0f} ms",
++                             env::getExeBaseName(), frame_log_frames_ / seconds, seconds,
++                             seconds * 1000 / frame_log_frames_, frame_log_slowest_ * 1000));
++    frame_log_period_start_ = now;
++    frame_log_frames_ = 0;
++    frame_log_slowest_ = 0;
++  }
++
+   void UpdateStatistics(const FrameStatisticsContainer& statistics, uint64_t frame_id) {
+     hud.begin();
+     auto &frame = statistics.at(frame_id - 1); // show the previous one frame statistics
+@@ -1090,6 +1114,11 @@ private:
+   DXGI_COLOR_SPACE_TYPE colorspace_ = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+   double init_refresh_rate_ = DBL_MAX;
+   int preferred_max_frame_rate = 0;
++  double frame_log_started_ = 0;
++  double frame_log_period_start_ = 0;
++  double frame_log_last_ = 0;
++  double frame_log_slowest_ = 0;
++  uint32_t frame_log_frames_ = 0;
+   HUDState hud;
+   Rc<Presenter> presenter;
+   ModeSetGuard modeset_guard_;

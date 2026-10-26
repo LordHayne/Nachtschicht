@@ -32,7 +32,7 @@ enum GameLog {
         (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? UInt64 ?? 0
     }
 
-    private static func text(since mark: UInt64) -> String {
+    static func text(since mark: UInt64) -> String {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return "" }
         defer { try? handle.close() }
         let end = (try? handle.seekToEnd()) ?? 0

@@ -71,7 +71,10 @@ struct GameOptionsSheet: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Picker(L10n.t("Frame limit"), selection: $options.frameLimit) {
-                        Text(automaticLabel(GameOptions().effectiveFrameLimit(displayRefreshRate: refreshRate, profile: profile).fpsLabel))
+                        // What the next start uses, including what Nightforge learned (FramePacing).
+                        Text(automaticLabel(FramePacing.automaticLimit(
+                            appID: game.appID, options: { var o = options; o.frameLimit = nil; return o }(),
+                            profile: profile, refreshRate: refreshRate).limit.fpsLabel))
                             .tag(Int?.none)
                         ForEach(GameOptions.frameLimits, id: \.self) { limit in
                             Text(limit.fpsLabel).tag(Int?.some(limit))
@@ -83,7 +86,7 @@ struct GameOptionsSheet: View {
                         Text(L10n.t("Off")).tag(Choice.off)
                     }
                     .disabled(!drawsWith.upscales || layers.isEmpty)
-                    Text(L10n.t("Automatic follows “Sharp & smooth” in Settings. The frame limit keeps frames even; MetalFX (DXMT only) upscales the picture to full Retina sharpness – set a lower resolution in the game for more FPS."))
+                    Text(L10n.t("Automatic follows “Sharp & smooth” in Settings. The frame limit keeps frames even; MetalFX upscales the picture to full Retina sharpness (not with WineD3D) – set a lower resolution in the game for more FPS."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

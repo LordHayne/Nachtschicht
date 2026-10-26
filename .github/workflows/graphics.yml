@@ -1,8 +1,10 @@
 name: Build graphics package
 
 # DXMT (Direct3D 10/11 → Metal) patched for Wine 11, plus Wine's Mac driver rebuilt with visible
-# symbols so DXMT can attach its Metal layer to game windows. Published as one release asset that
-# components/manifest.json points to. WINE_VERSION must match the engine pinned in sources.json.
+# symbols so DXMT can attach its Metal layer to game windows, and ntdll.so + wineserver with msync
+# (engine/patches/wine-*.patch). Published as one release asset that components/manifest.json points
+# to – from main only, so a run on another branch just checks that everything builds.
+# WINE_VERSION must match the engine pinned in sources.json.
 
 on:
   workflow_dispatch:
@@ -17,6 +19,8 @@ permissions:
 
 env:
   WINE_VERSION: "11.18"
+  # Header for the engine's libinotify (libinotify-kqueue), which wineserver links like Gcenx's does.
+  LIBINOTIFY_TAG: "20240724"
   DXMT_VERSION: v0.80
   LLVM_VERSION: llvmorg-15.0.7
   # Wine headers/tools DXMT builds against (from DXMT's own CI)
@@ -118,29 +122,43 @@ jobs:
   winemac:
     runs-on: macos-15
     steps:
+      - uses: actions/checkout@v4
+        with:
+          path: nightforge
+
       - name: Tools and sources
         run: |
           brew install bison flex pkg-config mingw-w64 || true
           git clone --depth 1 --branch "wine-$WINE_VERSION" https://gitlab.winehq.org/wine/wine.git wine
-          # Link against the same Vulkan loader the engine ships (Gcenx build of this Wine version).
+          for patch in nightforge/engine/patches/wine-*.patch; do
+            echo "Applying $patch"
+            git -C wine apply --verbose "$GITHUB_WORKSPACE/$patch"
+          done
+          # Link against the same Vulkan loader and libinotify the engine ships (Gcenx build of this Wine version).
           mkdir -p gcenx
           curl -fsSL "https://github.com/Gcenx/macOS_Wine_builds/releases/download/$WINE_VERSION/wine-devel-$WINE_VERSION-osx64.tar.xz" \
             | tar -xJ -C gcenx
           ln -s "$PWD/gcenx/Wine Devel.app/Contents/Resources/wine/lib" gcenxlib
+          mkdir -p inotify/sys
+          curl -fsSL "https://raw.githubusercontent.com/libinotify-kqueue/libinotify-kqueue/$LIBINOTIFY_TAG/sys/inotify.h" \
+            -o inotify/sys/inotify.h
 
       - name: Configure (x86_64, visible symbols)
         run: |
           export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
           mkdir build && cd build
+          # ntdll keeps the system unwinder (no --without-unwind), as in the engine's own build.
           ../wine/configure --host=x86_64-apple-darwin --enable-win64 --disable-tests \
             --without-freetype --without-x --without-gstreamer --without-cups --without-sane \
             --without-krb5 --without-gssapi --without-sdl --without-usb --without-pcap \
-            --without-netapi --without-gnutls --without-unwind \
+            --without-netapi --without-gnutls \
             CC="clang -arch x86_64" CXX="clang++ -arch x86_64" \
+            CPPFLAGS="-I$GITHUB_WORKSPACE/inotify" \
             CFLAGS="-fvisibility=default -O2 -Wno-error -mmacosx-version-min=11.0" \
-            LDFLAGS="-L$GITHUB_WORKSPACE/gcenxlib -mmacosx-version-min=11.0"
+            LDFLAGS="-L$GITHUB_WORKSPACE/gcenxlib -Wl,-rpath,@loader_path/../lib -mmacosx-version-min=11.0"
           # configure picks up otool's description instead of the install name; use what Gcenx uses.
           sed -i '' 's|^#define SONAME_LIBVULKAN .*|#define SONAME_LIBVULKAN "libvulkan.1.dylib"|' include/config.h
+          grep -q "define HAVE_SYS_INOTIFY_H 1" include/config.h || { echo "wineserver would lose inotify"; exit 1; }
 
       - name: Build winemac.so
         working-directory: build
@@ -154,10 +172,28 @@ jobs:
             nm -g dlls/winemac.drv/winemac.so | grep -q " T _$sym$" || { echo "missing $sym"; exit 1; }
           done
 
+      - name: Build ntdll.so and wineserver (msync)
+        working-directory: build
+        run: |
+          export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+          make -j"$(sysctl -n hw.logicalcpu)" dlls/ntdll/ntdll.so server/wineserver
+          nm dlls/ntdll/ntdll.so | grep -q "msync_wait_objs" || { echo "ntdll.so without msync"; exit 1; }
+          nm server/wineserver | grep -q "msync_init" || { echo "wineserver without msync"; exit 1; }
+          nm -u dlls/ntdll/ntdll.so | grep -q "_Unwind_Find_FDE" || { echo "ntdll.so without the system unwinder"; exit 1; }
+          # The engine's libinotify is found next to it, under the name the engine's own wineserver uses.
+          current=$(otool -L server/wineserver | awk '/inotify/ { print $1 }')
+          test -n "$current" || { echo "wineserver without libinotify"; exit 1; }
+          install_name_tool -change "$current" @rpath/libinotify.0.dylib server/wineserver
+          otool -L server/wineserver
+          otool -L dlls/ntdll/ntdll.so
+
       - uses: actions/upload-artifact@v4
         with:
           name: winemac
-          path: build/dlls/winemac.drv/winemac.so
+          path: |
+            build/dlls/winemac.drv/winemac.so
+            build/dlls/ntdll/ntdll.so
+            build/server/wineserver
 
   package:
     needs: [dxmt, winemac]
@@ -175,7 +211,14 @@ jobs:
           find artifacts/dxmt/install64 -name '*.dll' -exec cp {} "$root/x86_64-windows/" \;
           find artifacts/dxmt/install32 -name '*.dll' -exec cp {} "$root/i386-windows/" \;
           find artifacts/dxmt -name 'winemetal.so' -exec cp {} "$root/x86_64-unix/" \;
-          cp artifacts/winemac/winemac.so "$root/x86_64-unix/winemac.so"
+          find artifacts/winemac -name winemac.so -exec cp {} "$root/x86_64-unix/winemac.so" \;
+          # msync's ntdll.so and wineserver only work together (server protocol 963), so they sit in a
+          # folder of their own that only Nightforge versions which install both at once pick up.
+          mkdir -p "$root/msync/x86_64-unix" "$root/msync/bin"
+          find artifacts/winemac -name ntdll.so -exec cp {} "$root/msync/x86_64-unix/ntdll.so" \;
+          find artifacts/winemac -name wineserver -exec cp {} "$root/msync/bin/wineserver" \;
+          chmod +x "$root/msync/bin/wineserver"
+          test -s "$root/x86_64-unix/winemac.so" && test -s "$root/msync/x86_64-unix/ntdll.so" && test -s "$root/msync/bin/wineserver"
           ls -lR "$root"
           version="${WINE_VERSION}-dxmt${DXMT_VERSION#v}-${GITHUB_RUN_NUMBER}"
           name="nightforge-graphics-$version.tar.gz"
@@ -185,10 +228,11 @@ jobs:
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
       - name: Publish release
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "graphics-${{ steps.assemble.outputs.version }}" "${{ steps.assemble.outputs.name }}" \
             --repo "$GITHUB_REPOSITORY" --latest=false \
             --title "Graphics ${{ steps.assemble.outputs.version }}" \
-            --notes "DXMT $DXMT_VERSION with Nightforge's Wine 11 patches, and winemac.so from Wine $WINE_VERSION built with visible symbols. Licences: DXMT LGPL-2.1-or-later, Wine LGPL-2.1-or-later; sources: https://github.com/3Shain/dxmt, https://gitlab.winehq.org/wine/wine, patches in engine/patches."
+            --notes "DXMT $DXMT_VERSION with Nightforge's Wine 11 patches, winemac.so from Wine $WINE_VERSION built with visible symbols, and ntdll.so + wineserver from Wine $WINE_VERSION with msync (from CodeWeavers' CrossOver sources). Licences: DXMT LGPL-2.1-or-later, Wine LGPL-2.1-or-later; sources: https://github.com/3Shain/dxmt, https://gitlab.winehq.org/wine/wine, patches in engine/patches."

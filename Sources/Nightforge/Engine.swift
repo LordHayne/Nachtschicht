@@ -17,6 +17,8 @@ enum Engine {
     /// DirectX 9–11 → Vulkan → Metal. Draws reliably on Wine 11 today, while DXMT can't attach to
     /// Wine 11's windows yet (that needs a patched DXMT build).
     static let dxvkID = "dxvk-macos"
+    /// Vulkan → Metal for DXVK and Vulkan games, newer than the copy the engine brings along.
+    static let moltenVKID = "moltenvk"
     static let steamSetupURL = URL(string: "https://cdn.akamai.steamstatic.com/client/installer/SteamSetup.exe")!
     static let steamExeWindowsPath = #"C:\Program Files (x86)\Steam\steam.exe"#
     /// Steam's web UI (CEF) paints a black window under Wine on macOS unless it renders in software
@@ -42,6 +44,10 @@ enum Engine {
             // Rosetta runs AVX and AVX2 (macOS 15 and later) but only tells programs so when asked;
             // many newer games refuse to start or crash without it.
             "ROSETTA_ADVERTISE_AVX": "1",
+            // DXMT keeps the shaders it has translated in the Mac's per-user cache folder by default,
+            // which macOS empties at every restart – and then each game stutters through compiling
+            // them all over again. The user's Caches folder keeps them (and stays out of backups).
+            "DXMT_SHADER_CACHE_PATH": shaderCache.path,
         ]
         // Apple's Metal HUD: DXMT draws with Metal directly, so this is its FPS display. Only an
         // environment variable turns it on, and games get theirs from Steam, hence app-wide.
@@ -49,12 +55,19 @@ enum Engine {
         return env
     }
 
+    /// Where DXMT keeps translated shaders, shared by all games (its entries are keyed by shader).
+    static var shaderCache: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Nightforge/dxmt", isDirectory: true)
+    }
+
     /// Steam starts its games with a fresh environment built from the Windows registry, not with
     /// its own – so the game settings go into the user environment (HKCU\Environment) as well,
     /// where every Windows program, games included, picks them up at start.
     static func applyGameEnvironment(wine: URL) {
         let managed = ["DXVK_ASYNC", "MTL_HUD_ENABLED", "WINEDEBUG", "MVK_CONFIG_LOG_LEVEL", "DXVK_LOG_LEVEL", "DXVK_LOG_PATH",
-                       "ROSETTA_ADVERTISE_AVX"]
+                       "ROSETTA_ADVERTISE_AVX", "DXMT_SHADER_CACHE_PATH"]
+        try? FileManager.default.createDirectory(at: shaderCache, withIntermediateDirectories: true)
         let current = gameEnvironment
         let values = managed.map { name in
             current[name].map { "\"\(name)\"=\"\($0)\"" } ?? "\"\(name)\"=-"
@@ -139,6 +152,11 @@ enum Engine {
         let ours = ownProcesses()
         return ours.contains { $0.command.lowercased().contains(#"\steam\steam.exe"#) }
             && ours.contains { $0.command.hasSuffix("/wineserver") || $0.command.contains("/wineserver ") }
+    }
+
+    /// A Windows game runs in Nightforge's Wine session (its process shows the game folder's path).
+    static var windowsGameRunning: Bool {
+        ownProcesses().contains { $0.command.lowercased().contains(#"\steamapps\common\"#) }
     }
 
     /// Processes started from Nightforge's engine (executable inside its folder), with the command
@@ -253,7 +271,9 @@ enum Engine {
 
     /// Makes sure the engine and graphics layer from the current component list are installed –
     /// e.g. after the list moved to a newer engine. Returns the wine binary to use.
-    static func ensureEngine() async throws -> URL {
+    /// `gameRunning`: a game of Nightforge's own Steam runs, so its Wine session must not end –
+    /// a new graphics package (which can bring a new wineserver) waits for the next start then.
+    static func ensureEngine(gameRunning: Bool = false) async throws -> URL {
         let store = ComponentStore.shared
         let manifest = try await store.manifest()
         guard let engine = manifest.component(engineID), let graphics = graphicsComponent(in: manifest) else {
@@ -277,16 +297,49 @@ enum Engine {
                 }
             }
         }
-        try installGraphics(graphicsDir, into: wine, matchesEngine: graphics.version.hasPrefix(engine.version + "-"))
+        // Copying the graphics files again would give them new inodes and so rebuild the game
+        // bundle Steam runs from, and every regedit starts Wine: each part is only redone when what
+        // it installs has changed. The stamps live in what they describe, so a fresh engine or
+        // prefix starts without one.
+        let matchesEngine = graphics.version.hasPrefix(engine.version + "-")
+        let graphicsStamp = stamp(in: wine.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lib/wine", isDirectory: true), name: "graphics")
+        let moltenVK = manifest.component(moltenVKID)
+        let graphicsWanted = "\(graphics.id) \(graphics.version) engine-match \(matchesEngine) moltenvk \(moltenVK?.version ?? "engine")"
+        if readStamp(graphicsStamp) != graphicsWanted, !gameRunning, !windowsGameRunning {
+            try installGraphics(graphicsDir, into: wine, matchesEngine: matchesEngine)
+            var moltenVKDir: URL?
+            if let moltenVK { moltenVKDir = try await store.install(moltenVK) }
+            try installMoltenVK(moltenVKDir, into: wine)
+            writeStamp(graphicsStamp, graphicsWanted)
+        }
         installGameBundle(wine: wine)  // after the graphics: its links must point at the new files
         detachUserFolders()
         trimSteamLogs()
         excludeGamesFromBackup()
-        applyGameEnvironment(wine: wine)
-        if let dxvk = manifest.component(dxvkID) {
-            try installDXVK(try await store.install(dxvk), wine: wine)
+        let prefixStamp = stamp(in: prefix, name: "setup")
+        let dxvk = manifest.component(dxvkID)
+        let prefixWanted = "\(engine.version) \(dxvk?.version ?? "-") " + gameEnvironment.sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }.joined(separator: " ")
+        if readStamp(prefixStamp) != prefixWanted {
+            applyGameEnvironment(wine: wine)
+            if let dxvk { try installDXVK(try await store.install(dxvk), wine: wine) }
+            writeStamp(prefixStamp, prefixWanted)
         }
         return wine
+    }
+
+    /// What `ensureEngine` last set up in a folder (the engine's lib/wine, the prefix).
+    private static func stamp(in folder: URL, name: String) -> URL {
+        folder.appendingPathComponent(".nightforge-\(name)")
+    }
+
+    private static func readStamp(_ file: URL) -> String? {
+        try? String(contentsOf: file, encoding: .utf8)
+    }
+
+    private static func writeStamp(_ file: URL, _ text: String) {
+        try? text.write(to: file, atomically: true, encoding: .utf8)
     }
 
     /// The engine's wine binary without async work (for app shutdown): the newest installed copy.
@@ -372,7 +425,8 @@ enum Engine {
           osascript -e 'tell application id "com.valvesoftware.steam" to quit' >/dev/null 2>&1
         fi
         [ -n "$WINE" ] || exit 0
-        export WINEPREFIX="$PREFIX" WINEDEBUG=-all
+        # WINEMSYNC like every other Wine process of the session (Engine.environment).
+        export WINEPREFIX="$PREFIX" WINEDEBUG=-all WINEMSYNC=1
         if steam_running; then
           "$WINE" 'C:\Program Files (x86)\Steam\steam.exe' -shutdown >/dev/null 2>&1
           for i in $(seq 1 20); do steam_running || break; sleep 1; done
@@ -413,6 +467,63 @@ enum Engine {
                 try fm.copyItem(at: file, to: destination)
             }
         }
+        try installMsync(top.appendingPathComponent("msync", isDirectory: true), into: wine, matchesEngine: matchesEngine)
+    }
+
+    /// msync: Wine's synchronization (events, mutexes, semaphores every game thread waits on) on
+    /// Mach semaphores instead of round trips to the wineserver, which otherwise burns CPU time a
+    /// game would rather have (engine/patches/wine-11.18-msync.patch). The package's ntdll.so and
+    /// wineserver replace the engine's, which stay as *.engine and come back for a package without
+    /// them or for another engine version. The two only work together, so a Wine session started
+    /// with the old pair ends before the swap. Switched on by WINEMSYNC (see `environment`).
+    private static func installMsync(_ msyncDir: URL, into wine: URL, matchesEngine: Bool) throws {
+        let fm = FileManager.default
+        let root = wine.deletingLastPathComponent().deletingLastPathComponent()
+        let pairs = [
+            (msyncDir.appendingPathComponent("x86_64-unix/ntdll.so"), root.appendingPathComponent("lib/wine/x86_64-unix/ntdll.so")),
+            (msyncDir.appendingPathComponent("bin/wineserver"), wine.deletingLastPathComponent().appendingPathComponent("wineserver")),
+        ]
+        let available = matchesEngine && pairs.allSatisfy { fm.fileExists(atPath: $0.0.path) }
+        let sources = pairs.map { pair -> URL in
+            let original = pair.1.appendingPathExtension("engine")
+            return available ? pair.0 : original
+        }
+        let changes = zip(sources, pairs).contains { source, pair in
+            fm.fileExists(atPath: source.path) && !fm.contentsEqual(atPath: source.path, andPath: pair.1.path)
+        }
+        guard changes else { return }
+        if !ownProcesses().isEmpty { stopAll(wine) }  // with the old wineserver, before it's replaced
+        for (source, pair) in zip(sources, pairs) {
+            let original = pair.1.appendingPathExtension("engine")
+            if available, !fm.fileExists(atPath: original.path) { try fm.copyItem(at: pair.1, to: original) }
+            guard fm.fileExists(atPath: source.path) else { continue }
+            let staged = pair.1.appendingPathExtension("new")
+            try? fm.removeItem(at: staged)
+            try fm.copyItem(at: source, to: staged)
+            try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: staged.path)
+            _ = try fm.replaceItemAt(pair.1, withItemAt: staged)
+        }
+    }
+
+    /// Puts MoltenVK from its component in place of the engine's own (kept as libMoltenVK.dylib.engine,
+    /// which comes back when the component list drops it: `moltenVKDir` nil). The Vulkan loader finds
+    /// it there inside and outside the game bundle. Copied, not moved: a running Steam keeps the
+    /// library it has loaded.
+    static func installMoltenVK(_ moltenVKDir: URL?, into wine: URL) throws {
+        let fm = FileManager.default
+        let lib = wine.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib", isDirectory: true)
+        let installed = lib.appendingPathComponent("libMoltenVK.dylib")
+        let original = lib.appendingPathComponent("libMoltenVK.dylib.engine")
+        if !fm.fileExists(atPath: original.path), fm.fileExists(atPath: installed.path) {
+            try fm.copyItem(at: installed, to: original)
+        }
+        let source = moltenVKDir.map { $0.appendingPathComponent("MoltenVK/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib") }
+            ?? original
+        guard fm.fileExists(atPath: source.path) else { return }
+        let staged = lib.appendingPathComponent("libMoltenVK.dylib.new")
+        try? fm.removeItem(at: staged)
+        try fm.copyItem(at: source, to: staged)
+        _ = try fm.replaceItemAt(installed, withItemAt: staged)
     }
 
     /// Direct3D DLLs a game can take from DXVK (native, in the prefix) or DXMT (builtin, in the engine).
@@ -598,7 +709,7 @@ enum Engine {
     }
 
     /// Windows programs in a game folder (a few levels deep, where Unity/Unreal put them).
-    private static func executables(in dir: URL) -> [String] {
+    static func executables(in dir: URL) -> [String] {
         Set(executableFiles(in: dir).map(\.lastPathComponent)).sorted()
     }
 
@@ -824,6 +935,9 @@ enum Engine {
             env["DYLD_INSERT_LIBRARIES"] = hider.path
         }
         env["WINEPREFIX"] = prefix.path
+        // msync (installMsync); every Wine process of the session, wineserver included, has to agree,
+        // so it's in the environment all of them start with. Engines without it ignore it.
+        env["WINEMSYNC"] = "1"
         env["WINEDEBUG"] = "-all"
         // Gecko/Mono installers would otherwise pop up dialogs during setup.
         env["WINEDLLOVERRIDES"] = "mscoree,mshtml="
@@ -916,10 +1030,11 @@ enum Engine {
             // factor DXMT upscales to exactly the window's Retina pixels.
             dxmt.append("d3d11.metalSpatialUpscale = True")
         }
-        // Read by Nightforge's Vulkan layer (wrapper/nightforge-vulkan-layer.c); only games whose
-        // profile needs it get one.
+        // Read by Nightforge's Vulkan layer (wrapper/nightforge-vulkan-layer.c), for games that draw
+        // through Vulkan themselves or via DXVK.
         var vulkan = vulkanSamplers.map { ["maxPerStageDescriptorSamplers = \($0)"] } ?? []
         if hdr { vulkan.append("hdr = on") }
+        if upscaling { vulkan.append("upscale = on") }  // MetalFX, as DXMT does it
         var folders = Set([installDir.standardizedFileURL])
         for exe in executableFiles(in: installDir) { folders.insert(exe.deletingLastPathComponent().standardizedFileURL) }
         for folder in folders {
@@ -944,8 +1059,8 @@ enum Engine {
 
     /// Game files can be downloaded again any time; backing up tens of gigabytes of them would
     /// only make Time Machine busy (and the disk with it) while you play. Saves live elsewhere.
-    static func excludeGamesFromBackup() {
-        let steamapps = steamRoot.appendingPathComponent("steamapps", isDirectory: true)
+    /// Steam for Mac's library gets the same (LibraryModel, after each scan).
+    static func excludeGamesFromBackup(steamapps: URL = steamRoot.appendingPathComponent("steamapps", isDirectory: true)) {
         for name in ["common", "downloading", "shadercache", "temp"] {
             var folder = steamapps.appendingPathComponent(name, isDirectory: true)
             guard FileManager.default.fileExists(atPath: folder.path),

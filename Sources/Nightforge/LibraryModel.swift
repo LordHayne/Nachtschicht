@@ -109,9 +109,11 @@ final class LibraryModel: ObservableObject {
     private func watchRunningGames() {
         Task {
             while !Task.isCancelled {
+                let loaded = libraryLoaded
                 let folders = Self.processFolders(allGames)
                 let found = await Task.detached(priority: .utility) { Self.runningGames(folders) }.value
                 if found != running { running = found }
+                if loaded { runningScanned = true }  // only a look with the games known counts
                 watchForGameEnd(found)
                 if restartSteamWhenIdle && found.isEmpty && launchingID == nil {
                     restartSteamWhenIdle = false
@@ -197,6 +199,11 @@ final class LibraryModel: ObservableObject {
         return result
     }
 
+    /// The running-game check has looked at the processes at least once, knowing the library.
+    private var runningScanned = false
+    /// The first library scan has finished.
+    private var libraryLoaded = false
+
     /// The name of the program a process runs ("No Man's Sky"), as crash reports are named.
     nonisolated private static func programName(_ pid: pid_t) -> String? {
         var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
@@ -266,7 +273,10 @@ final class LibraryModel: ObservableObject {
                                      mac: LibraryScanner.scanMac(), preferWindows: preferWindows),
                 blocks: blocks)
         }.value
+        let wasDownloading = Set(allGames.filter { Self.isDownloading($0.install) }.map(\.id))
         allGames = found
+        libraryLoaded = true
+        for game in found where game.isInstalled && wasDownloading.contains(game.id) { prepare(game) }
         applyFilter()
         isScanning = false
         watchDownloads()
@@ -277,6 +287,7 @@ final class LibraryModel: ObservableObject {
     /// download. Not otherwise: it would sign the Wine Steam out (one sign-in per account), which
     /// most games need; Play starts it when a Mac version is played.
     private func afterScan() {
+        if MacSteam.isReady { Engine.excludeGamesFromBackup(steamapps: MacSteam.steamapps) }
         let macDownload = allGames.contains { game in
             (game.platform == .mac && Self.isDownloading(game.install)) || Self.isDownloading(game.macPending)
         }
@@ -355,9 +366,10 @@ final class LibraryModel: ObservableObject {
         guard SetupModel.isComplete, steamStartup == nil else { return }
         Task { await ProfileStore.shared.refresh() }
         steamStartup = Task {
-            guard let wine = try? await Engine.ensureEngine() else { return }
-            // Let the running-game check see the processes before deciding on a restart.
-            try? await Task.sleep(for: .seconds(4))
+            // Let the running-game check see the processes before deciding on a restart – or on
+            // replacing the engine's files, which ends the Wine session a game would run in.
+            while !runningScanned { try? await Task.sleep(for: .milliseconds(100)) }
+            guard let wine = try? await Engine.ensureEngine(gameRunning: !running.isEmpty) else { return }
             // Signing in would sign out the Steam for Mac a running Mac game uses; Play starts it later.
             guard !macSteamBusy else { return }
             try? await Engine.ensureSteamRunning(wine, busy: !running.isEmpty)
@@ -687,6 +699,7 @@ final class LibraryModel: ObservableObject {
                 break
             }
             launchingID = nil
+            SteamPriority.watch(game)
             startedHere.insert(game.id)
             // Steam's window may still be up from a question it asked; the game has the stage now.
             MacSteam.hide()
@@ -931,21 +944,22 @@ final class LibraryModel: ObservableObject {
             let attempts = insight?.attempts ?? []
             if automatic { LaunchHealth.review(game.appID, attempts, steamRoot: game.steamRoot) }
             let refreshRate = NSScreen.main?.maximumFramesPerSecond ?? 60  // the game opens on the main display
+            if game.bottle.isBuiltIn {
+                // The last session's frame rates decide this one's automatic frame limit.
+                await Task.detached(priority: .utility) {
+                    FramePacing.learn(appID: game.appID, installDir: game.installDir)
+                }.value
+            }
 
+            if let preparing = preparations[game.appID] {
+                launchStatus = L10n.t("Setting up the game …")
+                await preparing.value
+                launchStatus = nil
+            }
             while true {
-                // Runtimes the profile asks for, and those an earlier start turned out to need.
-                let learned = LearnedFixes.winetricks(game.appID)
-                let missing = Engine.missingWinetricks((profile?.winetricks ?? []) + learned.filter { $0 != GameLog.wineMono })
-                if !missing.isEmpty, let runner {
-                    launchStatus = L10n.t("Setting up the game …")
-                    await Engine.installWinetricks(missing, wine: URL(fileURLWithPath: runner))
-                    launchStatus = nil
-                }
-                if game.bottle.isBuiltIn, analysis?.usesDotNet == true || learned.contains(GameLog.wineMono),
-                   !Engine.wineMonoInstalled, let runner {
-                    launchStatus = L10n.t("Setting up .NET for the game …")
-                    await Engine.installWineMono(URL(fileURLWithPath: runner))
-                    launchStatus = nil
+                if let runner {
+                    await installRuntimes(for: game, profile: profile, analysis: analysis,
+                                          wine: URL(fileURLWithPath: runner), showStatus: true)
                 }
                 var arguments = analysis?.preferD3D11Arguments ?? []
                 var watchFirstSeconds = false
@@ -958,10 +972,17 @@ final class LibraryModel: ObservableObject {
                 }
                 let logMark = GameLog.mark()
                 LearnedFixes.setLastLaunch(game.appID, logMark: logMark)
+                let (frameLimit, learning) = FramePacing.automaticLimit(appID: game.appID, options: options,
+                                                                         profile: profile, refreshRate: refreshRate)
+                if game.bottle.isBuiltIn {
+                    FramePacing.recordStart(appID: game.appID, options: options, profile: profile, refreshRate: refreshRate,
+                                            logMark: logMark, limit: frameLimit, learning: learning)
+                }
                 guard await start(game, runner: runner, options: options, profile: profile,
-                                  arguments: arguments, refreshRate: refreshRate)
+                                  arguments: arguments, frameLimit: frameLimit)
                 else { return }
                 launchingID = nil
+                if game.bottle.isBuiltIn { SteamPriority.watch(game) }
                 startedHere.insert(game.id)
                 await bringToFront(game)
                 guard watchFirstSeconds else { break }
@@ -999,17 +1020,55 @@ final class LibraryModel: ObservableObject {
         }
     }
 
+    /// Runtimes the profile asks for and those an earlier start turned out to need, and Wine Mono
+    /// for .NET games. `showStatus` says so on the Play button while it takes.
+    private func installRuntimes(for game: Game, profile: GameProfile?, analysis: GameAnalysis?,
+                                 wine: URL, showStatus: Bool) async {
+        let learned = LearnedFixes.winetricks(game.appID)
+        let missing = Engine.missingWinetricks((profile?.winetricks ?? []) + learned.filter { $0 != GameLog.wineMono })
+        if !missing.isEmpty {
+            if showStatus { launchStatus = L10n.t("Setting up the game …") }
+            await Engine.installWinetricks(missing, wine: wine)
+            if showStatus { launchStatus = nil }
+        }
+        if game.bottle.isBuiltIn, analysis?.usesDotNet == true || learned.contains(GameLog.wineMono),
+           !Engine.wineMonoInstalled {
+            if showStatus { launchStatus = L10n.t("Setting up .NET for the game …") }
+            await Engine.installWineMono(wine)
+            if showStatus { launchStatus = nil }
+        }
+    }
+
+    /// Games being set up in the background right after their download; Play waits for them.
+    private var preparations: [Int: Task<Void, Never>] = [:]
+
+    /// A Windows game Steam has just finished downloading gets what it needs to start (runtimes,
+    /// .NET) now, while nobody waits – so its first Play starts it at once. Not while a game runs
+    /// or starts: that one gets the Mac's full attention, and Play does the setup then.
+    private func prepare(_ game: Game) {
+        guard game.bottle.isBuiltIn, game.platform == .windows, preparations[game.appID] == nil,
+              running.isEmpty, launchingID == nil
+        else { return }
+        preparations[game.appID] = Task {
+            defer { preparations[game.appID] = nil }
+            guard let wine = await Engine.installedWine() else { return }
+            let profile = await ProfileStore.shared.profile(for: game.appID)
+            let analysis = await insight(of: game)?.analysis
+            await installRuntimes(for: game, profile: profile, analysis: analysis, wine: wine, showStatus: false)
+        }
+    }
+
     /// Hands the game to Steam and follows Steam's log until the game runs. True once it does; a
     /// question from Steam can take as long as the player needs, no sign of life ends after 2 min.
     private func start(_ game: Game, runner: String?, options: GameOptions, profile: GameProfile?,
-                       arguments: [String], refreshRate: Int) async -> Bool {
+                       arguments: [String], frameLimit: Int) async -> Bool {
         var watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
         do {
             // Off the main thread: it reads Steam's app catalog and writes the registry, which
             // would freeze the window for a moment.
             try await Task.detached(priority: .userInitiated) {
                 try Launcher.launch(game, runnerPath: runner ?? "", options: options, profile: profile,
-                                    displayRefreshRate: refreshRate, extraArguments: arguments)
+                                    frameLimit: frameLimit, extraArguments: arguments)
             }.value
         } catch {
             errorMessage = error.localizedDescription
@@ -1050,7 +1109,7 @@ final class LibraryModel: ObservableObject {
                         resent = true
                         try? await Task.detached(priority: .userInitiated) {
                             try Launcher.launch(game, runnerPath: runner ?? "", options: options, profile: profile,
-                                                displayRefreshRate: refreshRate, extraArguments: arguments)
+                                                frameLimit: frameLimit, extraArguments: arguments)
                         }.value
                         continue
                     }
@@ -1065,7 +1124,7 @@ final class LibraryModel: ObservableObject {
                         watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
                         try? await Task.detached(priority: .userInitiated) {
                             try Launcher.launch(game, runnerPath: runner, options: options, profile: profile,
-                                                displayRefreshRate: refreshRate, extraArguments: arguments)
+                                                frameLimit: frameLimit, extraArguments: arguments)
                         }.value
                     }
                     launchStatus = nil

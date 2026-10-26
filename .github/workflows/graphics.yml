@@ -254,8 +254,10 @@ jobs:
           strings "$so" | grep -q "XBOX 360 For Windows" || { echo "Xbox 360 IDs patch missing"; exit 1; }
           # Where the engine's own winebus.so finds ntdll.so and SDL: next to it, and the engine's lib/
           # (two levels up from lib/wine/x86_64-unix; the game bundle has links in the same places).
-          install_name_tool -add_rpath @loader_path/ "$so"
-          install_name_tool -add_rpath @loader_path/../../ "$so"
+          for rpath in @loader_path/ @loader_path/../../; do
+            otool -l "$so" | grep -q "path $rpath " || install_name_tool -add_rpath "$rpath" "$so"
+          done
+          otool -l "$so" | grep -A2 LC_RPATH
           codesign -fs - "$so"
           otool -L "$so"
 

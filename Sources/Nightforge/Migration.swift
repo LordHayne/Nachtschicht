@@ -21,10 +21,10 @@ enum LegacyMigration {
 
         let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let oldSupport = support.appendingPathComponent(oldName, isDirectory: true)
-        if fm.fileExists(atPath: oldSupport.path) && !fm.fileExists(atPath: Engine.supportDir.path) {
+        if fm.fileExists(atPath: oldSupport.path) {
             stopSession(in: oldSupport)
-            // Same volume, so this is a rename. If it fails, try again on the next start.
-            guard (try? fm.moveItem(at: oldSupport, to: Engine.supportDir)) != nil else { return }
+            // Same volume, so these are renames. If one fails, try again on the next start.
+            guard moveContents(of: oldSupport, into: Engine.supportDir) else { return }
         }
 
         let caches = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -34,6 +34,20 @@ enum LegacyMigration {
             try? fm.moveItem(at: oldCaches, to: newCaches)
         }
         defaults.set(true, forKey: doneKey)
+    }
+
+    /// Moves `old` to `new`. When `new` exists already (a start whose move failed goes on to create
+    /// it, e.g. for the component list), whatever it lacks still comes over – above all the prefix
+    /// with Steam and the games – instead of being left behind for good. False when a move failed.
+    static func moveContents(of old: URL, into new: URL) -> Bool {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: new.path) else { return (try? fm.moveItem(at: old, to: new)) != nil }
+        for item in (try? fm.contentsOfDirectory(at: old, includingPropertiesForKeys: nil)) ?? [] {
+            let target = new.appendingPathComponent(item.lastPathComponent)
+            guard !fm.fileExists(atPath: target.path) else { continue }  // the new copy wins
+            guard (try? fm.moveItem(at: item, to: target)) != nil else { return false }
+        }
+        return true
     }
 
     /// Steam and Wine still running from the old folder would keep using paths that are about to

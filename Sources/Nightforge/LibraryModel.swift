@@ -720,7 +720,7 @@ final class LibraryModel: ObservableObject {
         launchStatus = nil
         let behavior = Prefs.afterLaunch
         let arguments = GameOptionsStore.load(game.appID).extraArgs.trimmingCharacters(in: .whitespaces)
-        Task {
+        launchTask = Task {
             defer {
                 launchingID = nil
                 launchNeedsConfirmation = false
@@ -757,7 +757,7 @@ final class LibraryModel: ObservableObject {
             let extra = arguments.isEmpty ? ""
                 : "//" + (arguments.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "")
             await takeSavesAlong(game, to: .mac)
-            let installDir = MacSteam.steamapps.appendingPathComponent("common/\(game.installDirName)", isDirectory: true)
+            let installDir = game.installDir  // the library it's really in, an external drive's included
             await Task.detached(priority: .userInitiated) { ControllerCompatibility.prepare(installDir: installDir) }.value
             let watcher = LaunchWatcher(steamRoot: MacSteam.root, appID: game.appID)
             let launchStarted = Date()
@@ -768,7 +768,10 @@ final class LibraryModel: ObservableObject {
             case .failed:
                 if !fallBackToWindows(game) { errorMessage = L10n.t("Steam couldn't start %@.", game.name) }
                 return
+            case .cancelled:
+                return
             case .noSignOfLife:
+                errorMessage = L10n.t("Steam didn't respond, so %@ didn't start. Please try again.", game.name)
                 return
             case .processSeen, .steamSaysRunning:
                 break
@@ -809,6 +812,11 @@ final class LibraryModel: ObservableObject {
         guard game.macNative else { return }
         let appID = game.appID
         let installDir = game.installDirName
+        // Where each version really is when that's known (an extra library on an external drive),
+        // else the default library.
+        let started = game.platform == platform ? game.installDir : nil
+        let windowsDir = platform == .windows ? started : game.windowsLeftoverDir
+        let macDir = platform == .mac ? started : nil
         let profileRules = await ProfileStore.shared.profile(for: appID)?.saves ?? []
         await Task.detached(priority: .userInitiated) {
             let macCatalog = MacSteam.root.appendingPathComponent("appcache/appinfo.vdf")
@@ -816,8 +824,9 @@ final class LibraryModel: ObservableObject {
                 appID: appID, steamRoot: FileManager.default.fileExists(atPath: macCatalog.path) ? MacSteam.root : Engine.steamRoot)
                 + profileRules
             var places = SaveTransfer.Places()
-            places.windowsInstall = Engine.steamRoot.appendingPathComponent("steamapps/common/\(installDir)", isDirectory: true)
-            places.macInstall = MacSteam.steamapps.appendingPathComponent("common/\(installDir)", isDirectory: true)
+            places.windowsInstall = windowsDir
+                ?? Engine.steamRoot.appendingPathComponent("steamapps/common/\(installDir)", isDirectory: true)
+            places.macInstall = macDir ?? MacSteam.steamapps.appendingPathComponent("common/\(installDir)", isDirectory: true)
             SaveTransfer.beforeStart(appID: appID, platform: platform, rules: rules, places: places)
         }.value
     }
@@ -842,7 +851,7 @@ final class LibraryModel: ObservableObject {
     }
 
     private enum MacStart {
-        case processSeen, steamSaysRunning, failed, noSignOfLife
+        case processSeen, steamSaysRunning, failed, cancelled, noSignOfLife
     }
 
     /// Follows the start of a Mac game until its process is there, or Steam's log says it runs.
@@ -858,8 +867,11 @@ final class LibraryModel: ObservableObject {
         var askingSince: Int?
         var handledRejections = 0
         var resent = 0
+        awaitingSteam = true
+        defer { awaitingSteam = false }
         while quietSeconds < 120 && seconds < 900 {
             try? await Task.sleep(for: .seconds(1))
+            if Task.isCancelled { return .cancelled }
             seconds += 1
             if await Task.detached(priority: .utility, operation: { Self.runningGames(folders) }).value[game.id] != nil {
                 launchNeedsConfirmation = false
@@ -898,7 +910,7 @@ final class LibraryModel: ObservableObject {
                 askingSince = nil
                 quietSeconds = 0
             case .cancelled?:
-                return .noSignOfLife
+                return .cancelled
             case .failed?:
                 return .failed
             case nil:
@@ -962,25 +974,48 @@ final class LibraryModel: ObservableObject {
         showingLibrary = false
     }
 
-    /// ↑/↓ in the grid move a whole row.
+    var gridLayout: GridLayout { GridLayout(games: games, columns: gridColumns) }
+
+    /// The selection is in the grid's first row, where ↑ leaves the grid.
+    var selectionInTopGridRow: Bool { (gridLayout.position(of: selectedIndex)?.row ?? 0) == 0 }
+
+    /// ↑/↓ in the grid move a whole row, keeping the column (or the last card of a shorter row).
     func moveRow(_ delta: Int) {
-        guard showingLibrary else { return }
-        move(delta * max(gridColumns, 1))
+        guard showingLibrary, let next = gridLayout.index(from: selectedIndex, rows: delta) else { return }
+        selectedIndex = next
     }
 
+    /// ←/→: the rail goes through the list, the grid through what it shows, group by group.
     func move(_ delta: Int) {
         guard !games.isEmpty else { return }
-        selectedIndex = max(0, min(games.count - 1, selectedIndex + delta))
+        if showingLibrary, let next = gridLayout.index(from: selectedIndex, steps: delta) {
+            selectedIndex = next
+        } else {
+            selectedIndex = max(0, min(games.count - 1, selectedIndex + delta))
+        }
     }
 
     func jump(toStart: Bool) {
         guard !games.isEmpty else { return }
-        selectedIndex = toStart ? 0 : games.count - 1
+        let order = showingLibrary ? gridLayout.order : Array(games.indices)
+        selectedIndex = (toStart ? order.first : order.last) ?? 0
     }
 
     func launchSelected() {
         guard let game = selected else { return }
         launch(game)
+    }
+
+    /// The launch in progress, so B or Esc can call it off while Nightforge waits for Steam.
+    private var launchTask: Task<Void, Never>?
+
+    /// While Nightforge waits for Steam to start the game (not while it watches a running game's first seconds).
+    private(set) var awaitingSteam = false
+
+    /// Stops waiting for a game Steam hasn't started yet. A game that already runs isn't touched.
+    func cancelLaunch() {
+        guard awaitingSteam else { return }
+        launchTask?.cancel()
     }
 
     private func launch(_ game: Game) {
@@ -994,7 +1029,7 @@ final class LibraryModel: ObservableObject {
         launchNeedsConfirmation = false
         launchStatus = nil
         let behavior = Prefs.afterLaunch
-        Task {
+        launchTask = Task {
             defer {
                 launchingID = nil
                 launchNeedsConfirmation = false
@@ -1191,8 +1226,11 @@ final class LibraryModel: ObservableObject {
         var retriedAfterRestart = false
         var signedInSince: Int?
         var resent = false
+        awaitingSteam = true
+        defer { awaitingSteam = false }
         while quietSeconds < 120 && totalSeconds < 900 {
             try? await Task.sleep(for: .seconds(1))
+            if Task.isCancelled { return false }
             totalSeconds += 1
             switch watcher.poll() {
             case .running?:
@@ -1254,6 +1292,8 @@ final class LibraryModel: ObservableObject {
                 }
             }
         }
+        // No sign of life for two minutes: say so instead of quietly turning back into Play.
+        errorMessage = L10n.t("Steam didn't respond, so %@ didn't start. Please try again.", game.name)
         return false
     }
 
@@ -1309,8 +1349,8 @@ final class LibraryModel: ObservableObject {
     }
 
     /// Opens a pre-filled problem report for the game in the browser.
-    func reportProblem(for game: Game) {
-        Task { ProblemReport.open(game: game, insight: await insight(of: game)) }
+    func reportProblem(for game: Game, tried: [String] = []) {
+        Task { ProblemReport.open(game: game, insight: await insight(of: game), tried: tried) }
     }
 
     /// Steam starts the game in the background, and since macOS 14 an app can't push itself to

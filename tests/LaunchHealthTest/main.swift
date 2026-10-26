@@ -77,7 +77,8 @@ struct LaunchHealthTest {
         LaunchHealth.recordStart(app, ladder)
         check(LaunchHealth.advance(app, ladder), "there is a second way")
         check(LaunchHealth.current(app, ladder) == (1, false), "moved to DXVK")
-        check(LaunchHealth.note(app, ladder)?.contains("DXVK") == true, "the note names the new way")
+        // The note says it was handled in plain words; which layer it is shows in the game's options.
+        check(LaunchHealth.note(app, ladder) != nil, "a game on another way gets a note")
         LaunchHealth.confirm(app, ladder)
         check(LaunchHealth.current(app, ladder) == (1, true), "DXVK confirmed")
         check(!LaunchHealth.advance(app, ladder) && LaunchHealth.current(app, ladder) == (0, false), "after the last way it starts over")
@@ -255,6 +256,22 @@ struct LaunchHealthTest {
                     "HKEY_CURRENT_USER\\Software\\Game]\n[HKEY_CURRENT_USER\\Software\\Microsoft", #"HKEY_CURRENT_USER\Software\"#] {
             check(!Engine.isAllowedRegistryKey(key), "registry key \(key.debugDescription) refused")
         }
+
+        // Migration from Nachtschicht into a Nightforge folder that already exists: the prefix it lacks
+        // comes over, what it has stays its own.
+        let migration = fm.temporaryDirectory.appendingPathComponent("nf-migration-\(UUID().uuidString)")
+        let oldFolder = migration.appendingPathComponent("Nachtschicht"), newFolder = migration.appendingPathComponent("Nightforge")
+        for folder in [oldFolder.appendingPathComponent("Prefix/drive_c"), oldFolder.appendingPathComponent("Components"),
+                       newFolder.appendingPathComponent("Components")] {
+            try? fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        try? "old".write(to: oldFolder.appendingPathComponent("Components/manifest.json"), atomically: true, encoding: .utf8)
+        try? "new".write(to: newFolder.appendingPathComponent("Components/manifest.json"), atomically: true, encoding: .utf8)
+        check(LegacyMigration.moveContents(of: oldFolder, into: newFolder), "migration into an existing folder succeeds")
+        check(fm.fileExists(atPath: newFolder.appendingPathComponent("Prefix/drive_c").path), "the old prefix comes over")
+        check((try? String(contentsOf: newFolder.appendingPathComponent("Components/manifest.json"), encoding: .utf8)) == "new",
+              "what the new folder has stays")
+        try? fm.removeItem(at: migration)
 
         // Winetricks verbs from the online fixes: install verbs pass, commands and options don't.
         for verb in ["vcrun2019", "d3dcompiler_47", "xact_x64"] {

@@ -1,16 +1,17 @@
 import AppKit
 import SwiftUI
 
-/// Settings in tabs: where the games come from and how they run. The tabs are a row of
-/// buttons, so the pad reaches them too.
+/// Settings in tabs: where the games come from, how they run, and what Nightforge is
+/// built on. The tabs are a row of buttons, so the pad reaches them too.
 struct SettingsView: View {
     enum Tab: CaseIterable {
-        case stores, general
+        case stores, general, about
 
         var label: String {
             switch self {
             case .stores: return L10n.t("Stores")
             case .general: return L10n.t("General")
+            case .about: return L10n.t("About")
             }
         }
     }
@@ -30,6 +31,8 @@ struct SettingsView: View {
                 switch tab {
                 case .stores: StoresSettings()
                 case .general: GeneralSettings()
+                case .about: AboutSettings()
+                        .frame(height: 560)  // the list of projects scrolls
                 }
             }
             .formStyle(.grouped)
@@ -159,6 +162,121 @@ private struct GeneralSettings: View {
             } header: {
                 Text(L10n.t("General"))
             }
+        }
+    }
+}
+
+// MARK: - About
+
+private struct AboutSettings: View {
+    private struct Credit: Identifiable {
+        let name: String
+        let version: String?
+        let role: String
+        let license: String
+        var id: String { name }
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Label {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L10n.t("No account. No telemetry. No background service."))
+                            .fontWeight(.semibold)
+                        Text(L10n.t("Nothing leaves your Mac unless you send it – a problem report opens on GitHub, filled in, and goes nowhere until you submit it."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } icon: {
+                    Image(systemName: "lock.fill")
+                }
+            } header: {
+                Text(L10n.t("Nightforge %@", Updater.currentVersion))
+            }
+
+            Section {
+                Text(L10n.t("Nightforge is free software under the GPL-3.0. It stands on these projects – thank you to everyone behind them. Their licence files ship inside the app."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(credits) { credit in
+                    LabeledContent {
+                        Text(credit.license)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: 220, alignment: .trailing)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(credit.name)
+                                if let version = credit.version {
+                                    Text(version).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                                }
+                            }
+                            Text(credit.role).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Button(L10n.t("Show Licence Files"), action: showLicences)
+                    .padFocus("settings.licences", activate: showLicences)
+            } header: {
+                Text(L10n.t("Built on"))
+            }
+        }
+    }
+
+    /// From the component list at hand (the last one fetched, else the app's own) – no network.
+    private var credits: [Credit] {
+        let components = ComponentStore.localManifest()?.components ?? []
+        return components.map { Credit(name: Self.name(of: $0), version: $0.version, role: Self.role(of: $0), license: $0.license) }
+            + [Credit(name: "umu-protonfixes", version: nil, role: L10n.t("Fixes for single games"), license: "BSD-2-Clause"),
+               Credit(name: "AreWeAntiCheatYet", version: nil, role: L10n.t("Which games' anti-cheat runs where"), license: "MIT")]
+    }
+
+    private static func name(of component: Component) -> String {
+        switch component.id {
+        case "wine": return "Wine"
+        case "winecx": return "Wine (CrossOver)"
+        case "d3dmetal": return "D3DMetal"
+        case "dxmt": return "DXMT"
+        case "dxvk-macos": return "DXVK"
+        case "moltenvk": return "MoltenVK"
+        case "winetricks": return "winetricks"
+        case "cabextract": return "cabextract"
+        case "gamepad": return L10n.t("Wine with controller support")
+        case "graphics": return L10n.t("Wine with DXMT")
+        default: return component.id
+        }
+    }
+
+    private static func role(of component: Component) -> String {
+        switch component.id {
+        case "wine", "winecx", "gamepad", "graphics": return L10n.t("Runs Windows games on the Mac")
+        case "d3dmetal": return L10n.t("DirectX 12 on Metal (Apple)")
+        case "dxmt": return L10n.t("DirectX 10 and 11 on Metal")
+        case "dxvk-macos": return L10n.t("DirectX 9 to 11 on Vulkan")
+        case "moltenvk": return L10n.t("Vulkan on Metal")
+        case "winetricks": return L10n.t("Installs what games need from Windows")
+        case "cabextract": return L10n.t("Unpacks Windows installers")
+        default:
+            switch component.kind {
+            case .engine: return L10n.t("Runs Windows games on the Mac")
+            case .graphics: return L10n.t("Graphics")
+            case .tool: return L10n.t("Tool")
+            }
+        }
+    }
+
+    private func showLicences() {
+        let files = ["LICENSE", "LICENSE-umu-protonfixes", "LICENSE-areweanticheatyet"]
+            .compactMap { Bundle.main.url(forResource: $0, withExtension: nil) }
+        if files.isEmpty {
+            NSWorkspace.shared.open(URL(string: "https://github.com/LordHayne/Nightforge")!)
+        } else {
+            NSWorkspace.shared.activateFileViewerSelecting(files)
         }
     }
 }

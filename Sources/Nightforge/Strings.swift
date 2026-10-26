@@ -357,9 +357,30 @@ enum L10n {
 
         // Settings tabs
         "Stores": "Stores",
+        "About": "Über",
         "Not set up yet – Nightforge does it at the first start.": "Noch nicht eingerichtet – Nightforge macht das beim ersten Start.",
         "Signed in · %@": "Angemeldet · %@",
         "Not signed in · %@": "Nicht angemeldet · %@",
+        "No account. No telemetry. No background service.": "Kein Konto. Keine Telemetrie. Kein Hintergrunddienst.",
+        "Nothing leaves your Mac unless you send it – a problem report opens on GitHub, filled in, and goes nowhere until you submit it.":
+            "Nichts verlässt deinen Mac, außer du schickst es ab – ein Problembericht öffnet sich ausgefüllt auf GitHub und geht nirgendwohin, bis du ihn absendest.",
+        "Nightforge %@": "Nightforge %@",
+        "Nightforge is free software under the GPL-3.0. It stands on these projects – thank you to everyone behind them. Their licence files ship inside the app.":
+            "Nightforge ist freie Software unter der GPL-3.0. Es baut auf diesen Projekten auf – danke an alle, die dahinterstehen. Ihre Lizenzdateien liegen in der App.",
+        "Built on": "Gebaut auf",
+        "Show Licence Files": "Lizenzdateien zeigen",
+        "Fixes for single games": "Korrekturen für einzelne Spiele",
+        "Which games' anti-cheat runs where": "Welches Anti-Cheat wo läuft",
+        "Wine with controller support": "Wine mit Controller-Unterstützung",
+        "Wine with DXMT": "Wine mit DXMT",
+        "Runs Windows games on the Mac": "Lässt Windows-Spiele auf dem Mac laufen",
+        "DirectX 12 on Metal (Apple)": "DirectX 12 auf Metal (Apple)",
+        "DirectX 10 and 11 on Metal": "DirectX 10 und 11 auf Metal",
+        "DirectX 9 to 11 on Vulkan": "DirectX 9 bis 11 auf Vulkan",
+        "Vulkan on Metal": "Vulkan auf Metal",
+        "Installs what games need from Windows": "Installiert, was Spiele von Windows brauchen",
+        "Unpacks Windows installers": "Entpackt Windows-Installer",
+        "Tool": "Werkzeug",
 
         // Library filters
         "Sort": "Sortieren",

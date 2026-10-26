@@ -118,6 +118,7 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.Keys.gameMode) private var gameMode = true
     @AppStorage(Prefs.Keys.sharpAndSmooth) private var sharpAndSmooth = true
     @AppStorage(Prefs.Keys.notifyDownloads) private var notifyDownloads = true
+    @AppStorage(Prefs.Keys.saveBattery) private var saveBattery = false
     @AppStorage(Prefs.Keys.reduceMotion) private var reduceMotionSetting = ""
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
@@ -151,6 +152,16 @@ private struct GeneralSettings: View {
                 .toggleStyle(.switch)
                 .onChange(of: gameMode) { _, _ in model.applySteamSettings() }
                 .padFocus("settings.gameMode", toggle: $gameMode)
+                Toggle(isOn: $saveBattery) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(L10n.t("Save battery when unplugged"))
+                        Text(L10n.t("On battery, games are capped at 30 FPS so the battery lasts longer. Plugged in, everything runs at full speed. Takes effect at the next game start."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .padFocus("settings.saveBattery", toggle: $saveBattery)
                 Toggle(isOn: $performanceHUD) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(L10n.t("Performance HUD in games"))

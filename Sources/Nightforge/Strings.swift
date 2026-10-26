@@ -515,6 +515,14 @@ enum L10n {
         "Let's Play": "Los geht's",
         "Show the First Start Again": "Ersten Start noch einmal zeigen",
 
+        // Battery
+        "Save battery when unplugged": "Akku sparen ohne Netzteil",
+        "On battery, games are capped at 30 FPS so the battery lasts longer. Plugged in, everything runs at full speed. Takes effect at the next game start.":
+            "Im Akkubetrieb laufen Spiele mit höchstens 30 FPS, damit der Akku länger hält. Am Netzteil läuft alles mit voller Geschwindigkeit. Gilt ab dem nächsten Spielstart.",
+        "On battery – games are capped at 30 FPS to last longer": "Im Akkubetrieb – Spiele laufen mit höchstens 30 FPS, damit der Akku länger hält",
+        "On battery – “Save battery when unplugged” in Settings caps games at 30 FPS": "Im Akkubetrieb – „Akku sparen ohne Netzteil“ in den Einstellungen begrenzt Spiele auf 30 FPS",
+        "On battery: games are capped at 30 FPS to last longer.": "Im Akkubetrieb: Spiele laufen mit höchstens 30 FPS, damit der Akku länger hält.",
+
         // Cloud saves
         "Your save is in the Steam Cloud. You can close your Mac.": "Dein Spielstand ist in der Steam Cloud. Du kannst den Mac zuklappen.",
         "Steam syncs your save in the background.": "Steam gleicht deinen Spielstand im Hintergrund ab.",

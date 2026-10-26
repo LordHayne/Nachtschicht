@@ -26,6 +26,12 @@ enum Prefs {
         static let padGlyphs = "padGlyphs"
         static let notifyDownloads = "notifyDownloads"
         static let reduceMotion = "reduceMotion"
+        static let saveBattery = "saveBattery"
+    }
+
+    /// On battery, games are capped at 30 FPS to last longer. Off by default: the player chooses it.
+    static var saveBattery: Bool {
+        UserDefaults.standard.bool(forKey: Keys.saveBattery)
     }
 
     /// "Reduce motion": "on" or "off" once changed in Settings, else whatever macOS says.

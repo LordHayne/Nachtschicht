@@ -109,6 +109,8 @@ final class LibraryModel: ObservableObject {
     /// A newer Nightforge release, offered with one click in the top bar.
     @Published private(set) var availableUpdate: AppUpdate?
     @Published private(set) var updating = false
+    /// Plugged in or on battery (for the top bar and "Save battery when unplugged").
+    @Published private(set) var power = PowerSource.current()
     /// macOS Low Power Mode: CPU and graphics run much slower, and so do games.
     @Published private(set) var lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
 
@@ -182,6 +184,8 @@ final class LibraryModel: ObservableObject {
                 // Every few seconds while it matters (Nightforge in front, a game running or starting),
                 // otherwise less often: nothing waits on it then, and the Mac stays quieter.
                 if controllerConnected && NSApp.isActive { input.refreshBattery() }
+                let source = PowerSource.current()
+                if source != power { power = source }
                 let busy = NSApp.isActive || !found.isEmpty || launchingID != nil
                 try? await Task.sleep(for: .seconds(busy ? 3 : 10))
             }
@@ -1431,8 +1435,14 @@ final class LibraryModel: ObservableObject {
                 let logMark = GameLog.mark()
                 let startedAt = Date()
                 LearnedFixes.setLastLaunch(game.appID, logMark: logMark)
-                let (frameLimit, learning) = FramePacing.automaticLimit(appID: game.appID, options: options,
+                var (frameLimit, learning) = FramePacing.automaticLimit(appID: game.appID, options: options,
                                                                          profile: profile, refreshRate: refreshRate)
+                // On battery with "Save battery" on: 30 FPS, and nothing learned from a capped session.
+                let capped = PowerSource.cappedLimit(frameLimit, onBattery: power.onBattery, saveBattery: Prefs.saveBattery)
+                if capped != frameLimit {
+                    frameLimit = capped
+                    learning = false
+                }
                 if game.bottle.isBuiltIn {
                     FramePacing.recordStart(appID: game.appID, options: options, profile: profile, refreshRate: refreshRate,
                                             logMark: logMark, limit: frameLimit, learning: learning)

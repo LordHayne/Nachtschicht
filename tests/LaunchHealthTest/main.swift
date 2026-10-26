@@ -338,6 +338,15 @@ struct LaunchHealthTest {
         check(Set([LaunchPhase.startingSteam, .signingIn, .settingUp, .settingUpDotNet, .restartingSteam, .retrying("DXVK"),
                    .startingSteamForMac, .signInInSteamWindow].map(\.hint)).count == 8, "every phase explains itself differently")
 
+        // "Save battery when unplugged": 30 FPS on battery, nothing changes plugged in or with the setting off.
+        check(PowerSource.cappedLimit(60, onBattery: true, saveBattery: true) == 30, "60 becomes 30 on battery")
+        check(PowerSource.cappedLimit(24, onBattery: true, saveBattery: true) == 24, "a lower limit stays")
+        check(PowerSource.cappedLimit(0, onBattery: true, saveBattery: true) == 30, "no limit becomes 30")
+        check(PowerSource.cappedLimit(60, onBattery: false, saveBattery: true) == 60, "plugged in: as it was")
+        check(PowerSource.cappedLimit(60, onBattery: true, saveBattery: false) == 60, "setting off: as it was")
+        let power = PowerSource.current()
+        check(power.level.map { (0...1).contains($0) } ?? true, "battery level reads as 0…1: \(String(describing: power.level))")
+
         print(failures == 0 ? "✓ all checks passed" : "\(failures) checks failed")
         exit(failures == 0 ? 0 : 1)
     }

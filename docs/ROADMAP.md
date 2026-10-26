@@ -157,7 +157,7 @@
   - **Was:** Tabs `Stores` · `General` · `Controller` · `Storage` · `About`. Inhalte siehe 1.6, 4.3, 5.4, 2.5.
   - **Wo:** `SettingsViews.swift` (`SettingsView`).
   - **Design:** `Dialogs.tsx` → `SettingsDialog`.
-  - **Stand:** `SettingsView.swift` mit Tab-Leiste (eigene Pad-Knöpfe): **Stores** (Steam: angemeldet/Spiele, „Open Steam“; CrossOver/Whisky/eigenes Wine), **General** (wie bisher), **Controller** (Teil von 5.4), **About** (1.6). `SettingsView(tab:)` öffnet direkt einen Tab. **Storage** seit `claude/ux-storage-4-3` (Teil von 4.3). In General inzwischen auch 5.1 (Mitteilungen) und 2.5 (Reduce motion); 3.4 fehlt noch.
+  - **Stand:** `SettingsView.swift` mit Tab-Leiste (eigene Pad-Knöpfe): **Stores** (Steam: angemeldet/Spiele, „Open Steam“; CrossOver/Whisky/eigenes Wine), **General** (wie bisher), **Controller** (Teil von 5.4), **About** (1.6). `SettingsView(tab:)` öffnet direkt einen Tab. **Storage** seit `claude/ux-storage-4-3` (Teil von 4.3). In General inzwischen auch 5.1 (Mitteilungen), 2.5 (Reduce motion) und 3.4 (Akku sparen).
 
 - [ ] **2.3 Grafik-Voreinstellungen in Klartext + Profil-Herkunft** · `M`
   - **Was:** In den Spieloptionen statt Einzelschaltern zuerst vier Voreinstellungen:
@@ -211,9 +211,10 @@
   - **Design:** `Parts.tsx` (`rollback`-Phase), `Detail.tsx` (Engine-Hinweis, Zeile „Engine … (held back)“).
   - **Fertig wenn:** Ein simuliertes kaputtes Engine-Update führt zu einem erfolgreichen Start mit der alten Version, ohne dass der Nutzer etwas tun muss.
 
-- [ ] **3.4 Akku-Modus** · `S`
+- [x] **3.4 Akku-Modus** · `S` · Branch `claude/ux-battery-3-4` (standardmäßig aus)
   - **Was:** Ohne Netzteil (IOKit `IOPSCopyPowerSourcesInfo`): Bildrate auf 30 FPS begrenzen, Hinweis „On battery: capped at 30 FPS – about 1 h 40 min of play“, Akkustand in der Top-Bar. Abschaltbar in General. Grundlage für die Begrenzung: `FramePacing.swift`.
   - **Design:** `Parts.tsx` (`playHint` mit `onBattery`), Top-Bar-Akku.
+  - **Stand** (`claude/ux-battery-3-4`): `PowerSource.swift` (IOKit: Akku/Netzteil, Ladestand; alle paar Sekunden im bestehenden Lauf-Check). Schalter „Save battery when unplugged“ in General – **standardmäßig aus** (Abweichung, bitte entscheiden: du magst 60 FPS fest, deshalb nicht ungefragt eingeschaltet). Ist er an und der Mac im Akkubetrieb, startet ein Spiel mit höchstens 30 FPS (auch ohne eigene Grenze), und aus so einer Sitzung lernt `FramePacing` nichts. Top-Bar zeigt im Akkubetrieb den Ladestand (unter 20 % in der Akzentfarbe), die Spielseite die Zeile „On battery: games are capped at 30 FPS …“. Ohne Restzeit-Schätzung – macOS' Schätzung gilt für die aktuelle Last, nicht fürs Spielen. Test in `tests/LaunchHealthTest/`.
 
 ---
 

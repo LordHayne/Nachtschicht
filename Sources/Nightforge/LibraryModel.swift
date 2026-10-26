@@ -115,6 +115,8 @@ final class LibraryModel: ObservableObject {
                 if found != running { running = found }
                 if loaded { runningScanned = true }  // only a look with the games known counts
                 watchForGameEnd(found)
+                if found.isEmpty, launchingID == nil, playing.isEmpty { idleLooks += 1 } else { idleLooks = 0 }
+                if idleLooks == 20 { GameDisplay.leaveGame() }  // a start that never got going (~1 min)
                 if restartSteamWhenIdle && found.isEmpty && launchingID == nil {
                     restartSteamWhenIdle = false
                     if let wine = await Engine.installedWine() { try? await Engine.restartSteamInBackground(wine) }
@@ -130,6 +132,7 @@ final class LibraryModel: ObservableObject {
     private var startedHere: Set<String> = []
     private var playing: Set<String> = []
     private var goneFor = 0
+    private var idleLooks = 0
 
     /// Once the games Nightforge started have all ended (gone for three looks, ~6–9 s, so a
     /// launcher handing over to the game doesn't count), Nightforge comes back to the front: the
@@ -151,6 +154,7 @@ final class LibraryModel: ObservableObject {
 
     private func comeBack() {
         MacSteam.hide()
+        GameDisplay.leaveGame()
         // Since macOS 14 an app can't push itself to the front; opening it through Launch
         // Services can, and unhides it too.
         let configuration = NSWorkspace.OpenConfiguration()
@@ -641,6 +645,7 @@ final class LibraryModel: ObservableObject {
         guard !needsMacSteam(game, then: .play) else { return }
         guard MacSteam.signedIn || otherSteamFree(for: .mac) else { return }
         launchingID = game.id
+        GameDisplay.enterGame()
         launchNeedsConfirmation = false
         launchStatus = nil
         let behavior = Prefs.afterLaunch
@@ -916,6 +921,7 @@ final class LibraryModel: ObservableObject {
         }
         if game.bottle.isBuiltIn && !Engine.steamSignedIn && !otherSteamFree(for: .windows) { return }
         launchingID = game.id
+        GameDisplay.enterGame()
         launchNeedsConfirmation = false
         launchStatus = nil
         let behavior = Prefs.afterLaunch
@@ -943,7 +949,7 @@ final class LibraryModel: ObservableObject {
             let automatic = game.bottle.isBuiltIn && options.graphics == .automatic
             let attempts = insight?.attempts ?? []
             if automatic { LaunchHealth.review(game.appID, attempts, steamRoot: game.steamRoot) }
-            let refreshRate = NSScreen.main?.maximumFramesPerSecond ?? 60  // the game opens on the main display
+            let refreshRate = GameDisplay.screen?.maximumFramesPerSecond ?? 60
             if game.bottle.isBuiltIn {
                 // The last session's frame rates decide this one's automatic frame limit.
                 await Task.detached(priority: .utility) {

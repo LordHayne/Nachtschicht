@@ -28,9 +28,9 @@ enum Route: Equatable {
 enum HomeRail {
     static let limit = 12
 
-    /// Indices into `games`: downloads first, then installed games, the ones played last first
-    /// (never played after them, by name).
-    static func pick(_ games: [Game]) -> [Int] {
+    /// Indices into `games`: pinned games first (by name), then downloads, then installed games,
+    /// the ones played last first (never played after them, by name). Only what's on this Mac.
+    static func pick(_ games: [Game], pinned: Set<Int> = []) -> [Int] {
         let candidates = games.indices.filter { index in
             switch games[index].install {
             case .installed, .downloading: return true
@@ -41,14 +41,18 @@ enum HomeRail {
             if case .downloading = game.install { return true }
             return false
         }
+        func byName(_ a: Game, _ b: Game) -> Bool { a.name.localizedStandardCompare(b.name) == .orderedAscending }
         let sorted = candidates.sorted { a, b in
             let ga = games[a], gb = games[b]
+            let pa = pinned.contains(ga.appID), pb = pinned.contains(gb.appID)
+            if pa != pb { return pa }
+            if pa { return byName(ga, gb) }
             if downloading(ga) != downloading(gb) { return downloading(ga) }
             switch (ga.lastPlayed, gb.lastPlayed) {
             case let (x?, y?) where x != y: return x > y
             case (_?, nil): return true
             case (nil, _?): return false
-            default: return ga.name.localizedStandardCompare(gb.name) == .orderedAscending
+            default: return byName(ga, gb)
             }
         }
         return Array(sorted.prefix(limit))

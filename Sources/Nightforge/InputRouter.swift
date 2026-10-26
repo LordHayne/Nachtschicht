@@ -93,6 +93,12 @@ final class InputRouter {
         case "i" where !model.route.isDetail && model.heroGame != nil:
             model.openDetail()
             return true
+        case "h" where model.route.isDetail:
+            if let game = model.selected { model.toggleHidden(game) }
+            return true
+        case "p" where model.route.isDetail:
+            if let game = model.selected { model.togglePinned(game) }
+            return true
         case "/":
             model.focusSearch()
             return true

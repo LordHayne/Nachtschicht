@@ -352,6 +352,26 @@ enum L10n {
         "%@ – click again for details": "%@ – noch einmal klicken für Details",
         "Tested on %@": "Getestet auf %@",
 
+        // Hide & pin
+        "Hidden": "Ausgeblendet",
+        "Hidden games": "Ausgeblendete Spiele",
+        "Hide": "Ausblenden",
+        "Show": "Einblenden",
+        "Hide from library (H)": "Aus der Bibliothek ausblenden (H)",
+        "Show in library again (H)": "Wieder in der Bibliothek zeigen (H)",
+        "Pin to Home – stays on the rail (P)": "An die Startseite heften – bleibt in der Leiste (P)",
+        "Unpin from Home (P)": "Von der Startseite lösen (P)",
+        "Pinned to Home": "An die Startseite geheftet",
+        "Undo": "Rückgängig",
+        "%@ is hidden from your library": "%@ ist aus deiner Bibliothek ausgeblendet",
+        "%@ is back in your library": "%@ ist wieder in deiner Bibliothek",
+        "%@ stays on Home – even when you haven't played it for a while": "%@ bleibt auf der Startseite – auch wenn du es länger nicht gespielt hast",
+        "%@ is no longer pinned": "%@ ist nicht mehr angeheftet",
+        "Open a game to bring it back.": "Öffne ein Spiel, um es zurückzuholen.",
+
+        "%@ is ready to play": "%@ ist bereit zum Spielen",
+        "%ld games are ready to play": "%ld Spiele sind bereit zum Spielen",
+
         // Compatibility
         "Runs great": "Läuft super",
         "Runs with tweaks": "Läuft mit Anpassungen",

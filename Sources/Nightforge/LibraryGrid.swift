@@ -93,6 +93,7 @@ struct LibraryGrid: View {
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 34) {
+                        LibraryFilterBar()
                         ForEach(sections) { section in
                             VStack(alignment: .leading, spacing: 18) {
                                 HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -106,7 +107,7 @@ struct LibraryGrid: View {
                                 LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
                                     ForEach(section.items, id: \.game.id) { item in
                                         GridCard(game: item.game, isSelected: item.index == model.selectedIndex,
-                                                 isRunning: model.isRunning(item.game),
+                                                 isRunning: model.isRunning(item.game), isPinned: model.isPinned(item.game),
                                                  compatibility: model.compatibility(of: item.game))
                                             .id(item.game.id)
                                             .modifier(GameContextMenu(game: item.game, index: item.index))
@@ -143,11 +144,12 @@ private struct GridCard: View {
     let game: Game
     let isSelected: Bool
     var isRunning = false
+    var isPinned = false
     let compatibility: Compatibility
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            CoverCard(game: game, isSelected: isSelected, isRunning: isRunning)
+            CoverCard(game: game, isSelected: isSelected, isRunning: isRunning, isPinned: isPinned)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 // The level's own icon (each has a different one), named for VoiceOver and on hover.
                 Image(systemName: compatibility.level.symbol)
@@ -163,5 +165,63 @@ private struct GridCard: View {
             .frame(width: 154, alignment: .leading)
         }
         .contentShape(Rectangle())
+    }
+}
+
+/// Above the grid: what the library shows. Only there when it has something to offer.
+private struct LibraryFilterBar: View {
+    @EnvironmentObject private var model: LibraryModel
+
+    var body: some View {
+        if !model.hiddenGames.isEmpty || model.showingHidden {
+            HStack(spacing: 12) {
+                if model.showingHidden {
+                    Text(L10n.t("Hidden games"))
+                        .font(Theme.display(24))
+                        .foregroundStyle(Theme.ink)
+                    Text(L10n.t("Open a game to bring it back."))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.muted)
+                }
+                Spacer()
+                FilterToggle(title: L10n.t("Hidden"), symbol: "eye.slash", count: model.hiddenGames.count,
+                             on: model.showingHidden, id: "library.hidden") { model.toggleShowingHidden() }
+            }
+        }
+    }
+}
+
+/// A filter switch: filled in while it's on.
+struct FilterToggle: View {
+    let title: String
+    let symbol: String
+    var count: Int?
+    let on: Bool
+    let id: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+                Text(title)
+                if let count {
+                    Text("\(count)")
+                        .monospacedDigit()
+                        .foregroundStyle(on ? Theme.night.opacity(0.6) : Theme.muted)
+                }
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(on ? Theme.night : Theme.ink.opacity(0.85))
+            .padding(.horizontal, 13)
+            .frame(height: 32)
+            .background {
+                if on { Capsule().fill(Theme.ink) } else { Capsule().fill(.ultraThinMaterial) }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .padFocus(id, cornerRadius: 16, activate: action)
     }
 }

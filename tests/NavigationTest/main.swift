@@ -43,6 +43,22 @@ struct NavigationTest {
         check(long.first == 1 && long == long.sorted(), "the most recent first: \(long.prefix(4))")
         check(HomeRail.pick([]).isEmpty, "no games, no rail")
 
+        // Pinned games lead the rail (by name), even ones not played for long; only games on this Mac.
+        let pinned = HomeRail.pick(games, pinned: [5, 0])
+        check(pinned == [5, 4, 3, 1, 6], "pinned first, a pinned game not on the Mac stays off: \(pinned)")
+        let pinnedMany = HomeRail.pick(many, pinned: [139, 137])
+        check(pinnedMany.prefix(2) == [137, 139] && pinnedMany.count == HomeRail.limit, "pins beat recent games and the limit holds: \(pinnedMany.prefix(3))")
+
+        // Hidden and pinned marks survive a restart (UserDefaults), by app ID.
+        let defaults = UserDefaults(suiteName: "nightforge.navigation-test")!
+        defaults.removePersistentDomain(forName: "nightforge.navigation-test")
+        GameMarks.save([570, 10], .hidden, to: defaults)
+        GameMarks.save([1091500], .pinned, to: defaults)
+        check(GameMarks.load(.hidden, from: defaults) == [570, 10], "hidden games come back")
+        check(GameMarks.load(.pinned, from: defaults) == [1091500], "pinned games come back")
+        check(GameMarks.load(.hidden, from: UserDefaults(suiteName: "nightforge.navigation-test.empty")!).isEmpty, "nothing marked at first")
+        defaults.removePersistentDomain(forName: "nightforge.navigation-test")
+
         // A game's page belongs to where it was opened; Back goes there.
         check(Route.detail(gameID: "x", from: .library).level == .library, "a page opened in the library is in the library")
         check(Route.detail(gameID: "x", from: .home).level == .home, "a page opened on Home is on Home")

@@ -36,6 +36,11 @@ final class LibraryModel: ObservableObject {
     @Published private(set) var homeRail: [Int] = []
     /// On Home, the "All games" tile after the rail is selected instead of a game.
     @Published private(set) var homeOnAllGames = false
+    /// Games hidden from the library and pinned to Home, by app ID (GameMarks).
+    @Published private(set) var hiddenGames = GameMarks.load(.hidden)
+    @Published private(set) var pinnedGames = GameMarks.load(.pinned)
+    /// The library shows only the hidden games, to bring them back.
+    @Published private(set) var showingHidden = false
     /// The game each level had selected, so going back to it finds it there again.
     private var homeGameID: String?
     private var libraryGameID: String?
@@ -307,8 +312,13 @@ final class LibraryModel: ObservableObject {
         let wasDownloading = Set(allGames.filter { Self.isDownloading($0.install) }.map(\.id))
         allGames = found
         libraryLoaded = true
-        for game in found where game.isInstalled && wasDownloading.contains(game.id) { prepare(game) }
+        let finished = found.filter { $0.isInstalled && wasDownloading.contains($0.id) }
+        for game in finished { prepare(game) }
         applyFilter()
+        if let game = finished.first {
+            Toasts.shared.show(finished.count == 1 ? L10n.t("%@ is ready to play", game.name) : L10n.t("%ld games are ready to play", finished.count),
+                               action: .init(label: L10n.t("Play")) { [weak self] in self?.play(game) })
+        }
         watchDownloads()
         afterScan()
         if scanAgain {
@@ -954,18 +964,20 @@ final class LibraryModel: ObservableObject {
     private func applyFilter(selectBestMatch: Bool = false) {
         let previous = selected?.id
         let words = Search.key(searchText).split(separator: " ")
+        // Hidden games only show where they're brought back from.
+        let shelf = allGames.filter { hiddenGames.contains($0.appID) == showingHidden }
         if words.isEmpty {
-            games = allGames
+            games = shelf
         } else {
             // Word starts first ("ark" → ARK, Arkham), then initials ("rdr2"), then mid-word hits
             // (Amnesia: The Dark Descent); within each, the library order.
-            let ranked = allGames.compactMap { game in Search.rank(name: game.name, query: searchText).map { (game, $0) } }
+            let ranked = shelf.compactMap { game in Search.rank(name: game.name, query: searchText).map { (game, $0) } }
             let owned = Set(allGames.map(\.appID))
             games = (0...2).flatMap { rank in ranked.filter { $0.1 == rank }.map(\.0) }
-                + storeResults.filter { !owned.contains($0.appID) }
+                + (showingHidden ? [] : storeResults.filter { !owned.contains($0.appID) })
         }
         selectedIndex = selectBestMatch && !words.isEmpty ? 0 : games.firstIndex(where: { $0.id == previous }) ?? 0
-        homeRail = words.isEmpty ? HomeRail.pick(games) : []
+        homeRail = words.isEmpty && !showingHidden ? HomeRail.pick(games, pinned: pinnedGames) : []
         switch route {
         case .detail(let id, let from) where !games.contains(where: { $0.id == id }):
             route = from == .home ? .home : .library  // its game is gone (another scan, another version)
@@ -1015,6 +1027,7 @@ final class LibraryModel: ObservableObject {
         guard route != .home else { return }
         rememberSelection()
         route = .home
+        if showingHidden { showingHidden = false; applyFilter() }
         if !searchText.isEmpty { searchText = "" }  // Home is the whole collection
         selectOnHome()
     }
@@ -1050,7 +1063,13 @@ final class LibraryModel: ObservableObject {
         case .detail(_, .home):
             route = .home
         case .library:
-            if searchText.isEmpty { goHome() } else { searchText = "" }
+            if !searchText.isEmpty {
+                searchText = ""
+            } else if showingHidden {
+                toggleShowingHidden()
+            } else {
+                goHome()
+            }
         case .home:
             return false
         }
@@ -1082,10 +1101,75 @@ final class LibraryModel: ObservableObject {
         homeOnAllGames ? homeRail.count : homeRail.firstIndex(of: selectedIndex) ?? 0
     }
 
+    /// Play from somewhere else (a message's button): selects the game where it's shown, then plays it.
+    func play(_ game: Game) {
+        guard let index = games.firstIndex(where: { $0.id == game.id }) else { return }
+        select(index)
+        primaryAction()
+    }
+
     /// A game picked directly (a right-click on its cover).
     func select(_ index: Int) {
         if route == .home { homeOnAllGames = false }
         selectedIndex = index
+    }
+
+    // MARK: - Hide & pin
+
+    /// The games in the library, without the hidden ones.
+    var visibleCount: Int { allGames.lazy.filter { !self.hiddenGames.contains($0.appID) }.count }
+
+    func isHidden(_ game: Game) -> Bool { hiddenGames.contains(game.appID) }
+    func isPinned(_ game: Game) -> Bool { pinnedGames.contains(game.appID) }
+
+    /// Pinning keeps a game on Home's rail; only games on this Mac are there.
+    func canPin(_ game: Game) -> Bool {
+        guard !isHidden(game) else { return false }
+        switch game.install {
+        case .installed, .downloading: return true
+        case .notInstalled, .inStore: return false
+        }
+    }
+
+    /// H: out of the library, Home and searches (or back in), with Undo.
+    func toggleHidden(_ game: Game) {
+        guard game.install != .inStore else { return }
+        let hide = !isHidden(game), wasPinned = isPinned(game)
+        mark(game.appID, hidden: hide, pinned: hide ? false : nil)
+        Toasts.shared.show(hide ? L10n.t("%@ is hidden from your library", game.name) : L10n.t("%@ is back in your library", game.name),
+                           action: .init(label: L10n.t("Undo")) { [weak self] in
+                               self?.mark(game.appID, hidden: !hide, pinned: hide && wasPinned ? true : nil)
+                           })
+    }
+
+    /// P: stays on Home's rail even when it hasn't been played for a while.
+    func togglePinned(_ game: Game) {
+        guard canPin(game) || isPinned(game) else { return }
+        let pin = !isPinned(game)
+        mark(game.appID, pinned: pin)
+        Toasts.shared.show(pin ? L10n.t("%@ stays on Home – even when you haven't played it for a while", game.name)
+                               : L10n.t("%@ is no longer pinned", game.name))
+    }
+
+    private func mark(_ appID: Int, hidden: Bool? = nil, pinned: Bool? = nil) {
+        if let hidden {
+            if hidden { hiddenGames.insert(appID) } else { hiddenGames.remove(appID) }
+            GameMarks.save(hiddenGames, .hidden)
+            if hiddenGames.isEmpty { showingHidden = false }
+        }
+        if let pinned {
+            if pinned { pinnedGames.insert(appID) } else { pinnedGames.remove(appID) }
+            GameMarks.save(pinnedGames, .pinned)
+        }
+        applyFilter()
+    }
+
+    /// The library's "Hidden" switch: only the hidden games, to bring some back – or all games again.
+    func toggleShowingHidden() {
+        guard showingHidden || !hiddenGames.isEmpty else { return }
+        showingHidden.toggle()
+        applyFilter()
+        selectedIndex = gridLayout.order.first ?? 0
     }
 
     var gridLayout: GridLayout { GridLayout(games: games, columns: gridColumns) }

@@ -278,7 +278,7 @@ private struct AllGamesHero: View {
                 .font(.system(size: 12, weight: .semibold))
                 .kerning(1.8)
                 .foregroundStyle(Theme.muted)
-            Text(model.allGames.count == 1 ? L10n.t("Your game") : L10n.t("All %ld games", model.allGames.count))
+            Text(model.visibleCount == 1 ? L10n.t("Your game") : L10n.t("All %ld games", model.visibleCount))
                 .font(Theme.display(54))
                 .foregroundStyle(Theme.ink)
                 .lineLimit(2)
@@ -442,7 +442,7 @@ private struct TopBar: View {
     }
 
     private var countText: String {
-        let total = model.allGames.count
+        let total = model.visibleCount
         let matches = model.games.filter { $0.install != .inStore }.count  // store hits aren't yours
         return total == 1 ? L10n.t("%ld of 1 game", matches) : L10n.t("%ld of %ld games", matches, total)
     }
@@ -455,7 +455,7 @@ private struct SectionSwitch: View {
     var body: some View {
         HStack(spacing: 0) {
             segment(.home, L10n.t("Home"), count: nil) { model.goHome() }
-            segment(.library, L10n.t("Library"), count: model.allGames.count) { model.goLibrary() }
+            segment(.library, L10n.t("Library"), count: model.visibleCount) { model.goLibrary() }
         }
         .padding(3)
         .frame(height: 34)
@@ -563,7 +563,17 @@ private struct GameDetail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            CompatibilityLine(compatibility: model.compatibility(of: game), detailed: !compact)
+            HStack(spacing: 12) {
+                CompatibilityLine(compatibility: model.compatibility(of: game), detailed: !compact)
+                if model.isHidden(game) {
+                    Label(L10n.t("Hidden"), systemImage: "eye.slash")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.ink.opacity(0.8))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.1), in: Capsule())
+                }
+            }
 
             Group {
                 if let logo {
@@ -686,6 +696,22 @@ private struct GameDetail: View {
                         help: game.isInstalled ? L10n.t("Uninstall (⌘⌫)") : L10n.t("Cancel Download")
                     ) {
                         model.requestUninstall(game)
+                    }
+                }
+                if !compact && game.install != .inStore {
+                    let hidden = model.isHidden(game)
+                    RoundIconButton(symbol: hidden ? "eye" : "eye.slash",
+                                    help: hidden ? L10n.t("Show in library again (H)") : L10n.t("Hide from library (H)"),
+                                    focusID: "detail.hide") {
+                        model.toggleHidden(game)
+                    }
+                }
+                if !compact && (model.canPin(game) || model.isPinned(game)) {
+                    let pinned = model.isPinned(game)
+                    RoundIconButton(symbol: pinned ? "pin.fill" : "pin",
+                                    help: pinned ? L10n.t("Unpin from Home (P)") : L10n.t("Pin to Home – stays on the rail (P)"),
+                                    focusID: "detail.pin") {
+                        model.togglePinned(game)
                     }
                 }
             }
@@ -870,6 +896,8 @@ struct RoundIconButton: View {
     let symbol: String
     let help: String
     var size: CGFloat = 52
+    /// For a button whose symbol changes (hide/show): keeps the pad's highlight on it.
+    var focusID: String?
     let action: () -> Void
 
     var body: some View {
@@ -885,7 +913,7 @@ struct RoundIconButton: View {
         .help(help)
         // Spoken without the shortcut in brackets ("Rescan library", not "arrow.clockwise").
         .accessibilityLabel(help.replacingOccurrences(of: #" \(.*\)$"#, with: "", options: .regularExpression))
-        .padFocus("round.\(symbol)", cornerRadius: size / 2, activate: action)
+        .padFocus(focusID ?? "round.\(symbol)", cornerRadius: size / 2, activate: action)
     }
 }
 
@@ -909,7 +937,7 @@ private struct CoverRail: View {
                 LazyHStack(spacing: 18) {
                     ForEach(railItems, id: \.game.id) { place, index, game in
                         let isSelected = !model.homeOnAllGames && index == model.selectedIndex
-                        CoverCard(game: game, isSelected: isSelected, isRunning: model.isRunning(game))
+                        CoverCard(game: game, isSelected: isSelected, isRunning: model.isRunning(game), isPinned: model.isPinned(game))
                             .id(game.id)
                             .modifier(GameContextMenu(game: game, index: index))
                             .onTapGesture {
@@ -921,7 +949,7 @@ private struct CoverRail: View {
                             }
                             .help(isSelected ? L10n.t("%@ – click again for details", game.name) : game.name)
                     }
-                    AllGamesTile(count: model.allGames.count, isSelected: model.homeOnAllGames)
+                    AllGamesTile(count: model.visibleCount, isSelected: model.homeOnAllGames)
                         .id(Self.allGamesID)
                         .onTapGesture {
                             if model.homeOnAllGames {
@@ -1028,6 +1056,7 @@ struct CoverCard: View {
     let game: Game
     let isSelected: Bool
     var isRunning = false
+    var isPinned = false
     @State private var cover: NSImage?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -1077,6 +1106,16 @@ struct CoverCard: View {
             }
         }
         .overlay(alignment: .topLeading) {
+            if isPinned && !isRunning {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.ink)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 5)
+                    .background(Theme.night.opacity(0.78), in: Capsule())
+                    .padding(7)
+                    .help(L10n.t("Pinned to Home"))
+            }
             if isRunning {
                 HStack(spacing: 5) {
                     Circle().fill(Color.green).frame(width: 7, height: 7)
@@ -1117,6 +1156,7 @@ struct CoverCard: View {
         case .inStore: parts.append(L10n.t("In the Steam Store"))
         }
         if game.platform == .mac { parts.append(L10n.t("Uses the Mac version")) }
+        if isPinned { parts.append(L10n.t("Pinned to Home")) }
         if game.controller != .none { parts.append(game.controller.help) }
         if isRunning { parts.append(L10n.t("Running")) }
         return parts.joined(separator: ", ")
@@ -1197,13 +1237,17 @@ private struct HintBar: View {
                     Hint(symbol: controller ? pad.confirm : "return", text: L10n.t("Open"))
                     Hint(symbol: controller ? pad.stick : "arrow.up.and.down.and.arrow.left.and.right",
                          text: L10n.t("Select"))
-                    Hint(symbol: controller ? pad.back : "escape", text: model.searchText.isEmpty ? L10n.t("Home") : L10n.t("Clear search"))
+                    Hint(symbol: controller ? pad.back : "escape",
+                         text: !model.searchText.isEmpty ? L10n.t("Clear search") : model.showingHidden ? L10n.t("All games") : L10n.t("Home"))
                 case .detail(_, let from):
                     if let game = model.selected, game.install != .inStore {
                         // What Return does here: the big button's word, short.
                         Hint(symbol: controller ? pad.confirm : "return",
                              text: game.install == .notInstalled && !game.playsInCloud ? L10n.t("Download") : L10n.t("Play"))
                         Hint(symbol: controller ? pad.options : "o.square", text: L10n.t("Options"))
+                        if !controller {
+                            Hint(symbol: "h.square", text: model.isHidden(game) ? L10n.t("Show") : L10n.t("Hide"))
+                        }
                     }
                     Hint(symbol: controller ? pad.back : "escape", text: from == .home ? L10n.t("Home") : L10n.t("Library"))
                 }

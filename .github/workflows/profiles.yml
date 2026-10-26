@@ -61,7 +61,7 @@ jobs:
           assert len(doc["games"]) > 50, "suspiciously few games"
           for app_id, game in doc["games"].items():
               assert app_id.isdigit(), app_id
-              assert game.get("graphics") in (None, "dxmt", "dxvk"), (app_id, game.get("graphics"))
+              assert game.get("graphics") in (None, "dxmt", "dxvk", "wined3d", "d3dmetal"), (app_id, game.get("graphics"))
               assert game.get("metalFX") in (None, True, False), (app_id, game.get("metalFX"))
               assert game.get("frameLimit") is None or isinstance(game["frameLimit"], int), (app_id, game.get("frameLimit"))
               assert game.get("antiCheat") is None or isinstance(game["antiCheat"], list), (app_id, game.get("antiCheat"))

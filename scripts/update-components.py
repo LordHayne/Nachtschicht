@@ -44,6 +44,9 @@ def hash_url(url: str) -> tuple[str, int]:
 
 def latest_release(repo: str, tag_prefix: str = "") -> dict:
     releases = get_json(f"https://api.github.com/repos/{repo}/releases?per_page=30")
+    # GitHub doesn't list releases newest first (a graphics package from the morning came before
+    # the evening's), so order by when each was published.
+    releases.sort(key=lambda release: release.get("published_at") or "", reverse=True)
     for release in releases:
         if not release["draft"] and not release["prerelease"] and release["tag_name"].startswith(tag_prefix):
             return release

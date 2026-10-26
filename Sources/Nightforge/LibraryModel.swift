@@ -291,7 +291,7 @@ final class LibraryModel: ObservableObject {
         let macDownload = allGames.contains { game in
             (game.platform == .mac && Self.isDownloading(game.install)) || Self.isDownloading(game.macPending)
         }
-        if !macSteamPrewarmed, macDownload, MacSteam.isReady, !anyRunning(.windows) {
+        if !macSteamPrewarmed, macDownload, MacSteam.isReady, !anyRunning(.windows), launchingID == nil {
             macSteamPrewarmed = true
             if !MacSteam.isRunning { MacSteam.start() }
         }
@@ -302,6 +302,8 @@ final class LibraryModel: ObservableObject {
     /// any more ("Failed to get list of download sources"). With downloads waiting in both, the
     /// signed-in one finishes first, then the other is signed in – not while a game runs or starts.
     private var lastSignInSwitch = Date.distantPast
+    /// How far the Mac downloads had got when Steam for Mac last got its turn.
+    private var lastMacTurnProgress: Double?
 
     private func takeTurnsDownloading() {
         guard launchingID == nil, running.isEmpty, Date().timeIntervalSince(lastSignInSwitch) > 120 else { return }
@@ -309,8 +311,15 @@ final class LibraryModel: ObservableObject {
             (game.platform == .mac && Self.isDownloading(game.install)) || Self.isDownloading(game.macPending)
         }
         let windowsDownload = allGames.contains { $0.platform == .windows && $0.bottle.isBuiltIn && Self.isDownloading($0.install) }
-        if macDownload, MacSteam.isReady, !MacSteam.signedIn, !(windowsDownload && Engine.steamSignedIn) {
+        // A Mac download that got nowhere in its last turn (Steam for Mac finds no download
+        // servers, say) doesn't get another: Steam for Mac would come up and sign the Wine Steam out
+        // every few minutes for nothing. Any progress lets it take turns again.
+        let macProgress = allGames.filter { Self.isDownloading($0.macPending) || ($0.platform == .mac && Self.isDownloading($0.install)) }
+            .map { MacSteamProgress.fraction(appID: $0.appID) ?? 0 }.reduce(0, +)
+        let macStalled = lastMacTurnProgress.map { macProgress <= $0 } ?? false
+        if macDownload, MacSteam.isReady, !MacSteam.signedIn, !(windowsDownload && Engine.steamSignedIn), !macStalled {
             lastSignInSwitch = Date()
+            lastMacTurnProgress = macProgress
             Task {
                 if MacSteam.isRunning { await MacSteam.quit() }
                 MacSteam.start()
@@ -937,6 +946,18 @@ final class LibraryModel: ObservableObject {
                 _ = await restartStuckSteam(wine)
                 launchStatus = nil
             }
+            // A Steam that is still signing in starts the game offline ("Steam is currently in
+            // Offline Mode"): wait for it, and start it afresh if it doesn't get there.
+            if game.bottle.isBuiltIn, Engine.isSteamSignedIn, !Engine.steamSignedIn, let wine = await Engine.installedWine() {
+                launchStatus = L10n.t("Signing in to Steam …")
+                var waited = 0
+                while !Engine.steamSignedIn, waited < 45 {
+                    try? await Task.sleep(for: .seconds(1))
+                    waited += 1
+                }
+                if !Engine.steamSignedIn { _ = await restartStuckSteam(wine) }
+                launchStatus = nil
+            }
             if game.bottle.isBuiltIn { await takeSavesAlong(game, to: .windows) }
             let runner = game.bottle.isBuiltIn ? await Engine.installedWine()?.path : Prefs.runnerPath
             // Known fixes for this game (profiles/profiles.json) and what its files reveal.
@@ -975,12 +996,23 @@ final class LibraryModel: ObservableObject {
                     if watchFirstSeconds { LaunchHealth.recordStart(game.appID, attempts) }
                 }
                 let logMark = GameLog.mark()
+                let startedAt = Date()
                 LearnedFixes.setLastLaunch(game.appID, logMark: logMark)
                 let (frameLimit, learning) = FramePacing.automaticLimit(appID: game.appID, options: options,
                                                                          profile: profile, refreshRate: refreshRate)
                 if game.bottle.isBuiltIn {
                     FramePacing.recordStart(appID: game.appID, options: options, profile: profile, refreshRate: refreshRate,
                                             logMark: logMark, limit: frameLimit, learning: learning)
+                }
+                // Settings a game only takes from the environment come with the Steam that starts it.
+                let layer = options.graphics == .automatic ? (profile?.graphics ?? Engine.defaultGraphics) : options.graphics
+                if game.bottle.isBuiltIn,
+                   Engine.prepareLaunchEnvironment(avx: LearnedFixes.avx(game.appID, profile: profile), d3dMetal: layer == .d3dmetal,
+                                                   frameLimit: frameLimit, upscaling: options.effectiveUpscaling(profile: profile)),
+                   Engine.isSteamRunning, !anyRunning(.windows), let runner {
+                    launchStatus = L10n.t("Signing in to Steam …")
+                    _ = await restartStuckSteam(URL(fileURLWithPath: runner))
+                    launchStatus = nil
                 }
                 guard await start(game, runner: runner, options: options, profile: profile,
                                   arguments: arguments, frameLimit: frameLimit)
@@ -1003,6 +1035,17 @@ final class LibraryModel: ObservableObject {
                 if !needed.isEmpty {
                     // Wine said what's missing: install it and try the same way again.
                     LearnedFixes.addWinetricks(needed, for: game.appID)
+                    continue
+                }
+                if game.bottle.isBuiltIn, Engine.applyFileEdits(profile?.fileEdits ?? [], installDir: game.installDir) {
+                    // The game wrote its settings file at its first start, with a setting its
+                    // profile turns off: the same way again, with the file fixed.
+                    continue
+                }
+                if game.bottle.isBuiltIn, LearnedFixes.avx(game.appID, profile: profile),
+                   GameLog.illegalInstruction(since: logMark, installDir: game.installDir, startedAt: startedAt) {
+                    // Rosetta's AVX hint sent it down a path Rosetta can't run: the same way without it.
+                    LearnedFixes.setNoAVX(game.appID)
                     continue
                 }
                 if LaunchHealth.advance(game.appID, attempts) {

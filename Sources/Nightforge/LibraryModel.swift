@@ -47,8 +47,6 @@ final class LibraryModel: ObservableObject {
     @Published var pendingLeftoverRemoval: Game?
     /// Steam for Mac being set up for a game whose Mac version is wanted.
     @Published var macSetup: MacSteamSetup?
-    /// Started once its download is done: the player pressed Play on a game that had to fetch its Mac version.
-    private var playWhenInstalled: String?
     private var macSteamPrewarmed = false
     @Published private(set) var uninstallingID: String?
     /// Games whose Windows process is running right now, with that process's pid.
@@ -190,31 +188,28 @@ final class LibraryModel: ObservableObject {
         }
     }
 
-    /// Steam for Mac starts in the background with Nightforge once a game uses its Mac version, so
-    /// downloads go on and Play is quick; a game whose Mac download the player wanted to play starts.
+    /// Steam for Mac starts in the background with Nightforge once a game uses its Mac version (or
+    /// is fetching it), so downloads go on and Play is quick.
     private func afterScan() {
-        let macGames = allGames.filter { $0.platform == .mac && $0.install != .notInstalled }
-        if !macSteamPrewarmed, !macGames.isEmpty, MacSteam.isReady {
+        let usesMacSteam = allGames.contains { game in
+            (game.platform == .mac && game.install != .notInstalled) || Self.isDownloading(game.macPending)
+        }
+        if !macSteamPrewarmed, usesMacSteam, MacSteam.isReady {
             macSteamPrewarmed = true
             if !MacSteam.isRunning { MacSteam.start() }
         }
-        guard let id = playWhenInstalled, let game = allGames.first(where: { $0.id == id }) else { return }
-        switch game.install {
-        case .installed:
-            playWhenInstalled = nil
-            if launchingID == nil && !isRunning(game) { launch(game) }
-        case .notInstalled, .inStore:
-            playWhenInstalled = nil  // the download was cancelled
-        case .downloading:
-            break
-        }
+    }
+
+    private static func isDownloading(_ state: InstallState?) -> Bool {
+        if case .downloading? = state { return true }
+        return false
     }
 
     private var downloadWatcher: Task<Void, Never>?
 
     /// While Steam downloads something, re-read the manifests every few seconds for progress.
     private func watchDownloads() {
-        let downloading = allGames.contains { if case .downloading = $0.install { return true } else { return false } }
+        let downloading = allGames.contains { Self.isDownloading($0.install) || Self.isDownloading($0.macPending) }
         guard downloading, downloadWatcher == nil else { return }
         downloadWatcher = Task {
             try? await Task.sleep(for: .seconds(3))
@@ -303,16 +298,10 @@ final class LibraryModel: ObservableObject {
         switch game.install {
         case .installed: launchSelected()
         case .notInstalled where game.isVROnly: break
-        case .notInstalled: download(game, thenPlay: playsAfterDownload(game))
+        case .notInstalled: download(game)
         case .downloading: break
         case .inStore: openStorePage(game)
         }
-    }
-
-    /// The game was playable until Nightforge switched it to its Mac version, so its button still
-    /// says Play: that fetches the Mac version and starts it.
-    func playsAfterDownload(_ game: Game) -> Bool {
-        game.platform == .mac && game.install == .notInstalled && game.windowsLeftover != nil
     }
 
     /// Buying happens on Steam's own store page in the browser; Nightforge never sees payment data.
@@ -392,9 +381,9 @@ final class LibraryModel: ObservableObject {
     /// Steam then would end the game too.
     private var restartSteamWhenIdle = false
 
-    private func download(_ game: Game, thenPlay: Bool = false) {
+    private func download(_ game: Game) {
         if game.platform == .mac {
-            downloadMac(game, thenPlay: thenPlay)
+            downloadMac(game)
             return
         }
         Task {
@@ -425,7 +414,7 @@ final class LibraryModel: ObservableObject {
             guard let self else { return }
             self.macSetup = nil
             switch setup.next {
-            case .download: self.downloadMac(setup.game, thenPlay: self.playsAfterDownload(setup.game))
+            case .download: self.downloadMac(setup.game)
             case .play: self.launch(setup.game)
             }
         }
@@ -448,13 +437,25 @@ final class LibraryModel: ObservableObject {
         reload(quiet: true)
     }
 
-    private func downloadMac(_ game: Game, thenPlay: Bool) {
+    /// For a game played through its installed Windows version: fetch its Mac version in the
+    /// background; the game switches over once it's installed.
+    func loadMacVersion(of game: Game) {
+        downloadMac(LibraryScanner.macEntry(for: game))
+    }
+
+    /// Stops fetching the Mac version (asks first, like any download).
+    func cancelMacVersion(of game: Game) {
+        var entry = LibraryScanner.macEntry(for: game)
+        entry.listID = game.id + "#mac"  // the Windows version stays playable meanwhile
+        requestUninstall(entry)
+    }
+
+    private func downloadMac(_ game: Game) {
         guard !needsMacSteam(game, then: .download) else { return }
         Task {
             do {
                 try await MacSteam.download(appID: game.appID, name: game.name, installDir: game.installDirName,
                                             macGameRunning: anyRunning(.mac))
-                if thenPlay { playWhenInstalled = game.id }
                 reload(quiet: true)
                 await watchMacDownloadStart(game)
             } catch {
@@ -972,7 +973,6 @@ final class LibraryModel: ObservableObject {
             do {
                 if game.platform == .mac {
                     try await MacSteam.uninstall(appID: game.appID, installDir: game.installDir)
-                    if playWhenInstalled == game.id { playWhenInstalled = nil }
                     return
                 }
                 guard let wine = await Engine.installedWine() else { return }

@@ -52,6 +52,9 @@ struct Game: Identifiable, Hashable {
     var versionReason: VersionChoice.Reason?
     /// Mac version in use while the Windows one is still installed in Nightforge's own Steam: its size.
     var windowsLeftover: Int64?
+    /// The Mac version Nightforge switches to once it's on the Mac, while the installed Windows
+    /// version is still the one played: not downloaded yet, or downloading.
+    var macPending: InstallState?
     /// Keeps a game's place in the list when it changes version.
     var listID: String?
     /// Store hits only: price as shown in the store, and the Metacritic score.
@@ -206,10 +209,13 @@ enum LibraryScanner {
         for steamapps in libraryFolders(steamRoot: root, bottle: bottle) {
             for manifest in manifests(in: steamapps) {
                 guard var game = readManifest(manifest, steamapps: steamapps, bottle: bottle,
-                                              steamRoot: root, steamExe: "", usage: usage),
+                                              steamRoot: root, steamExe: "", usage: usage, measureStaging: false),
                       seen.insert(game.appID).inserted
                 else { continue }
                 game.platform = .mac
+                if case .downloading = game.install, let fraction = MacSteamProgress.fraction(appID: game.appID, steamRoot: root) {
+                    game.install = .downloading(fraction)
+                }
                 if let app = catalog[game.appID] {
                     game.isVROnly = app.vrOnly
                     game.adoptMacFacts(app)
@@ -249,35 +255,53 @@ enum LibraryScanner {
                 result.append(game)
                 continue
             }
-            var entry: Game
-            if let installedMac {
-                entry = installedMac
-            } else {
-                entry = Game(appID: game.appID, name: game.name, bottle: MacSteam.bottle, steamRoot: MacSteam.root,
-                             steamExeWindowsPath: "",
-                             installDir: MacSteam.steamapps.appendingPathComponent("common/\(game.installDirName)", isDirectory: true),
-                             sizeOnDisk: game.macSize)
-                entry.install = .notInstalled
-                entry.installDirName = game.installDirName
-            }
-            entry.platform = .mac
-            entry.macNative = true
+            var entry = macEntry(for: game, onMac: installedMac)
             entry.mac64 = facts.mac64
-            entry.macAppleSilicon = game.macAppleSilicon || installedMac?.macAppleSilicon == true
-            entry.macSize = max(game.macSize, installedMac?.macSize ?? 0)
-            entry.isVROnly = game.isVROnly
-            entry.lastPlayed = [game.lastPlayed, installedMac?.lastPlayed].compactMap { $0 }.max()
-            entry.playtimeMinutes = [game.playtimeMinutes, installedMac?.playtimeMinutes].compactMap { $0 }.max()
-            entry.windowsBuild = game.windowsBuild
             entry.switchable = switchable
             entry.versionReason = switchable ? reason : nil
-            entry.listID = game.id
-            if game.isInstalled && game.bottle.isBuiltIn { entry.windowsLeftover = game.sizeOnDisk }
+            // Seamless: a game that plays through its installed Windows version stays playable
+            // that way while its Mac version is fetched; it switches once that is installed.
+            if game.isInstalled && !entry.isInstalled && reason != .chosen {
+                game.macPending = entry.install
+                result.append(game)
+                continue
+            }
             result.append(entry)
         }
         let listed = Set(windows.filter { $0.install != .inStore }.map(\.appID))
         result += mac.filter { !listed.contains($0.appID) }
         return sorted(result)
+    }
+
+    /// The Mac version's entry for a game the Windows scan found: what Steam for Mac has of it
+    /// (`onMac`), else not downloaded. It keeps the game's place in the list.
+    static func macEntry(for game: Game, onMac: Game? = nil) -> Game {
+        var entry: Game
+        if let onMac {
+            entry = onMac
+        } else {
+            entry = Game(appID: game.appID, name: game.name, bottle: MacSteam.bottle, steamRoot: MacSteam.root,
+                         steamExeWindowsPath: "",
+                         installDir: MacSteam.steamapps.appendingPathComponent("common/\(game.installDirName)", isDirectory: true),
+                         sizeOnDisk: game.macSize)
+            entry.install = game.macPending ?? .notInstalled
+            entry.installDirName = game.installDirName
+        }
+        entry.platform = .mac
+        entry.macNative = true
+        entry.mac64 = game.mac64 || onMac?.mac64 == true
+        entry.macAppleSilicon = game.macAppleSilicon || onMac?.macAppleSilicon == true
+        entry.macSize = max(game.macSize, onMac?.macSize ?? 0)
+        entry.isVROnly = game.isVROnly
+        entry.lastPlayed = [game.lastPlayed, onMac?.lastPlayed].compactMap { $0 }.max()
+        entry.playtimeMinutes = [game.playtimeMinutes, onMac?.playtimeMinutes].compactMap { $0 }.max()
+        entry.windowsBuild = game.windowsBuild
+        entry.switchable = game.switchable
+        entry.versionReason = game.versionReason
+        entry.listID = game.id
+        entry.macPending = nil
+        if game.isInstalled && game.bottle.isBuiltIn { entry.windowsLeftover = game.sizeOnDisk }
+        return entry
     }
 
     // MARK: - Manifests
@@ -287,9 +311,11 @@ enum LibraryScanner {
         return files.filter { $0.lastPathComponent.hasPrefix("appmanifest_") && $0.pathExtension == "acf" }
     }
 
+    /// `measureStaging`: the files a download has unpacked so far say how far it is – not with
+    /// Steam for Mac, which reserves the whole game up front.
     private static func readManifest(
         _ url: URL, steamapps: URL, bottle: Bottle,
-        steamRoot: URL, steamExe: String, usage: [Int: Usage]
+        steamRoot: URL, steamExe: String, usage: [Int: Usage], measureStaging: Bool = true
     ) -> Game? {
         guard let state = VDF.parse(contentsOf: url)?["appstate"],
               let appID = state["appid"]?.string.flatMap({ Int($0) }),
@@ -311,7 +337,7 @@ enum LibraryScanner {
             // unpacked files pile up in steamapps/downloading/<appid>, so measure that too and
             // take whichever is further along.
             let reported = toDownload > 0 ? downloaded / toDownload : 0
-            let staged = toStage > 0
+            let staged = toStage > 0 && measureStaging
                 ? Double(folderSize(steamapps.appendingPathComponent("downloading/\(appID)", isDirectory: true))) / toStage
                 : 0
             install = .downloading(min(max(reported, staged), 0.99))

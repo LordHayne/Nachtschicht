@@ -232,6 +232,22 @@ struct MacVersionTest {
               "Mac chosen for a game Steam for Mac hasn't got yet")
         check(list.firstIndex { $0.appID == 1003 }! < list.firstIndex { $0.appID == 1005 }!,
               "still playable through its Windows copy, it stays with the installed games")
+        // Played through its installed Windows version: it stays that way while the Mac version comes.
+        var downloadingMac = game(1002, "DepotArch", size: 4000)
+        downloadingMac.adoptMacFacts(catalog[1002]!)
+        var notYet = game(3001, "Fresh")
+        notYet.adoptMacFacts(catalog[1001]!)
+        let seamless = LibraryScanner.merge([downloadingMac, notYet], mac: onMac, preferWindows: [],
+                                            choice: { _ in .automatic }, macFailed: { _ in false })
+        let comingIn = seamless.first { $0.appID == 1002 }
+        check(comingIn?.platform == .windows && comingIn?.isInstalled == true && comingIn?.macPending == .downloading(nil)
+              && comingIn?.versionReason == .macRuns, "playable while its Mac version downloads: \(String(describing: comingIn?.macPending))")
+        let offered = seamless.first { $0.appID == 3001 }
+        check(offered?.platform == .windows && offered?.macPending == .notInstalled && offered?.switchable == true,
+              "the Mac version is offered, the Windows one plays")
+        let fetch = offered.map { LibraryScanner.macEntry(for: $0) }
+        check(fetch?.platform == .mac && fetch?.install == .notInstalled && fetch?.listID == notYet.id
+              && fetch?.installDir.path.hasSuffix("steamapps/common/Fresh") == true, "what loading the Mac version asks Steam for")
         list = merged(failed: [1001])
         check(entries(1001).first?.versionReason == .macFailed, "a failed Mac version hands over")
 
@@ -265,6 +281,45 @@ struct MacVersionTest {
         check(fm.fileExists(atPath: steamapps.appendingPathComponent("appmanifest_2000.acf").path), "other games stay")
         try? Engine.removeGameFiles(appID: 2000, installDirName: "..", steamapps: steamapps)
         check(fm.fileExists(atPath: steamapps.path), "an odd folder name never removes the library")
+
+        // MARK: Download progress from Steam's content log
+        let contentLog = """
+        [2026-10-26 11:09:00] AppID 1001 update started : download 0/100, store 0/0, reuse 0/0, delta 0/0, stage 0/120
+        [2026-10-26 11:09:30] AppID 1001 App update changed : None
+        [2026-10-26 11:10:05] AppID 275850 App update changed : Running Update,Preallocating,
+        [2026-10-26 11:10:12] AppID 275850 update started : download 1000/29035054496, store 0/0, reuse 0/0, delta 0/0, stage 0/32837541510
+        [2026-10-26 11:10:12] AppID 275850 App update changed : Running Update,Downloading,Staging,
+        [2026-10-26 11:10:52] Increasing target number of download connections to 10 (rate was 67.085, now 144.000)
+        [2026-10-26 11:11:23] Current download rate: 160.000 Mbps
+        [2026-10-26 11:12:23] Current download rate: 168.000 Mbps
+        """.replacingOccurrences(of: "\n", with: "\r\n")
+        let run = MacSteamProgress.currentRun(appID: 275850, log: contentLog)
+        check(run?.done == 1000 && run?.total == 29_035_054_496, "the running download and what it had before: \(String(describing: run))")
+        check(MacSteamProgress.currentRun(appID: 1001, log: contentLog) == nil, "a finished download isn't running")
+        check(MacSteamProgress.currentRun(appID: 27585, log: contentLog) == nil, "another app ID doesn't match")
+        if let started = run?.started {
+            let sum = MacSteamProgress.received(since: started, log: contentLog, now: started.addingTimeInterval(161))
+            // 40 s ramp-up at half of 18 MB/s, 31 s at 20 MB/s, 60 s at 21 MB/s, 30 s at 21 MB/s
+            let expected: Int64 = 40 * 9_000_000 + 31 * 20_000_000 + 60 * 21_000_000 + 30 * 21_000_000
+            check(sum == expected, "logged rates add up: \(sum)")
+        }
+
+        // tests/MacVersionTest/run.sh --progress 275850: what Nightforge reads from the real Steam for Mac.
+        if let flag = CommandLine.arguments.firstIndex(of: "--progress"), let appID = Int(CommandLine.arguments[flag + 1]) {
+            print("  progress of \(appID): \(MacSteamProgress.fraction(appID: appID).map { String(format: "%.1f %%", $0 * 100) } ?? "not downloading")")
+        }
+
+        // tests/MacVersionTest/run.sh --library 275850: how the real library shows a game.
+        if let flag = CommandLine.arguments.firstIndex(of: "--library"), let appID = Int(CommandLine.arguments[flag + 1]) {
+            let windows = LibraryScanner.scan(bottlesRoot: LibraryScanner.defaultBottlesRoot(), extraBottles: [Engine.bottle])
+            let mac = LibraryScanner.scanMac()
+            for entry in windows + mac where entry.appID == appID {
+                print("  scanned: \(entry.bottle.name) \(entry.platform) \(entry.install) mac64=\(entry.mac64)")
+            }
+            for entry in LibraryScanner.merge(windows, mac: mac, preferWindows: []) where entry.appID == appID {
+                print("  shown: \(entry.platform) \(entry.install) pending=\(String(describing: entry.macPending)) reason=\(String(describing: entry.versionReason))")
+            }
+        }
 
         try? fm.removeItem(at: steam)
         print(failures == 0 ? "✓ all checks passed" : "\(failures) checks failed")

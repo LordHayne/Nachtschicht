@@ -63,10 +63,9 @@ final class MacSteamSetup: ObservableObject, Identifiable {
             guard !Task.isCancelled else { return }
             progress = nil
             // Steam opens its library after the sign-in; from now on it works in the background.
-            try? await Task.sleep(for: .seconds(2))
-            MacSteam.hide()
             NSApp.activate()
             onReady?(self)
+            await MacSteam.keepHidden(for: 20)
         } catch is CancellationError {
             return
         } catch {

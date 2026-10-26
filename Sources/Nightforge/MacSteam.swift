@@ -44,13 +44,29 @@ enum MacSteam {
         return !(users ?? [:]).isEmpty
     }
 
-    /// Games can go through it: installed, and signed in once.
-    static var isReady: Bool { isInstalled && hasSignedIn }
+    /// Games can go through it: installed, and signed in once – or right now: Steam writes its
+    /// account list a few seconds after the sign-in.
+    static var isReady: Bool { isInstalled && (hasSignedIn || signedIn) }
 
     /// The Steam running now has signed in.
     static var signedIn: Bool { Engine.signedIn(steamRoot: root) }
 
     static var running: [NSRunningApplication] { NSRunningApplication.runningApplications(withBundleIdentifier: bundleID) }
+
+    /// The Steam client's process. NSRunningApplication doesn't always say (its pid can read -1),
+    /// so it's looked up by its program: Steam.AppBundle/…/MacOS/steam_osx in Steam's folder.
+    static var clientPID: pid_t? {
+        var pids = [pid_t](repeating: 0, count: 4096)
+        let count = Int(proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size)))
+        let client = root.appendingPathComponent("Steam.AppBundle").resolvingSymlinksInPath().path
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
+        for pid in pids.prefix(max(count, 0)) where pid > 0 {
+            guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { continue }
+            let path = String(cString: buffer)
+            if path.hasPrefix(client), path.hasSuffix("/steam_osx") { return pid }
+        }
+        return nil
+    }
 
     static var isRunning: Bool { !running.isEmpty }
 
@@ -129,6 +145,16 @@ enum MacSteam {
     /// Back to the background after the player has dealt with it.
     static func hide() {
         for app in running { app.hide() }
+    }
+
+    /// Steam opens its library window a few seconds after signing in, and that window doesn't know
+    /// the games Nightforge plays through Wine. Keeps it out of sight for a while.
+    @MainActor
+    static func keepHidden(for seconds: Int) async {
+        for _ in 0..<seconds {
+            for app in running where !app.isHidden { app.hide() }
+            try? await Task.sleep(for: .seconds(1))
+        }
     }
 
     /// Hands Steam a steam:// command ("run/275850"), which starts it if it isn't running.

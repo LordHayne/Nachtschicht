@@ -419,7 +419,7 @@ private struct GameDetail: View {
                     .controlSize(.small)
                 }
             }
-            VersionNotes(game: game, playsAfterDownload: model.playsAfterDownload(game))
+            VersionNotes(game: game)
 
             HStack(spacing: 14) {
                 PlayButton(install: game.install, isLaunching: model.launchingID == game.id,
@@ -427,8 +427,7 @@ private struct GameDetail: View {
                            isRunning: model.isRunning(game),
                            needsConfirmation: model.launchNeedsConfirmation,
                            status: model.launchStatus,
-                           vrOnly: game.isVROnly && game.install == .notInstalled,
-                           playsAfterDownload: model.playsAfterDownload(game)) {
+                           vrOnly: game.isVROnly && game.install == .notInstalled) {
                     model.primaryAction()
                 }
                 if game.install != .inStore {
@@ -483,8 +482,6 @@ private struct PlayButton: View {
     var status: String?
     /// VR-only and not downloaded: nothing useful to do on a Mac.
     var vrOnly = false
-    /// Not downloaded, but Play fetches the game and starts it (LibraryModel.playsAfterDownload).
-    var playsAfterDownload = false
     let action: () -> Void
     @State private var hovering = false
 
@@ -502,7 +499,7 @@ private struct PlayButton: View {
         if vrOnly { return L10n.t("VR only") }
         switch install {
         case .installed: return L10n.t("Play")
-        case .notInstalled: return playsAfterDownload ? L10n.t("Play") : L10n.t("Download")
+        case .notInstalled: return L10n.t("Download")
         case .downloading(let fraction?): return L10n.t("Downloading … %ld %%", Int(fraction * 100))
         case .downloading(nil): return L10n.t("Preparing download …")
         case .inStore: return L10n.t("View in Steam Store")
@@ -522,8 +519,7 @@ private struct PlayButton: View {
                         .controlSize(.small)
                         .environment(\.colorScheme, .light)
                 } else {
-                    Image(systemName: install == .notInstalled && !playsAfterDownload ? "arrow.down"
-                          : install == .inStore ? "cart" : "play.fill")
+                    Image(systemName: install == .notInstalled ? "arrow.down" : install == .inStore ? "cart" : "play.fill")
                         .font(.system(size: 15, weight: .bold))
                 }
                 Text(title)
@@ -843,12 +839,40 @@ private struct EmptyLibrary: View {
 /// Which version of the game Nightforge runs, and why – when Steam has both.
 private struct VersionNotes: View {
     let game: Game
-    let playsAfterDownload: Bool
     @EnvironmentObject private var model: LibraryModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let text {
+            if let pending = game.macPending {
+                note(L10n.t("There's a Mac version of this game that runs without any Windows translation. Nightforge switches to it as soon as it's on your Mac – until then you play the Windows version."),
+                     systemImage: "apple.logo")
+                HStack(spacing: 10) {
+                    if case .downloading(let fraction) = pending {
+                        if let fraction {
+                            ProgressView(value: fraction)
+                                .tint(Theme.sodium)
+                                .frame(width: 200)
+                        } else {
+                            ProgressView().controlSize(.small)
+                        }
+                        Text(fraction.map { L10n.t("Loading the Mac version … %ld %%", Int($0 * 100)) }
+                             ?? L10n.t("Preparing the Mac version …"))
+                            .font(.system(size: 12, weight: .medium).monospacedDigit())
+                            .foregroundStyle(Theme.muted)
+                        Button(L10n.t("Cancel")) { model.cancelMacVersion(of: game) }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    } else {
+                        Button(game.macSize > 0 ? L10n.t("Load Mac Version (%@)", Format.bytes(game.macSize)) : L10n.t("Load Mac Version")) {
+                            model.loadMacVersion(of: game)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+                .padding(.leading, 26)
+                .disabled(model.uninstallingID != nil)
+            } else if let text {
                 note(text, systemImage: game.platform == .mac ? "apple.logo" : "laptopcomputer")
             }
             if let leftover = game.windowsLeftover {
@@ -872,9 +896,6 @@ private struct VersionNotes: View {
         }
         guard let reason = game.versionReason else { return nil }
         if game.platform == .mac {
-            if playsAfterDownload {
-                return L10n.t("Nightforge now uses the Mac version of this game – no Windows translation needed. Play downloads it through Steam for Mac and starts it.")
-            }
             return game.macAppleSilicon
                 ? L10n.t("Nightforge uses the Mac version of this game, made for Apple silicon – no Windows translation needed.")
                 : L10n.t("Nightforge uses the Mac version of this game – no Windows translation needed. It's made for Intel Macs, so Rosetta runs it.")

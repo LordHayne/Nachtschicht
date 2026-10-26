@@ -138,8 +138,12 @@ enum L10n {
             "Nightforge nutzt die Mac-Version dieses Spiels, gemacht für Apple Silicon – ganz ohne Windows-Übersetzung.",
         "Nightforge uses the Mac version of this game – no Windows translation needed. It's made for Intel Macs, so Rosetta runs it.":
             "Nightforge nutzt die Mac-Version dieses Spiels – ganz ohne Windows-Übersetzung. Sie ist für Intel-Macs gemacht, deshalb läuft sie über Rosetta.",
-        "Nightforge now uses the Mac version of this game – no Windows translation needed. Play downloads it through Steam for Mac and starts it.":
-            "Nightforge nutzt jetzt die Mac-Version dieses Spiels – ganz ohne Windows-Übersetzung. „Spielen“ lädt sie über Steam für Mac herunter und startet sie.",
+        "There's a Mac version of this game that runs without any Windows translation. Nightforge switches to it as soon as it's on your Mac – until then you play the Windows version.":
+            "Von diesem Spiel gibt es eine Mac-Version, die ganz ohne Windows-Übersetzung läuft. Nightforge wechselt zu ihr, sobald sie auf deinem Mac ist – bis dahin spielst du die Windows-Version.",
+        "Load Mac Version (%@)": "Mac-Version laden (%@)",
+        "Load Mac Version": "Mac-Version laden",
+        "Loading the Mac version … %ld %%": "Mac-Version wird geladen … %ld %%",
+        "Preparing the Mac version …": "Mac-Version wird vorbereitet …",
         "Steam also has a Mac version, but the Windows version runs better, so Nightforge uses that.":
             "Steam hat auch eine Mac-Version, aber die Windows-Version läuft besser, deshalb nutzt Nightforge diese.",
         "Steam's Mac version of this game is too old for current Macs, so Nightforge uses the Windows version.":

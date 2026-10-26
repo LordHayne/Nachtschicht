@@ -264,6 +264,7 @@ enum L10n {
         "Setting up the game …": "Spiel wird eingerichtet …",
         "Restarting Steam …": "Steam wird neu gestartet …",
         "Steam couldn't start %@.": "Steam konnte %@ nicht starten.",
+        "Steam didn't respond, so %@ didn't start. Please try again.": "Steam hat nicht reagiert, deshalb ist %@ nicht gestartet. Bitte versuch es noch einmal.",
 
         "VR only": "Nur VR",
         "Doesn't run on a Mac": "Läuft nicht auf dem Mac",

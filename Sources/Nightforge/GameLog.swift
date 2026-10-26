@@ -41,6 +41,36 @@ enum GameLog {
         return String(decoding: (try? handle.readToEnd()) ?? Data(), as: UTF8.self)
     }
 
+    /// The game died on a processor instruction Rosetta doesn't run – what a game does that takes
+    /// Rosetta's AVX hint (`ROSETTA_ADVERTISE_AVX`) at its word on a path Rosetta lacks. Wine says
+    /// so in the log; Unreal games catch it themselves and leave a crash report in their folder.
+    static func illegalInstruction(since mark: UInt64, installDir: URL, startedAt: Date) -> Bool {
+        illegalInstruction(in: text(since: mark)) || unrealCrashes(in: installDir, since: startedAt).contains {
+            ((try? String(contentsOf: $0, encoding: .utf8)) ?? "").contains("EXCEPTION_ILLEGAL_INSTRUCTION")
+        }
+    }
+
+    static func illegalInstruction(in text: String) -> Bool {
+        text.lowercased().contains("unhandled illegal instruction") || text.contains("EXCEPTION_ILLEGAL_INSTRUCTION")
+    }
+
+    /// Unreal's crash reports (…/Saved/Crashes/<id>/CrashContext.runtime-xml) written since `date`.
+    static func unrealCrashes(in installDir: URL, since date: Date) -> [URL] {
+        let fm = FileManager.default
+        guard let files = fm.enumerator(at: installDir, includingPropertiesForKeys: [.contentModificationDateKey],
+                                        options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return [] }
+        var found: [URL] = []
+        for case let file as URL in files {
+            if files.level > 5 { files.skipDescendants(); continue }
+            guard file.lastPathComponent == "CrashContext.runtime-xml",
+                  let modified = try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
+                  modified >= date
+            else { continue }
+            found.append(file)
+        }
+        return found
+    }
+
     /// Runtimes (winetricks verbs) a game's programs needed and didn't find, since `mark`.
     static func missingRuntimes(since mark: UInt64, gameFolder: String) -> [String] {
         missingRuntimes(in: text(since: mark), gameFolder: gameFolder)

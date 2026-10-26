@@ -1,9 +1,23 @@
 import Foundation
+import Security
 
 /// Nightforge's own free Wine setup: the engine component, one Windows environment ("prefix")
 /// and the Windows Steam client inside it. Used when CrossOver isn't the chosen runner.
 enum Engine {
     static let engineID = "wine"
+    /// CodeWeavers' CrossOver changes on current Wine (dappermint/winecx-gptk): the engine Apple's
+    /// D3DMetal runs on. Preferred over `engineID` when the component list has it; a new ID, so
+    /// older Nightforge versions reading the same list keep the engine they know.
+    static let winecxEngineID = "winecx"
+    /// Apple's D3DMetal (Game Porting Toolkit, /redist/lib): Direct3D 10–12 → Metal.
+    static let d3dMetalID = "d3dmetal"
+    /// winebus.so with the SDL bus for winecx, plus SDL2 (.github/workflows/gamepad.yml): without it
+    /// a DualSense or DualShock 4 never reaches Windows games on winecx.
+    static let gamepadID = "gamepad"
+
+    static func engineComponent(in manifest: ComponentManifest) -> Component? {
+        manifest.component(winecxEngineID) ?? manifest.component(engineID)
+    }
     /// Nightforge's own DXMT build for Wine 11 (with winemac.so); plain upstream DXMT as fallback.
     static let graphicsID = "graphics"
     static let upstreamGraphicsID = "dxmt"
@@ -87,7 +101,36 @@ enum Engine {
 
     /// Changes whenever the background Steam has to restart to hand games different settings.
     static var steamConfigSignature: String {
-        "\(steamConfigVersion)-hud\(Prefs.performanceHUD ? 1 : 0)-gamemode\(Prefs.gameMode ? 1 : 0)"
+        "\(steamConfigVersion)-hud\(Prefs.performanceHUD ? 1 : 0)-gamemode\(Prefs.gameMode ? 1 : 0)-"
+            + launchEnvironment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ",")
+    }
+
+    /// What the game about to start needs on top of `gameEnvironment` ("" takes a variable away).
+    /// A game gets the environment of the Steam that starts it, as it was when that Steam started –
+    /// whatever the registry says by then doesn't reach it. So these go into Steam's own.
+    static var launchEnvironment: [String: String] = [:]
+
+    /// The environment the background Steam starts with, and its games with it.
+    static var steamEnvironment: [String: String] {
+        var env = gameEnvironment
+        for (name, value) in launchEnvironment { env[name] = value.isEmpty ? nil : value }
+        return env
+    }
+
+    /// Sets what a game needs from Steam's environment: Rosetta's AVX hint, and D3DMetal's
+    /// settings, which it only takes from there (Apple's readme): D3DM_MAX_FPS caps the frame rate,
+    /// D3DM_ENABLE_METALFX hands DLSS to MetalFX. A game on another layer leaves D3DMetal's as they
+    /// are, so going back and forth costs no restart. True when the running Steam has to restart.
+    static func prepareLaunchEnvironment(avx: Bool, d3dMetal: Bool, frameLimit: Int, upscaling: Bool) -> Bool {
+        var wanted = launchEnvironment
+        wanted["ROSETTA_ADVERTISE_AVX"] = avx ? nil : ""
+        if d3dMetal {
+            wanted["D3DM_MAX_FPS"] = frameLimit > 0 ? String(frameLimit) : ""
+            wanted["D3DM_ENABLE_METALFX"] = upscaling ? "1" : ""
+        }
+        wanted = wanted.filter { name, value in (value.isEmpty ? nil : value) != gameEnvironment[name] }
+        defer { launchEnvironment = wanted }
+        return wanted != launchEnvironment
     }
 
     /// Wine's builtin crypto avoids TLS failures in Steam's browser; the overlay DLL deadlocks games.
@@ -260,13 +303,33 @@ enum Engine {
         return probe.terminationStatus == 0
     }
 
-    /// `bin/wine` inside an unpacked engine component (the archive holds a "Wine ….app" bundle).
+    /// `bin/wine` inside an unpacked engine component: Gcenx's archive holds a "Wine ….app" bundle,
+    /// winecx's a Whisky-style `Libraries/Wine` tree.
     static func wineBinary(in engineDir: URL) -> URL? {
         let apps = (try? FileManager.default.contentsOfDirectory(at: engineDir, includingPropertiesForKeys: nil)) ?? []
-        return apps
-            .filter { $0.pathExtension == "app" }
-            .map { $0.appendingPathComponent("Contents/Resources/wine/bin/wine") }
-            .first { FileManager.default.isExecutableFile(atPath: $0.path) }
+        let candidates = apps.filter { $0.pathExtension == "app" }.map { $0.appendingPathComponent("Contents/Resources/wine/bin/wine") }
+            + [engineDir.appendingPathComponent("Libraries/Wine/bin/wine")]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0.path) }
+    }
+
+    /// Whether an engine can run D3DMetal: winecx says so in the version file next to its tree.
+    static func isGPTKCapable(wine: URL) -> Bool {
+        let plist = wine.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("WhiskyWineVersion.plist")
+        guard let data = try? Data(contentsOf: plist),
+              let info = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        else { return false }
+        return info["gptkCapable"] as? Bool == true
+    }
+
+    /// D3DMetal is in the engine (installD3DMetal): DirectX 12 games have a way to run.
+    static var d3dMetalReady: Bool { installedWineNow().map(isD3DMetalDeployed(wine:)) ?? false }
+
+    static func isD3DMetalDeployed(wine: URL) -> Bool {
+        let lib = wine.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib", isDirectory: true)
+        let fm = FileManager.default
+        return fm.fileExists(atPath: lib.appendingPathComponent("external/libd3dshared.dylib").path)
+            && (try? fm.destinationOfSymbolicLink(atPath: lib.appendingPathComponent("wine/x86_64-unix/d3d12.so").path)) != nil
     }
 
     /// Makes sure the engine and graphics layer from the current component list are installed –
@@ -276,7 +339,7 @@ enum Engine {
     static func ensureEngine(gameRunning: Bool = false) async throws -> URL {
         let store = ComponentStore.shared
         let manifest = try await store.manifest()
-        guard let engine = manifest.component(engineID), let graphics = graphicsComponent(in: manifest) else {
+        guard let engine = engineComponent(in: manifest), let graphics = graphicsComponent(in: manifest) else {
             throw ComponentError.noManifest
         }
         let fresh = await store.installedPath(for: engine) == nil
@@ -285,18 +348,19 @@ enum Engine {
         guard let wine = wineBinary(in: engineDir) else { throw SetupError.engineBroken }
         if fresh {
             // A wineserver from the previous engine can't talk to the new one; end the old session.
-            for dir in (try? FileManager.default.contentsOfDirectory(
-                at: store.root.appendingPathComponent(engineID), includingPropertiesForKeys: nil)) ?? []
-            where dir != engineDir {
-                if let old = wineBinary(in: dir) { stopAll(old) }
-            }
-            for other in ["wine-staging"] {
+            for other in [engineID, winecxEngineID, "wine-staging"] {
                 for dir in (try? FileManager.default.contentsOfDirectory(
-                    at: store.root.appendingPathComponent(other), includingPropertiesForKeys: nil)) ?? [] {
+                    at: store.root.appendingPathComponent(other), includingPropertiesForKeys: nil)) ?? []
+                where dir != engineDir {
                     if let old = wineBinary(in: dir) { stopAll(old) }
                 }
             }
         }
+        // On winecx, D3DMetal takes the engine's Direct3D builtins and DXMT and DXVK move into the
+        // prefix as native DLLs (see `layerOverrides`).
+        let gptk = isGPTKCapable(wine: wine)
+        let d3dMetal = gptk ? manifest.component(d3dMetalID) : nil
+        let gamepad = gptk ? manifest.component(gamepadID) : nil
         // Copying the graphics files again would give them new inodes and so rebuild the game
         // bundle Steam runs from, and every regedit starts Wine: each part is only redone when what
         // it installs has changed. The stamps live in what they describe, so a fresh engine or
@@ -306,25 +370,34 @@ enum Engine {
             .appendingPathComponent("lib/wine", isDirectory: true), name: "graphics")
         let moltenVK = manifest.component(moltenVKID)
         let graphicsWanted = "\(graphics.id) \(graphics.version) engine-match \(matchesEngine) moltenvk \(moltenVK?.version ?? "engine")"
+            + " d3dmetal \(d3dMetal?.version ?? "-") gamepad \(gamepad?.version ?? "-")"
         if readStamp(graphicsStamp) != graphicsWanted, !gameRunning, !windowsGameRunning {
-            try installGraphics(graphicsDir, into: wine, matchesEngine: matchesEngine)
+            try installGraphics(graphicsDir, into: wine, matchesEngine: matchesEngine, nativeInPrefix: gptk)
             var moltenVKDir: URL?
             if let moltenVK { moltenVKDir = try await store.install(moltenVK) }
             try installMoltenVK(moltenVKDir, into: wine)
+            if let d3dMetal { try installD3DMetal(try await store.install(d3dMetal), into: wine) }
+            if let gamepad { try installGamepad(try await store.install(gamepad), into: wine) }
             writeStamp(graphicsStamp, graphicsWanted)
         }
         installGameBundle(wine: wine)  // after the graphics: its links must point at the new files
+        if gptk { linkCrossOverProfile() }
         detachUserFolders()
         trimSteamLogs()
         excludeGamesFromBackup()
         let prefixStamp = stamp(in: prefix, name: "setup")
         let dxvk = manifest.component(dxvkID)
-        let prefixWanted = "\(engine.version) \(dxvk?.version ?? "-") " + gameEnvironment.sorted { $0.key < $1.key }
-            .map { "\($0.key)=\($0.value)" }.joined(separator: " ")
+        let prefixWanted = "\(engine.version) \(dxvk?.version ?? "-") \(gptk ? graphics.version + " d3dmetal " + (d3dMetal?.version ?? "-") : "-") "
+            + gameEnvironment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")
         if readStamp(prefixStamp) != prefixWanted {
             applyGameEnvironment(wine: wine)
-            if let dxvk { try installDXVK(try await store.install(dxvk), wine: wine) }
-            writeStamp(prefixStamp, prefixWanted)
+            if let dxvk { try installDXVK(try await store.install(dxvk), wine: wine, d3d9Only: gptk) }
+            let written = loadOrdersWritten
+            if gptk {
+                try installDXMTNatives(graphicsDir)
+                try installWineD3D12Natives(wine: wine)
+            }
+            if written { writeStamp(prefixStamp, prefixWanted) }
         }
         return wine
     }
@@ -344,9 +417,11 @@ enum Engine {
 
     /// The engine's wine binary without async work (for app shutdown): the newest installed copy.
     static func installedWineNow() -> URL? {
-        let dir = ComponentStore.shared.root.appendingPathComponent(engineID, isDirectory: true)
-        let versions = (try? FileManager.default.contentsOfDirectory(
-            at: dir, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        let versions = [winecxEngineID, engineID].flatMap { id in
+            (try? FileManager.default.contentsOfDirectory(
+                at: ComponentStore.shared.root.appendingPathComponent(id, isDirectory: true),
+                includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        }
         return versions
             .sorted { a, b in
                 let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
@@ -354,6 +429,20 @@ enum Engine {
                 return da > db
             }
             .lazy.compactMap(wineBinary(in:)).first
+    }
+
+    /// An installed component's folder without async work: the newest unpacked version of `id`.
+    static func installedComponentNow(_ id: String) -> URL? {
+        let dir = ComponentStore.shared.root.appendingPathComponent(id, isDirectory: true)
+        let versions = (try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        return versions
+            .filter { FileManager.default.fileExists(atPath: $0.appendingPathComponent(".sha256").path) }
+            .max { a, b in
+                let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                return da < db
+            }
     }
 
     /// When Nightforge quits, Steam should go too – but not while a game runs (it uploads cloud
@@ -440,7 +529,7 @@ enum Engine {
     /// Installed engine binary, if setup has got that far.
     static func installedWine() async -> URL? {
         guard let manifest = try? await ComponentStore.shared.manifest(),
-              let component = manifest.component(engineID),
+              let component = engineComponent(in: manifest),
               let dir = await ComponentStore.shared.installedPath(for: component)
         else { return nil }
         return wineBinary(in: dir)
@@ -449,12 +538,12 @@ enum Engine {
     /// Copies DXMT (Direct3D 10/11 → Metal) into the engine's builtin DLL folders. Safe to repeat.
     /// Nightforge's package also carries winemac.so built for one Wine version; it's only used
     /// when that matches the engine (`matchesEngine`), since a mismatched driver breaks every window.
-    static func installGraphics(_ dxmtDir: URL, into wine: URL, matchesEngine: Bool = false) throws {
+    /// `nativeInPrefix` (winecx): only DXMT's unix bridge, winemetal, goes into the engine; its
+    /// Direct3D DLLs are natives in the prefix (`installDXMTNatives`), D3DMetal holds the builtins.
+    static func installGraphics(_ dxmtDir: URL, into wine: URL, matchesEngine: Bool = false, nativeInPrefix: Bool = false) throws {
         let fm = FileManager.default
         let lib = wine.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib/wine", isDirectory: true)
-        // The archive has one versioned top folder: v0.80/{x86_64-windows,i386-windows,x86_64-unix}
-        let top = (try fm.contentsOfDirectory(at: dxmtDir, includingPropertiesForKeys: nil))
-            .first { fm.fileExists(atPath: $0.appendingPathComponent("x86_64-windows").path) } ?? dxmtDir
+        let top = graphicsTop(dxmtDir)
 
         for arch in ["x86_64-windows", "i386-windows", "x86_64-unix"] {
             let source = top.appendingPathComponent(arch, isDirectory: true)
@@ -462,12 +551,170 @@ enum Engine {
             guard let files = try? fm.contentsOfDirectory(at: source, includingPropertiesForKeys: nil) else { continue }
             for file in files {
                 if file.lastPathComponent == "winemac.so" && !matchesEngine { continue }
+                if nativeInPrefix, file.pathExtension == "dll", file.lastPathComponent != "winemetal.dll" { continue }
                 let destination = target.appendingPathComponent(file.lastPathComponent)
                 try? fm.removeItem(at: destination)
                 try fm.copyItem(at: file, to: destination)
             }
         }
         try installMsync(top.appendingPathComponent("msync", isDirectory: true), into: wine, matchesEngine: matchesEngine)
+    }
+
+    /// The graphics archive has one versioned top folder: v0.80/{x86_64-windows,i386-windows,x86_64-unix}
+    private static func graphicsTop(_ dir: URL) -> URL {
+        let fm = FileManager.default
+        return ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+            .first { fm.fileExists(atPath: $0.appendingPathComponent("x86_64-windows").path) } ?? dir
+    }
+
+    /// DXMT's Direct3D DLLs as natives in the prefix (64-bit → system32, 32-bit → syswow64), for
+    /// engines whose builtins are D3DMetal's. Wine swaps a builtin-marked DLL found in the prefix
+    /// for the engine's builtin of that name, so the copies lose the marker. Safe to repeat.
+    static func installDXMTNatives(_ dxmtDir: URL, windows: URL = prefix.appendingPathComponent("drive_c/windows", isDirectory: true)) throws {
+        let fm = FileManager.default
+        let top = graphicsTop(dxmtDir)
+        for (arch, folder) in [("x86_64-windows", "system32"), ("i386-windows", "syswow64")] {
+            let target = windows.appendingPathComponent(folder, isDirectory: true)
+            guard fm.fileExists(atPath: target.path),
+                  let files = try? fm.contentsOfDirectory(at: top.appendingPathComponent(arch), includingPropertiesForKeys: nil)
+            else { continue }
+            for file in files where file.pathExtension == "dll" && file.lastPathComponent != "winemetal.dll" {
+                let destination = target.appendingPathComponent(file.lastPathComponent)
+                try writeAsNative(try Data(contentsOf: file), to: destination)
+            }
+        }
+    }
+
+    /// Wine's own Direct3D 12, which D3DMetal took the place of in the engine (kept as *.wine), as
+    /// natives in system32: for games on DXMT or DXVK that look for Direct3D 12 (`layerOverrides`).
+    static func installWineD3D12Natives(wine: URL, windows: URL = prefix.appendingPathComponent("drive_c/windows", isDirectory: true)) throws {
+        let engine = wine.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib/wine/x86_64-windows")
+        for name in ["d3d12.dll", "d3d12core.dll"] {
+            guard let original = try? Data(contentsOf: engine.appendingPathComponent(name + ".wine")) else { continue }
+            try writeAsNative(original, to: windows.appendingPathComponent("system32/\(name)"))
+        }
+    }
+
+    /// Wine's builtin DLLs carry "Wine builtin DLL" right after the DOS header.
+    private static let builtinMarker = Data("Wine builtin DLL".utf8)
+
+    /// Writes a DLL with Wine's builtin marker cleared, so Wine loads it as the native it is.
+    static func writeAsNative(_ dll: Data, to destination: URL) throws {
+        var bytes = dll
+        let range = 0x40..<(0x40 + builtinMarker.count)
+        if bytes.count > range.upperBound, bytes.subdata(in: range) == builtinMarker {
+            bytes.replaceSubrange(range, with: Data(count: builtinMarker.count))
+        }
+        if (try? Data(contentsOf: destination)) == bytes { return }
+        try bytes.write(to: destination, options: .atomic)
+    }
+
+    /// Puts Apple's D3DMetal into the engine as its Direct3D builtins, the layout Apple's toolkit
+    /// documents: each front end into lib/wine/x86_64-windows (Wine's own kept as *.wine), its unix
+    /// half as a symlink to external/libd3dshared.dylib – a copy would move the dylib's
+    /// @loader_path away from the D3DMetal framework it loads – and external/ beside them.
+    /// Only files Apple signed are installed; nothing of them is changed (Apple's licence).
+    static func installD3DMetal(_ payloadDir: URL, into wine: URL) throws {
+        let fm = FileManager.default
+        guard let payload = d3dMetalPayloadRoot(in: payloadDir) else { throw SetupError.engineBroken }
+        let external = payload.appendingPathComponent("external", isDirectory: true)
+        for code in ["libd3dshared.dylib", "D3DMetal.framework"] where !isAppleSigned(external.appendingPathComponent(code)) {
+            throw SetupError.engineBroken
+        }
+        let lib = wine.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib", isDirectory: true)
+        let windows = lib.appendingPathComponent("wine/x86_64-windows", isDirectory: true)
+        let unix = lib.appendingPathComponent("wine/x86_64-unix", isDirectory: true)
+
+        let installedExternal = lib.appendingPathComponent("external", isDirectory: true)
+        try? fm.removeItem(at: installedExternal)
+        try fm.copyItem(at: external, to: installedExternal)
+        // Apple's front ends are the DLLs with a unix half; a toolkit that brings no unix folder
+        // (the bridges are only links anyway) has nothing but them.
+        let payloadUnix = payload.appendingPathComponent("wine/x86_64-unix", isDirectory: true)
+        let bridged = Set(((try? fm.contentsOfDirectory(atPath: payloadUnix.path)) ?? []).filter { $0.hasSuffix(".so") }
+            .map { String($0.dropLast(3)) })
+        let frontEnds = ((try? fm.contentsOfDirectory(at: payload.appendingPathComponent("wine/x86_64-windows"),
+                                                      includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension == "dll" && (bridged.isEmpty || bridged.contains($0.deletingPathExtension().lastPathComponent)) }
+        // DLSS → MetalFX: Apple's readme has nvngx-on-metalfx installed under NVIDIA's name, nvngx.
+        let names = frontEnds.map { ($0, $0.lastPathComponent) }
+            + frontEnds.filter { $0.lastPathComponent == "nvngx-on-metalfx.dll" }.map { ($0, "nvngx.dll") }
+        for (dll, name) in names {
+            let target = windows.appendingPathComponent(name)
+            let original = target.appendingPathExtension("wine")
+            if fm.fileExists(atPath: target.path), !fm.fileExists(atPath: original.path), !fm.contentsEqual(atPath: dll.path, andPath: target.path) {
+                try fm.copyItem(at: target, to: original)
+            }
+            try? fm.removeItem(at: target)
+            try fm.copyItem(at: dll, to: target)
+            let bridge = unix.appendingPathComponent((name as NSString).deletingPathExtension + ".so")
+            if fm.fileExists(atPath: bridge.path) || (try? fm.destinationOfSymbolicLink(atPath: bridge.path)) != nil {
+                try fm.removeItem(at: bridge)
+            }
+            try fm.createSymbolicLink(atPath: bridge.path, withDestinationPath: "../../external/libd3dshared.dylib")
+        }
+    }
+
+    /// Puts the gamepad package's winebus.so in place of the engine's (kept as winebus.so.engine)
+    /// and its SDL2 next to the engine's other libraries, where winebus.so's rpath finds it.
+    /// Copied to a new file and swapped in: a running Wine session keeps the one it has loaded.
+    static func installGamepad(_ packageDir: URL, into wine: URL) throws {
+        let fm = FileManager.default
+        guard let files = fm.enumerator(at: packageDir, includingPropertiesForKeys: nil),
+              let bus = (files.compactMap { $0 as? URL }.first { $0.lastPathComponent == "winebus.so" })
+        else { throw SetupError.engineBroken }
+        let package = bus.deletingLastPathComponent().deletingLastPathComponent()
+        let lib = wine.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib", isDirectory: true)
+        let pairs = [(bus, lib.appendingPathComponent("wine/x86_64-unix/winebus.so")),
+                     (package.appendingPathComponent("lib/libSDL2-2.0.0.dylib"), lib.appendingPathComponent("libSDL2-2.0.0.dylib"))]
+        for (source, target) in pairs where fm.fileExists(atPath: source.path) {
+            if target.lastPathComponent == "winebus.so", fm.fileExists(atPath: target.path) {
+                let original = target.appendingPathExtension("engine")
+                if !fm.fileExists(atPath: original.path) { try fm.copyItem(at: target, to: original) }
+            }
+            if fm.fileExists(atPath: target.path), fm.contentsEqual(atPath: source.path, andPath: target.path) { continue }
+            let staged = target.appendingPathExtension("new")
+            try? fm.removeItem(at: staged)
+            try fm.copyItem(at: source, to: staged)
+            if fm.fileExists(atPath: target.path) {
+                _ = try fm.replaceItemAt(target, withItemAt: staged)
+            } else {
+                try fm.moveItem(at: staged, to: target)
+            }
+        }
+    }
+
+    /// The folder holding external/libd3dshared.dylib and wine/ in a D3DMetal download.
+    static func d3dMetalPayloadRoot(in dir: URL) -> URL? {
+        let fm = FileManager.default
+        guard let files = fm.enumerator(at: dir, includingPropertiesForKeys: nil, options: [.skipsPackageDescendants]) else { return nil }
+        for case let file as URL in files where file.lastPathComponent == "libd3dshared.dylib" {
+            let root = file.deletingLastPathComponent().deletingLastPathComponent()
+            if fm.fileExists(atPath: root.appendingPathComponent("wine/x86_64-windows/d3d12.dll").path) { return root }
+        }
+        return nil
+    }
+
+    /// Signed by Apple itself (the "Software Signing" chain), not just by anyone.
+    static func isAppleSigned(_ url: URL) -> Bool {
+        var code: SecStaticCode?
+        var requirement: SecRequirement?
+        guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code,
+              SecRequirementCreateWithString("anchor apple" as CFString, [], &requirement) == errSecSuccess
+        else { return false }
+        return SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSCheckAllArchitectures), requirement) == errSecSuccess
+    }
+
+    /// winecx keeps the Windows user folder under CrossOver's fixed name, "crossover". Pointed at
+    /// the folder the prefix already has, Steam's sign-in and every game's saves stay where they are.
+    static func linkCrossOverProfile(users: URL = prefix.appendingPathComponent("drive_c/users", isDirectory: true),
+                                     userName: String = NSUserName()) {
+        let fm = FileManager.default
+        let crossover = users.appendingPathComponent("crossover")
+        guard userName != "crossover", fm.fileExists(atPath: users.appendingPathComponent(userName).path),
+              (try? fm.attributesOfItem(atPath: crossover.path)) == nil
+        else { return }
+        try? fm.createSymbolicLink(atPath: crossover.path, withDestinationPath: userName)
     }
 
     /// msync: Wine's synchronization (events, mutexes, semaphores every game thread waits on) on
@@ -531,26 +778,90 @@ enum Engine {
 
     /// Copies DXVK's DLLs into the prefix (64-bit → system32, 32-bit → syswow64) and makes them the
     /// default for every program; games set to DXMT override that in `applyGameSettings`. Safe to repeat.
-    static func installDXVK(_ dxvkDir: URL, wine: URL) throws {
-        defer {
-            let values = direct3DLibraries.map { "\"\($0)\"=\"native,builtin\"" }.joined(separator: "\n")
-            importRegistry("[HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides]\n\(values)", wine: wine)
-        }
+    /// `d3d9Only` (winecx): system32 holds DXMT's DirectX 10/11 natives, so only DXVK's d3d9 goes
+    /// there; a game that takes DXVK for DirectX 11 gets its DLLs next to its program (`placeDXVK`).
+    /// False when the load orders couldn't be written (a wineserver of another engine still
+    /// running, say), so setup tries again next time instead of counting it done.
+    @discardableResult
+    static func installDXVK(_ dxvkDir: URL, wine: URL, d3d9Only: Bool = false) throws -> Bool {
+        defer { loadOrdersWritten = importRegistry("[HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides]\n"
+            + direct3DLibraries.map { "\"\($0)\"=\"\(defaultLoadOrder($0, d3dMetalEngine: d3d9Only))\"" }.joined(separator: "\n"),
+            wine: wine) }
         let fm = FileManager.default
-        let top = (try fm.contentsOfDirectory(at: dxvkDir, includingPropertiesForKeys: nil))
-            .first { fm.fileExists(atPath: $0.appendingPathComponent("x64").path) } ?? dxvkDir
+        let top = dxvkTop(dxvkDir)
         let windows = prefix.appendingPathComponent("drive_c/windows", isDirectory: true)
         for (arch, folder) in [("x64", "system32"), ("x32", "syswow64")] {
             let source = top.appendingPathComponent(arch, isDirectory: true)
             let target = windows.appendingPathComponent(folder, isDirectory: true)
             guard fm.fileExists(atPath: target.path),
                   let files = try? fm.contentsOfDirectory(at: source, includingPropertiesForKeys: nil) else { continue }
-            for file in files where file.pathExtension == "dll" {
+            for file in files where file.pathExtension == "dll" && (!d3d9Only || file.lastPathComponent == "d3d9.dll") {
                 let destination = target.appendingPathComponent(file.lastPathComponent)
                 try? fm.removeItem(at: destination)
                 try fm.copyItem(at: file, to: destination)
             }
         }
+        return true
+    }
+
+    /// Whether the last `installDXVK` got its load orders into the registry.
+    private(set) static var loadOrdersWritten = true
+
+    /// What every program without a per-game choice takes – Steam's browser above all. Gcenx's
+    /// engine: DXVK's natives. winecx: DirectX 10/11 from the builtins (D3DMetal, or Wine's own);
+    /// DXMT's natives in system32 are for the games that choose them (`layerOverrides`), and Steam's
+    /// browser crashes on them over and over.
+    static func defaultLoadOrder(_ dll: String, d3dMetalEngine: Bool) -> String {
+        d3dMetalEngine && dll != "d3d9" ? "builtin" : "native,builtin"
+    }
+
+    private static func dxvkTop(_ dir: URL) -> URL {
+        let fm = FileManager.default
+        return ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+            .first { fm.fileExists(atPath: $0.appendingPathComponent("x64").path) } ?? dir
+    }
+
+    /// DXVK's DirectX 10/11 DLLs, which `placeDXVK` lays next to a game's programs.
+    static let dxvkGameLibraries = ["dxgi.dll", "d3d11.dll", "d3d10core.dll"]
+
+    /// With `use`, puts DXVK's DirectX 10/11 DLLs next to each of the game's programs (Wine looks
+    /// in a program's own folder before system32, where DXMT's are), matching each program's
+    /// bitness; without, takes away what an earlier call put there. A DLL the game ships itself is
+    /// never touched: only files identical to DXVK's count as ours.
+    static func placeDXVK(_ use: Bool, dxvkDir: URL, installDir: URL) {
+        let fm = FileManager.default
+        let top = dxvkTop(dxvkDir)
+        func dxvk(_ name: String, arch: String) -> URL { top.appendingPathComponent("\(arch)/\(name)") }
+        var folders: [URL: String] = [:]
+        for exe in executableFiles(in: installDir) {
+            folders[exe.deletingLastPathComponent().standardizedFileURL] = isPE32Plus(exe) == false ? "x32" : "x64"
+        }
+        for (folder, arch) in folders {
+            for name in dxvkGameLibraries {
+                let target = folder.appendingPathComponent(name)
+                let exists = fm.fileExists(atPath: target.path)
+                let ours = ["x64", "x32"].contains { fm.contentsEqual(atPath: target.path, andPath: dxvk(name, arch: $0).path) }
+                if use {
+                    guard !exists || ours, fm.fileExists(atPath: dxvk(name, arch: arch).path) else { continue }
+                    if exists, fm.contentsEqual(atPath: target.path, andPath: dxvk(name, arch: arch).path) { continue }
+                    try? fm.removeItem(at: target)
+                    try? fm.copyItem(at: dxvk(name, arch: arch), to: target)
+                } else if exists, ours {
+                    try? fm.removeItem(at: target)
+                }
+            }
+        }
+    }
+
+    /// Whether a Windows program is 64-bit (PE32+); nil when it can't be read.
+    static func isPE32Plus(_ exe: URL) -> Bool? {
+        guard let handle = try? FileHandle(forReadingFrom: exe) else { return nil }
+        defer { try? handle.close() }
+        guard let head = try? handle.read(upToCount: 4096), head.count > 0x40 else { return nil }
+        let offset = Int(head[0x3C]) | Int(head[0x3D]) << 8 | Int(head[0x3E]) << 16 | Int(head[0x3F]) << 24
+        guard offset + 26 <= head.count, head[offset] == 0x50, head[offset + 1] == 0x45 else { return nil }
+        let magic = Int(head[offset + 24]) | Int(head[offset + 25]) << 8
+        return magic == 0x20B
     }
 
     /// winetricks verbs that would change every game in the shared prefix, not just the one that
@@ -649,26 +960,47 @@ enum Engine {
         }
     }
 
+    /// Which copy of each Direct3D DLL a layer takes. Gcenx's engine: DXMT is the builtin, DXVK
+    /// the native in system32 (the default). winecx (`d3dMetalEngine`): D3DMetal is the builtin,
+    /// DXMT the native in system32 and DXVK the native next to the game (`placeDXVK`), which Wine
+    /// finds before system32.
+    static func layerOverrides(_ layer: GraphicsLayer, d3dMetalEngine: Bool) -> [String: String] {
+        switch layer {
+        case .dxmt, .dxvk:
+            guard d3dMetalEngine else {
+                // d3d9 stays with DXVK: DXMT only covers Direct3D 10/11.
+                return layer == .dxmt ? ["dxgi": "builtin", "d3d11": "builtin", "d3d10core": "builtin"] : [:]
+            }
+            // Games that probe for Direct3D 12 at start (Unity does, through a delay-load that
+            // needs the DLL to exist) would get D3DMetal's, which crashes against DXMT's or DXVK's
+            // dxgi. Wine's own (`installWineD3D12Natives`) just answers that there's none.
+            return ["dxgi": "native", "d3d11": "native", "d3d10core": "native", "d3d12": "native", "d3d12core": "native"]
+        case .d3dmetal:
+            return Dictionary(uniqueKeysWithValues: ["dxgi", "d3d10", "d3d10core", "d3d11", "d3d12", "d3d12core", "nvapi64", "nvngx"]
+                .map { ($0, "builtin") })
+        case .wined3d:
+            // Wine's own Direct3D 9 (OpenGL) instead of DXVK's, for games DXVK can't run.
+            return ["d3d9": "builtin"]
+        case .automatic:
+            return [:]
+        }
+    }
+
     /// Per-program settings for a game's executables (Wine's AppDefaults): the Direct3D layer, the
     /// profile's DLL overrides and Windows version. Rewritten in full at every launch, so a changed
     /// choice or profile never leaves stale entries. The profile's registry entries go in as well.
     static func applyGameSettings(_ choice: GraphicsLayer, profile: GameProfile?, installDir: URL, wine: URL) {
         let layer = choice == .automatic ? (profile?.graphics ?? defaultGraphics) : choice
+        let d3dMetalEngine = isGPTKCapable(wine: wine)
+        if d3dMetalEngine, let dxvk = installedComponentNow(dxvkID) {
+            placeDXVK(layer == .dxvk, dxvkDir: dxvk, installDir: installDir)
+        }
         let exes = executables(in: installDir)
         var sections: [String] = []
         for exe in exes {
             let app = "HKEY_CURRENT_USER\\Software\\Wine\\AppDefaults\\\(exe)"
             var overrides = profile?.dllOverrides ?? [:]
-            switch layer {
-            case .dxmt:
-                // d3d9 stays with DXVK: DXMT only covers Direct3D 10/11.
-                for dll in ["dxgi", "d3d11", "d3d10core"] { overrides[dll] = "builtin" }
-            case .wined3d:
-                // Wine's own Direct3D 9 (OpenGL) instead of DXVK's, for games DXVK can't run.
-                overrides["d3d9"] = "builtin"
-            case .dxvk, .automatic:
-                break
-            }
+            overrides.merge(layerOverrides(layer, d3dMetalEngine: d3dMetalEngine)) { _, layer in layer }
             var section = "[-\(app)\\DllOverrides]"
             if !overrides.isEmpty {
                 section += "\n[\(app)\\DllOverrides]\n" + overrides.sorted { $0.key < $1.key }
@@ -728,11 +1060,12 @@ enum Engine {
 
     /// Imports registry settings into the prefix and waits only for regedit itself (not for the
     /// wineserver, which keeps running as long as Steam does).
-    static func importRegistry(_ body: String, wine: URL) {
+    @discardableResult
+    static func importRegistry(_ body: String, wine: URL) -> Bool {
         let temp = prefix.appendingPathComponent("drive_c/windows/temp", isDirectory: true)
         try? FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
         let file = temp.appendingPathComponent("nightforge-\(UUID().uuidString).reg")
-        guard (try? ("REGEDIT4\n\n" + body + "\n").write(to: file, atomically: true, encoding: .utf8)) != nil else { return }
+        guard (try? ("REGEDIT4\n\n" + body + "\n").write(to: file, atomically: true, encoding: .utf8)) != nil else { return false }
         defer { try? FileManager.default.removeItem(at: file) }
 
         let regedit = Process()
@@ -741,8 +1074,9 @@ enum Engine {
         regedit.environment = environment(wine: wine)
         regedit.standardOutput = FileHandle.nullDevice
         regedit.standardError = FileHandle.nullDevice
-        guard (try? regedit.run()) != nil else { return }
+        guard (try? regedit.run()) != nil else { return false }
         regedit.waitUntilExit()
+        return regedit.terminationStatus == 0
     }
 
     /// macOS only turns Game Mode on (CPU and GPU priority, lower Bluetooth latency) for apps whose
@@ -1045,6 +1379,25 @@ enum Engine {
         }
     }
 
+    /// A profile's changes to the game's own settings files (GameProfile.fileEdits). A file the game
+    /// writes at its first start isn't there before it; true when anything changed, so a start
+    /// that crashed on such a setting can be tried again right away.
+    @discardableResult
+    static func applyFileEdits(_ edits: [GameProfile.FileEdit], installDir: URL) -> Bool {
+        var changed = false
+        let root = installDir.standardizedFileURL.path
+        for edit in edits {
+            let file = installDir.appendingPathComponent(edit.path).standardizedFileURL
+            guard file.path.hasPrefix(root + "/"), !edit.find.isEmpty,
+                  let text = try? String(contentsOf: file, encoding: .utf8), text.contains(edit.find)
+            else { continue }
+            if (try? text.replacingOccurrences(of: edit.find, with: edit.replace).write(to: file, atomically: true, encoding: .utf8)) != nil {
+                changed = true
+            }
+        }
+        return changed
+    }
+
     private static func writeConfig(_ file: URL, lines: [String], keepWhenEmpty: Bool = true) {
         let marker = "# Written by Nightforge"
         let existing = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
@@ -1077,6 +1430,7 @@ enum Engine {
     static func restartSteamInBackground(_ wine: URL) async throws {
         try await stopSteam(wine)
         try startSteam(wine, arguments: ["-silent"])
+        UserDefaults.standard.set(steamConfigSignature, forKey: "steamConfigSignature")
     }
 
     /// Asks Steam to quit and waits up to 20 s before ending it the hard way.
@@ -1190,7 +1544,7 @@ enum Engine {
         let loader = loader(for: wine)
         process.executableURL = loader
         process.arguments = [steamExeWindowsPath] + steamArguments + arguments
-        var env = environment(wine: wine).merging(gameEnvironment) { _, new in new }
+        var env = environment(wine: wine).merging(steamEnvironment) { _, new in new }
         env["WINEDLLOVERRIDES"] = steamDLLOverrides
         if loader != wine { env["WINELOADER"] = loader.path }
         env["WINEDEBUG"] = GameLog.wineDebug

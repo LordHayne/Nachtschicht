@@ -44,6 +44,8 @@ struct Game: Identifiable, Hashable {
     var macSize: Int64 = 0
     /// Steam has a Windows version of it (nearly always).
     var windowsBuild = true
+    /// Playable with a controller (from the couch) – or only in part, or not.
+    var controller = ControllerSupport.none
     /// The version Nightforge runs: Windows through Wine, or Mac through Steam for Mac.
     var platform = Platform.windows
     /// Steam has both versions and Nightforge can run either, so the options offer the choice.
@@ -66,8 +68,10 @@ struct Game: Identifiable, Hashable {
 }
 
 extension Game {
-    /// What the Steam catalog says about the game's Mac version.
-    mutating func adoptMacFacts(_ app: CatalogApp) {
+    /// What the Steam catalog says about the game: VR only, controller, its Mac version.
+    mutating func adoptCatalogFacts(_ app: CatalogApp) {
+        isVROnly = app.vrOnly
+        controller = app.controller
         macNative = app.macNative
         mac64 = app.mac64
         macAppleSilicon = app.macAppleSilicon
@@ -166,8 +170,7 @@ enum LibraryScanner {
             let known = Dictionary(catalog.map { ($0.appID, $0) }, uniquingKeysWith: { first, _ in first })
             for index in result.indices {
                 guard let app = known[result[index].appID] else { continue }
-                result[index].isVROnly = app.vrOnly
-                result[index].adoptMacFacts(app)
+                result[index].adoptCatalogFacts(app)
             }
 
             // Nightforge's own Steam: show the whole library, not only what's on disk.
@@ -186,8 +189,7 @@ enum LibraryScanner {
                     )
                     game.install = .notInstalled
                     game.installDirName = app.installDir
-                    game.isVROnly = app.vrOnly
-                    game.adoptMacFacts(app)
+                    game.adoptCatalogFacts(app)
                     result.append(game)
                 }
             }
@@ -216,10 +218,7 @@ enum LibraryScanner {
                 if case .downloading = game.install, let fraction = MacSteamProgress.fraction(appID: game.appID, steamRoot: root) {
                     game.install = .downloading(fraction)
                 }
-                if let app = catalog[game.appID] {
-                    game.isVROnly = app.vrOnly
-                    game.adoptMacFacts(app)
-                }
+                if let app = catalog[game.appID] { game.adoptCatalogFacts(app) }
                 game.macNative = true
                 result.append(game)
             }
@@ -293,6 +292,7 @@ enum LibraryScanner {
         entry.macAppleSilicon = game.macAppleSilicon || onMac?.macAppleSilicon == true
         entry.macSize = max(game.macSize, onMac?.macSize ?? 0)
         entry.isVROnly = game.isVROnly
+        entry.controller = game.controller != .none ? game.controller : onMac?.controller ?? .none
         entry.lastPlayed = [game.lastPlayed, onMac?.lastPlayed].compactMap { $0 }.max()
         entry.playtimeMinutes = [game.playtimeMinutes, onMac?.playtimeMinutes].compactMap { $0 }.max()
         entry.windowsBuild = game.windowsBuild

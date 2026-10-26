@@ -82,6 +82,7 @@ final class LibraryModel: ObservableObject {
         // Left over from an earlier run whose Steam for Mac has ended since: a Steam the player
         // starts later isn't Nightforge's to quit.
         if !MacSteam.isRunning { MacSteam.startedByNightforge = false }
+        Task { await MacSteam.guardWindows() }
         input.start(model: self)
         watchRunningGames()
         NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main) { [weak self] _ in
@@ -108,6 +109,7 @@ final class LibraryModel: ObservableObject {
                 let found = await Task.detached(priority: .utility) { Self.runningGames(folders) }.value
                 if found != running { running = found }
                 runningScanned = true
+                watchForGameEnd(found)
                 if restartSteamWhenIdle && found.isEmpty && launchingID == nil {
                     restartSteamWhenIdle = false
                     if let wine = await Engine.installedWine() { try? await Engine.restartSteamInBackground(wine) }
@@ -115,6 +117,41 @@ final class LibraryModel: ObservableObject {
                 try? await Task.sleep(for: .seconds(3))
             }
         }
+    }
+
+    // MARK: - Back after a game
+
+    /// Games Nightforge started, from when their process shows up until it ends.
+    private var startedHere: Set<String> = []
+    private var playing: Set<String> = []
+    private var goneFor = 0
+
+    /// Once the games Nightforge started have all ended (gone for three looks, ~6–9 s, so a
+    /// launcher handing over to the game doesn't count), Nightforge comes back to the front: the
+    /// controller keeps working, and neither the desktop nor Steam is what the player sees.
+    private func watchForGameEnd(_ found: [String: pid_t]) {
+        playing.formUnion(startedHere.intersection(found.keys))
+        startedHere.subtract(playing)
+        guard !playing.isEmpty else { return }
+        if playing.contains(where: { found[$0] != nil }) {
+            goneFor = 0
+            return
+        }
+        goneFor += 1
+        guard goneFor >= 3 else { return }
+        playing = []
+        goneFor = 0
+        comeBack()
+    }
+
+    private func comeBack() {
+        MacSteam.hide()
+        // Since macOS 14 an app can't push itself to the front; opening it through Launch
+        // Services can, and unhides it too.
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration)
+        reload(quiet: true)  // play time, last played
     }
 
     /// What a game's processes show in `ps`, by game: Wine's Windows path of the game folder, or
@@ -384,6 +421,7 @@ final class LibraryModel: ObservableObject {
         )
         game.install = .inStore
         game.macNative = hit.macNative ?? false
+        game.controller = hit.controller ?? .none
         game.storePrice = hit.price
         game.metascore = hit.metascore
         return game
@@ -506,7 +544,7 @@ final class LibraryModel: ObservableObject {
             signedInFor = MacSteam.signedIn ? signedInFor + 1 : 0
             if second == 40 && signedInFor == 0 { MacSteam.show() }
             if signedInFor >= 60 {
-                MacSteam.open("install/\(game.appID)", activate: true)
+                MacSteam.ask("install/\(game.appID)")
                 return
             }
         }
@@ -573,6 +611,9 @@ final class LibraryModel: ObservableObject {
             }
             launchingID = nil
             SteamPriority.watch(game)
+            startedHere.insert(game.id)
+            // Steam's window may still be up from a question it asked; the game has the stage now.
+            MacSteam.hide()
             await bringToFront(game)
 
             // The first start of a Mac version: does it run past its first seconds? Only judged
@@ -833,6 +874,7 @@ final class LibraryModel: ObservableObject {
                 else { return }
                 launchingID = nil
                 if game.bottle.isBuiltIn { SteamPriority.watch(game) }
+                startedHere.insert(game.id)
                 await bringToFront(game)
                 guard watchFirstSeconds else { break }
 

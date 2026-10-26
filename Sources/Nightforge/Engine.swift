@@ -326,41 +326,54 @@ enum Engine {
     /// saves after the game ends) or a download is going. Nightforge itself quits right after a
     /// launch, so a small detached script waits for that and then stops Steam and the Wine session.
     /// It gives up if Nightforge is opened again in the meantime. Steam for Mac goes the same way
-    /// when Nightforge started it.
+    /// when Nightforge started it. A game that was running when Nightforge quit brings Nightforge
+    /// back when it ends, so the player lands in the launcher again, controller in hand.
     static func scheduleSteamShutdown() {
         let wine = isSteamInstalled ? installedWineNow() : nil
         let macSteam = MacSteam.startedByNightforge && MacSteam.isRunning
-        guard wine != nil || macSteam else { return }
+        let macLibrary = FileManager.default.fileExists(atPath: MacSteam.steamapps.path) ? MacSteam.steamapps.path : ""
         let script = supportDir.appendingPathComponent("steam-shutdown.sh")
         let text = #"""
         #!/bin/bash
-        # Written by Nightforge on quit: ends the background Steam once nothing needs it.
-        # WINE is empty without Nightforge's own Steam, MAC_STEAMAPPS unless Steam for Mac should go too.
-        WINE="$1"; PREFIX="$2"; MAC_STEAMAPPS="$3"
+        # Written by Nightforge on quit: ends the background Steam once nothing needs it, and brings
+        # Nightforge back when a game that was running ends.
+        # WINE is empty without Nightforge's own Steam; QUIT_MAC is 1 when Steam for Mac should go too.
+        WINE="$1"; PREFIX="$2"; MAC_STEAMAPPS="$3"; QUIT_MAC="$4"; APP="$5"
         STEAMAPPS="$PREFIX/drive_c/Program Files (x86)/Steam/steamapps"
         # The process list is read before searching it, so the search never finds itself; -F
         # because the Windows paths are full of backslashes, which grep would read as escapes.
         has_process() { local list; list="$(ps -axo command)"; printf '%s\n' "$list" | grep -qiF -- "$1"; }
         reopened() { pgrep -qf "Nightforge.app/Contents/MacOS/Nightforge"; }
         steam_running() { has_process '\steam\steam.exe'; }
-        busy() {
-          if [ -n "$WINE" ]; then
-            has_process '\steamapps\common\' && return 0   # a game
-            find "$STEAMAPPS/downloading" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | grep -q . && return 0
-          fi
-          if [ -n "$MAC_STEAMAPPS" ]; then
-            has_process "$MAC_STEAMAPPS/common/" && return 0   # a Mac game
-            find "$MAC_STEAMAPPS/downloading" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | grep -q . && return 0
-          fi
+        game_running() {
+          has_process '\steamapps\common\' && return 0                                  # a Windows game
+          [ -n "$MAC_STEAMAPPS" ] && has_process "$MAC_STEAMAPPS/common/" && return 0     # a Mac game
           return 1
         }
+        busy() {
+          game_running && return 0
+          [ -n "$WINE" ] && find "$STEAMAPPS/downloading" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | grep -q . && return 0
+          [ -n "$MAC_STEAMAPPS" ] && find "$MAC_STEAMAPPS/downloading" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | grep -q . && return 0
+          return 1
+        }
+        # The game ends: back to Nightforge (gone for three looks, so a launcher handing over doesn't count).
+        if [ -n "$APP" ] && game_running; then
+          gone=0
+          while [ "$gone" -lt 3 ]; do
+            reopened && exit 0
+            sleep 2
+            if game_running; then gone=0; else gone=$((gone + 1)); fi
+          done
+          open "$APP"
+          exit 0
+        fi
         while true; do
           while busy; do reopened && exit 0; sleep 10; done
           sleep 30                       # cloud saves of a game that just ended
           reopened && exit 0
           busy || break
         done
-        if [ -n "$MAC_STEAMAPPS" ] && pgrep -qx steam_osx; then
+        if [ "$QUIT_MAC" = 1 ] && pgrep -qx steam_osx; then
           osascript -e 'tell application id "com.valvesoftware.steam" to quit' >/dev/null 2>&1
         fi
         [ -n "$WINE" ] || exit 0
@@ -378,7 +391,7 @@ enum Engine {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [script.path, wine?.path ?? "", prefix.path, macSteam ? MacSteam.steamapps.path : ""]
+        process.arguments = [script.path, wine?.path ?? "", prefix.path, macLibrary, macSteam ? "1" : "0", Bundle.main.bundlePath]
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice

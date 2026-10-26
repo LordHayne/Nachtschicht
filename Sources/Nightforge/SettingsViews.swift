@@ -197,7 +197,7 @@ struct SettingsView: View {
     @EnvironmentObject private var model: LibraryModel
     @AppStorage(Prefs.Keys.bottlesRoot) private var bottlesRoot = ""
     @AppStorage(Prefs.Keys.runnerPath) private var runnerPath = ""
-    @AppStorage(Prefs.Keys.afterLaunch) private var afterLaunch = AfterLaunch.quit.rawValue
+    @AppStorage(Prefs.Keys.afterLaunch) private var afterLaunch = AfterLaunch.hide.rawValue
     @AppStorage(AppLanguage.storageKey) private var language = AppLanguage.system.rawValue
     @AppStorage(Prefs.Keys.performanceHUD) private var performanceHUD = false
     @AppStorage(Prefs.Keys.gameMode) private var gameMode = true

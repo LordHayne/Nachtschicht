@@ -13,6 +13,7 @@ actor StoreSearch {
         var price: String?
         var macNative: Bool?
         var metascore: Int?
+        var controller: ControllerSupport?
     }
 
     private var results: [String: [Hit]] = [:]
@@ -60,6 +61,7 @@ actor StoreSearch {
         }
         hit.macNative = (data["platforms"] as? [String: Any])?["mac"] as? Bool
         hit.metascore = (data["metacritic"] as? [String: Any])?["score"] as? Int
+        hit.controller = (data["controller_support"] as? String).flatMap { ControllerSupport(rawValue: $0.lowercased()) } ?? ControllerSupport.none
         details[appID] = hit
         return hit
     }

@@ -29,7 +29,7 @@ Nightforge sets up everything a Windows game needs on your Mac and then gets out
 - **Anti-cheat aware.** Easy Anti-Cheat and BattlEye can't run on a Mac; when Steam offers a way to start a game without them, Nightforge takes it.
 - **Your whole library, and the store.** Every game you own, with downloads, uninstall and running games you can switch back to. The search also finds games in the Steam store, with price, Metascore and a link to buy them in your browser; once bought, they appear in your library.
 - **Mac versions, automatically.** When Steam has a Mac version of a game that runs on current Macs (64-bit), Nightforge plays that instead of the Windows one – no translation in between. The first time, it sets up Valve's Steam for Mac for you (you sign in in Steam's own window) and downloads the Mac version through it. A game you already play as its Windows version stays playable that way: one click loads its Mac version in the background, and Nightforge switches over once it's there. A small MAC tag shows which games run that way; each game's options can switch back to Windows.
-- **Made for the couch too.** Keyboard and controller work everywhere. English and German.
+- **Made for the couch too.** Keyboard and controller work everywhere, a controller badge on every cover shows which games play with one (filled: full support, outline: partly), and when a game ends Nightforge is back in front – no desktop, no Steam window in between. English and German.
 - **Free and quiet.** No account, no telemetry, no background service. Steam is closed when you quit Nightforge and no game or download is running.
 
 ## Install

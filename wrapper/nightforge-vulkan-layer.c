@@ -30,7 +30,7 @@
 // Contents/Resources/vulkan/implicit_layer.d (see Engine.installVulkanLayer).
 //
 // Build (x86_64, like Wine): clang -arch x86_64 -dynamiclib -fvisibility=hidden -fobjc-arc
-//     -I vulkan-headers -framework Metal -framework MetalFX -framework QuartzCore -framework CoreGraphics
+//     -I vulkan-headers -framework AppKit -framework Metal -framework MetalFX -framework QuartzCore -framework CoreGraphics
 //     -o nightforge-vulkan-layer.dylib nightforge-vulkan-layer.c nightforge-vulkan-metalfx.m
 
 #include <crt_externs.h>
@@ -61,6 +61,9 @@ static PFN_vkQueuePresentKHR next_queue_present;
 static PFN_vkCreateMetalSurfaceEXT next_create_metal_surface;
 static PFN_vkDestroySwapchainKHR next_destroy_swapchain;
 static PFN_vkGetSwapchainImagesKHR next_get_swapchain_images;
+static PFN_vkDestroySurfaceKHR next_destroy_surface;
+static PFN_vkDestroyDevice next_destroy_device;
+static PFN_vkDestroyInstance next_destroy_instance;
 
 // MARK: - Configuration
 
@@ -218,7 +221,6 @@ static struct {
     PFN_vkAllocateMemory allocate;
     PFN_vkFreeMemory free_memory;
     PFN_vkBindImageMemory bind;
-    PFN_vkDeviceWaitIdle wait_idle;
 } metal;
 
 /// MetalFX turned a drawable down once: the swapchains after that are plain ones.
@@ -230,6 +232,7 @@ static int upscale_failed;
 /// images (`real`) have `target`.
 struct upscaled {
     VkSwapchainKHR handle;
+    VkDevice device;
     uint32_t count;
     VkImage images[MAX_IMAGES];
     VkDeviceMemory memory[MAX_IMAGES];
@@ -237,6 +240,8 @@ struct upscaled {
     VkImage real[MAX_IMAGES];
     VkExtent2D size, target;
     void *scaler;
+    /// The latest MetalFX command buffer, which tearing down waits for.
+    void *last;
     int broken;
     struct upscaled *next;
 };
@@ -250,27 +255,50 @@ static struct upscaled *find_upscaled(VkSwapchainKHR handle) {
     return NULL;
 }
 
-/// The CAMetalLayers behind the game's surfaces (Wine creates them with vkCreateMetalSurfaceEXT).
-static struct { VkSurfaceKHR surface; void *layer; } surfaces[16];
+/// The CAMetalLayers behind the game's surfaces (Wine creates them with vkCreateMetalSurfaceEXT),
+/// held (retained) until the surface goes: a window recreated for fullscreen frees its old layer,
+/// and MoltenVK often hands out the same surface handle again.
+#define MAX_SURFACES 16
+static struct { VkSurfaceKHR surface; void *layer; } surfaces[MAX_SURFACES];
+static unsigned next_surface_slot;
 
 static VKAPI_ATTR VkResult VKAPI_CALL CreateMetalSurfaceEXT(VkInstance instance, const VkMetalSurfaceCreateInfoEXT *info,
                                                             const VkAllocationCallbacks *allocator, VkSurfaceKHR *surface) {
     VkResult result = next_create_metal_surface(instance, info, allocator, surface);
     if (result == VK_SUCCESS) {
-        static unsigned next_slot;
         pthread_mutex_lock(&upscaled_lock);
-        surfaces[next_slot % 16].surface = *surface;
-        surfaces[next_slot % 16].layer = (void *)info->pLayer;
-        next_slot++;
+        unsigned slot = next_surface_slot++ % MAX_SURFACES;
+        nf_release(surfaces[slot].layer);
+        surfaces[slot].surface = *surface;
+        surfaces[slot].layer = nf_retain((void *)info->pLayer);
         pthread_mutex_unlock(&upscaled_lock);
     }
     return result;
 }
 
+static VKAPI_ATTR void VKAPI_CALL DestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface,
+                                                    const VkAllocationCallbacks *allocator) {
+    pthread_mutex_lock(&upscaled_lock);
+    for (int i = 0; i < MAX_SURFACES; i++)
+        if (surface && surfaces[i].surface == surface) {
+            nf_release(surfaces[i].layer);
+            surfaces[i].surface = VK_NULL_HANDLE;
+            surfaces[i].layer = NULL;
+        }
+    pthread_mutex_unlock(&upscaled_lock);
+    next_destroy_surface(instance, surface, allocator);
+}
+
+/// The surface's layer, retained for the caller (nf_release it); the newest entry wins.
 static void *layer_of(VkSurfaceKHR surface) {
-    for (int i = 0; i < 16; i++)
-        if (surfaces[i].surface == surface) return surfaces[i].layer;
-    return NULL;
+    void *layer = NULL;
+    pthread_mutex_lock(&upscaled_lock);
+    for (unsigned n = 1; n <= MAX_SURFACES && !layer; n++) {
+        unsigned slot = (next_surface_slot - n) % MAX_SURFACES;
+        if (surface && surfaces[slot].surface == surface) layer = nf_retain(surfaces[slot].layer);
+    }
+    pthread_mutex_unlock(&upscaled_lock);
+    return layer;
 }
 
 static void *metal_texture(VkImage image) {
@@ -283,6 +311,7 @@ static void *metal_texture(VkImage image) {
 }
 
 static void free_upscaled(VkDevice device, struct upscaled *u) {
+    nf_wait_and_release(u->last);  // MetalFX may still be reading the game's images
     for (uint32_t i = 0; i < u->count; i++) {
         if (u->images[i]) metal.destroy_image(device, u->images[i], NULL);
         if (u->memory[i]) metal.free_memory(device, u->memory[i], NULL);
@@ -329,14 +358,17 @@ static int create_game_images(VkDevice device, const VkSwapchainCreateInfoKHR *i
 static VKAPI_ATTR VkResult VKAPI_CALL CreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR *info,
                                                          const VkAllocationCallbacks *allocator, VkSwapchainKHR *swapchain) {
     VkExtent2D size = info->imageExtent, target = size;
-    int scale = allow_upscale && !upscale_failed && metal.mtl_device && device == metal.device &&
-                info->imageColorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR ? nf_display_scale() : 1;
+    int wanted = allow_upscale && !upscale_failed && metal.mtl_device && device == metal.device &&
+                 info->imageColorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    void *layer = wanted ? layer_of(info->surface) : NULL;
+    int scale = wanted ? nf_display_scale(layer) : 1;
     if (scale > 1) {
         // The window's Retina pixels; its size in points comes from the surface's layer when known.
         uint32_t width = size.width, height = size.height;
-        nf_layer_size(layer_of(info->surface), &width, &height);
+        nf_layer_size(layer, &width, &height);
         target = (VkExtent2D){width * scale, height * scale};
     }
+    nf_release(layer);
     struct upscaled *u = NULL;
     if (target.width > size.width && target.height > size.height) {
         u = calloc(1, sizeof *u);
@@ -371,15 +403,20 @@ static VKAPI_ATTR VkResult VKAPI_CALL CreateSwapchainKHR(VkDevice device, const 
         return result;
     }
     u->handle = *swapchain;
+    u->device = device;
     u->size = size;
     u->target = target;
     u->count = MAX_IMAGES;
-    if (next_get_swapchain_images(device, *swapchain, &u->count, u->real) < 0 || !create_game_images(device, info, u)) {
-        // Not enough for the game's own images: start over with the plain swapchain.
+    // More real images than the layer keeps (VK_INCOMPLETE) would hand the game indices it has no image for.
+    if (next_get_swapchain_images(device, *swapchain, &u->count, u->real) != VK_SUCCESS || !create_game_images(device, info, u)) {
+        // Not enough for the game's own images: start over with the plain swapchain. The game's
+        // oldSwapchain was already retired by the swapchain just destroyed, so it can't go along again.
         free_upscaled(device, u);
         next_destroy_swapchain(device, *swapchain, allocator);
         upscale_failed = 1;
-        return next_create_swapchain(device, info, allocator, swapchain);
+        VkSwapchainCreateInfoKHR plain = *info;
+        plain.oldSwapchain = VK_NULL_HANDLE;
+        return next_create_swapchain(device, &plain, allocator, swapchain);
     }
     pthread_mutex_lock(&upscaled_lock);
     u->next = upscaled_list;
@@ -396,10 +433,7 @@ static VKAPI_ATTR void VKAPI_CALL DestroySwapchainKHR(VkDevice device, VkSwapcha
     struct upscaled *u = *link;
     if (u) *link = u->next;
     pthread_mutex_unlock(&upscaled_lock);
-    if (u) {
-        metal.wait_idle(device);  // the game's images may still be read by MetalFX
-        free_upscaled(device, u);
-    }
+    if (u) free_upscaled(device, u);  // waits for its last upscale, not for the whole device
     next_destroy_swapchain(device, swapchain, allocator);
 }
 
@@ -434,14 +468,16 @@ static const VkPresentInfoKHR *upscale(VkQueue queue, const VkPresentInfoKHR *in
     if (!any) return NULL;
 
     if (info->waitSemaphoreCount) {
-        VkPipelineStageFlags stages[32];
-        uint32_t waits = info->waitSemaphoreCount < 32 ? info->waitSemaphoreCount : 32;
-        for (uint32_t i = 0; i < waits; i++) stages[i] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+        VkPipelineStageFlags fixed[32], *stages = fixed;
+        if (info->waitSemaphoreCount > 32 && !(stages = calloc(info->waitSemaphoreCount, sizeof *stages))) return NULL;
+        for (uint32_t i = 0; i < info->waitSemaphoreCount; i++) stages[i] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
         VkSubmitInfo submit = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
-        submit.waitSemaphoreCount = waits;
+        submit.waitSemaphoreCount = info->waitSemaphoreCount;
         submit.pWaitSemaphores = info->pWaitSemaphores;
         submit.pWaitDstStageMask = stages;
-        if (metal.queue_submit(queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS) return NULL;
+        VkResult waited = metal.queue_submit(queue, 1, &submit, VK_NULL_HANDLE);
+        if (stages != fixed) free(stages);
+        if (waited != VK_SUCCESS) return NULL;
     }
     VkExportMetalCommandQueueInfoEXT commands = {VK_STRUCTURE_TYPE_EXPORT_METAL_COMMAND_QUEUE_INFO_EXT};
     commands.queue = queue;
@@ -453,7 +489,7 @@ static const VkPresentInfoKHR *upscale(VkQueue queue, const VkPresentInfoKHR *in
         if (!u || u->broken) continue;
         uint32_t index = info->pImageIndices[i];
         if (index >= u->count ||
-            !nf_upscale((void *)commands.mtlCommandQueue, u->scaler, u->textures[index], metal_texture(u->real[index]))) {
+            !nf_upscale((void *)commands.mtlCommandQueue, u->scaler, u->textures[index], metal_texture(u->real[index]), &u->last)) {
             u->broken = 1;
             upscale_failed = 1;
             *recreate = 1;
@@ -557,13 +593,12 @@ static void set_up_metal(VkPhysicalDevice physical, VkDevice device, PFN_vkGetIn
     DEVICE_PROC(allocate, PFN_vkAllocateMemory, "vkAllocateMemory");
     DEVICE_PROC(free_memory, PFN_vkFreeMemory, "vkFreeMemory");
     DEVICE_PROC(bind, PFN_vkBindImageMemory, "vkBindImageMemory");
-    DEVICE_PROC(wait_idle, PFN_vkDeviceWaitIdle, "vkDeviceWaitIdle");
 #undef DEVICE_PROC
     if (!next_destroy_swapchain) next_destroy_swapchain = (PFN_vkDestroySwapchainKHR)next_device_proc(device, "vkDestroySwapchainKHR");
     if (!next_get_swapchain_images)
         next_get_swapchain_images = (PFN_vkGetSwapchainImagesKHR)next_device_proc(device, "vkGetSwapchainImagesKHR");
     if (!memory || !metal.export_objects || !metal.queue_submit || !metal.create_image || !metal.destroy_image ||
-        !metal.image_requirements || !metal.allocate || !metal.free_memory || !metal.bind || !metal.wait_idle ||
+        !metal.image_requirements || !metal.allocate || !metal.free_memory || !metal.bind ||
         !next_destroy_swapchain || !next_get_swapchain_images)
         return;
     memory(physical, &metal.memory);
@@ -639,6 +674,31 @@ static VKAPI_ATTR VkResult VKAPI_CALL CreateDevice(VkPhysicalDevice physicalDevi
     return result;
 }
 
+/// A device going away (games often create a probe device first): the next one can be upscaled.
+static VKAPI_ATTR void VKAPI_CALL DestroyDevice(VkDevice device, const VkAllocationCallbacks *allocator) {
+    if (device && device == metal.device) {
+        pthread_mutex_lock(&upscaled_lock);
+        // The game should have destroyed its swapchains by now; what's left of this device goes with it.
+        for (struct upscaled **link = &upscaled_list; *link;) {
+            struct upscaled *u = *link;
+            if (u->device != device) {
+                link = &u->next;
+                continue;
+            }
+            *link = u->next;
+            free_upscaled(device, u);
+        }
+        pthread_mutex_unlock(&upscaled_lock);
+        memset(&metal, 0, sizeof metal);
+    }
+    next_destroy_device(device, allocator);
+}
+
+static VKAPI_ATTR void VKAPI_CALL DestroyInstance(VkInstance instance, const VkAllocationCallbacks *allocator) {
+    if (instance && instance == first_instance) first_instance = VK_NULL_HANDLE;
+    next_destroy_instance(instance, allocator);
+}
+
 // MARK: - Entry points
 
 static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL GetDeviceProcAddr(VkDevice device, const char *name) {
@@ -659,6 +719,10 @@ static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL GetDeviceProcAddr(VkDevice devic
     if (theirs && !strcmp(name, "vkQueuePresentKHR")) {
         if (!next_queue_present) next_queue_present = (PFN_vkQueuePresentKHR)theirs;
         return (PFN_vkVoidFunction)QueuePresentKHR;
+    }
+    if (theirs && !strcmp(name, "vkDestroyDevice")) {
+        if (!next_destroy_device) next_destroy_device = (PFN_vkDestroyDevice)theirs;
+        return (PFN_vkVoidFunction)DestroyDevice;
     }
     return theirs;
 }
@@ -683,6 +747,14 @@ static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL GetInstanceProcAddr(VkInstance i
     if (theirs && (!strcmp(name, "vkGetPhysicalDeviceProperties2") || !strcmp(name, "vkGetPhysicalDeviceProperties2KHR"))) {
         if (!next_properties2) next_properties2 = (PFN_vkGetPhysicalDeviceProperties2)theirs;
         return (PFN_vkVoidFunction)GetPhysicalDeviceProperties2;
+    }
+    if (theirs && !strcmp(name, "vkDestroySurfaceKHR")) {
+        if (!next_destroy_surface) next_destroy_surface = (PFN_vkDestroySurfaceKHR)theirs;
+        return (PFN_vkVoidFunction)DestroySurfaceKHR;
+    }
+    if (theirs && !strcmp(name, "vkDestroyInstance")) {
+        if (!next_destroy_instance) next_destroy_instance = (PFN_vkDestroyInstance)theirs;
+        return (PFN_vkVoidFunction)DestroyInstance;
     }
     if (theirs && !strcmp(name, "vkCreateMetalSurfaceEXT")) {
         if (!next_create_metal_surface) next_create_metal_surface = (PFN_vkCreateMetalSurfaceEXT)theirs;

@@ -135,6 +135,23 @@ enum GameLog {
         return signs.contains { lower.contains($0) }
     }
 
+    /// A log line without what identifies the player: the Mac's home folder, the account name in
+    /// Windows and prefix paths (C:\\users\\<name>, drive_c/users/<name>) and Steam account ids.
+    /// The report goes into a GitHub link, which the browser fetches as soon as it opens.
+    static func redacted(_ line: String, home: String = NSHomeDirectory(), user: String = NSUserName()) -> String {
+        var text = line.replacingOccurrences(of: home, with: "~")
+        if !user.isEmpty {
+            for separator in ["\\", "/"] {
+                text = text.replacingOccurrences(of: "users\(separator)\(user)", with: "users\(separator)<user>",
+                                                 options: .caseInsensitive)
+            }
+        }
+        for pattern in [#"\[U:1:\d+\]"#, #"\b7656119\d{10}\b"#] {
+            text = text.replacingOccurrences(of: pattern, with: "<steam id>", options: .regularExpression)
+        }
+        return text
+    }
+
     /// The error lines since `mark`, for a problem report: Wine, DXVK and MoltenVK errors, without
     /// repeats and with the Mac's home folder left out.
     static func errors(since mark: UInt64, limit: Int = 30) -> [String] {
@@ -142,7 +159,6 @@ enum GameLog {
     }
 
     static func errors(in text: String, limit: Int = 30) -> [String] {
-        let home = NSHomeDirectory()
         var seen = Set<String>()
         var result: [String] = []
         for line in text.split(whereSeparator: \.isNewline) {
@@ -155,7 +171,7 @@ enum GameLog {
             if line.count > 5, line.prefix(4).allSatisfy(\.isHexDigit), line.dropFirst(4).first == ":" {
                 cleaned = String(line.dropFirst(5))
             }
-            cleaned = cleaned.replacingOccurrences(of: home, with: "~")
+            cleaned = redacted(cleaned)
             if seen.insert(cleaned).inserted { result.append(cleaned) }
         }
         return Array(result.suffix(limit))

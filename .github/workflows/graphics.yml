@@ -35,7 +35,7 @@ jobs:
     steps:
       - name: Cache LLVM
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           key: llvm-darwin-${{ env.LLVM_VERSION }}-x86_64
           path: toolchains/llvm-darwin
@@ -61,7 +61,7 @@ jobs:
 
       - name: Save LLVM
         if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           key: llvm-darwin-${{ env.LLVM_VERSION }}-x86_64
           path: toolchains/llvm-darwin
@@ -70,7 +70,7 @@ jobs:
     needs: llvm
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
 
@@ -78,13 +78,21 @@ jobs:
         run: |
           git clone --depth 1 --branch "$DXMT_VERSION" --recurse-submodules --shallow-submodules \
             https://github.com/3Shain/dxmt.git dxmt
+          # DXMT v0.80 is MIT, with DXVK code (zlib) and NVIDIA's NVAPI headers (MIT) built in: their
+          # licences and the untouched source (submodules included) go into the release.
+          mkdir -p source
+          git -C dxmt rev-parse HEAD > source/dxmt-commit.txt
+          cp dxmt/LICENSE source/LICENSE-DXMT.txt
+          cp dxmt/src/util/dxvk.LICENSE source/LICENSE-DXVK.txt
+          cp dxmt/external/nvapi/License.txt source/LICENSE-NVAPI.txt
+          tar -cJf "source/dxmt-$DXMT_VERSION.tar.xz" --exclude=.git dxmt
           for patch in engine/patches/dxmt-*.patch; do
             echo "Applying $patch"
             git -C dxmt apply --verbose "$GITHUB_WORKSPACE/$patch"
           done
 
       - name: Restore LLVM
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           key: llvm-darwin-${{ env.LLVM_VERSION }}-x86_64
           path: toolchains/llvm-darwin
@@ -116,17 +124,22 @@ jobs:
           meson compile -C build32
           meson install -C build32
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dxmt
           path: |
             dxmt/install64
             dxmt/install32
 
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dxmt-source
+          path: source
+
   winemac:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: nightforge
           persist-credentials: false
@@ -135,6 +148,12 @@ jobs:
         run: |
           brew install bison flex pkg-config mingw-w64 || true
           git clone --depth 1 --branch "wine-$WINE_VERSION" https://gitlab.winehq.org/wine/wine.git wine
+          # Wine is LGPL: its untouched source and licence go into the release (winebus builds from the same tag).
+          mkdir -p source
+          git -C wine rev-parse HEAD > source/wine-commit.txt
+          cp wine/COPYING.LIB source/COPYING-Wine.txt
+          cp wine/LICENSE source/LICENSE-Wine.txt
+          git -C wine archive --format=tar --prefix="wine-$WINE_VERSION/" HEAD | tar -cJf "source/wine-$WINE_VERSION.tar.xz" @-
           for patch in nightforge/engine/patches/wine-*.patch; do
             echo "Applying $patch"
             git -C wine apply --verbose "$GITHUB_WORKSPACE/$patch"
@@ -192,13 +211,18 @@ jobs:
           otool -L server/wineserver
           otool -L dlls/ntdll/ntdll.so
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: winemac
           path: |
             build/dlls/winemac.drv/winemac.so
             build/dlls/ntdll/ntdll.so
             build/server/wineserver
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wine-source
+          path: source
 
   winebus:
     # Wine's HID bus with the SDL bus compiled in, which reads a DualSense, DualShock 4 or Switch pad
@@ -209,7 +233,7 @@ jobs:
     env:
       SDL_HEADERS_TAG: release-2.32.8  # the SDL the engine ships (libSDL2-2.0.0.dylib, dlopened by name)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: nightforge
 
@@ -266,7 +290,7 @@ jobs:
           codesign -fs - "$so"
           otool -L "$so"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: winebus
           path: build/dlls/winebus.sys/winebus.so
@@ -277,7 +301,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: nightforge
+          persist-credentials: false
+          sparse-checkout: |
+            engine/patches
+            .github/workflows/graphics.yml
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts
 
@@ -299,13 +332,40 @@ jobs:
           find artifacts/winemac -name wineserver -exec cp {} "$root/msync/bin/wineserver" \;
           chmod +x "$root/msync/bin/wineserver"
           test -s "$root/x86_64-unix/winemac.so" && test -s "$root/msync/x86_64-unix/ntdll.so" && test -s "$root/msync/bin/wineserver"
-          ls -lR "$root"
           version="${WINE_VERSION}-dxmt${DXMT_VERSION#v}-${GITHUB_RUN_NUMBER}"
           name="nightforge-graphics-$version.tar.gz"
+          # Licence texts travel with the binaries; the corresponding source Wine's LGPL-2.1 asks for
+          # (untouched upstream, Nightforge's patches, this workflow as the build script) is a second
+          # asset. .tar.xz so it doesn't match the package asset pattern in components/sources.json.
+          source="nightforge-graphics-$version-source"
+          mkdir -p "$root/licenses" "$source/patches"
+          cp artifacts/dxmt-source/LICENSE-*.txt artifacts/wine-source/COPYING-Wine.txt \
+            artifacts/wine-source/LICENSE-Wine.txt "$root/licenses/"
+          cp artifacts/dxmt-source/*.tar.xz artifacts/wine-source/*.tar.xz "$source/"
+          cp "$root"/licenses/* "$source/"
+          cp nightforge/engine/patches/dxmt-*.patch nightforge/engine/patches/wine-*.patch \
+            nightforge/engine/patches/winebus-"$WINE_VERSION"-*.patch "$source/patches/"
+          cp nightforge/.github/workflows/graphics.yml "$source/"
+          notice="Nightforge graphics package $version
+
+          DXMT $DXMT_VERSION ($(cat artifacts/dxmt-source/dxmt-commit.txt)), https://github.com/3Shain/dxmt
+            -> x86_64-windows/, i386-windows/, x86_64-unix/winemetal.so. MIT (LICENSE-DXMT.txt), with code
+            from DXVK (zlib, LICENSE-DXVK.txt) and NVIDIA's NVAPI headers (MIT, LICENSE-NVAPI.txt).
+          Wine $WINE_VERSION ($(cat artifacts/wine-source/wine-commit.txt)), https://gitlab.winehq.org/wine/wine
+            -> x86_64-unix/winemac.so, x86_64-unix/winebus.so, msync/. LGPL-2.1-or-later (COPYING-Wine.txt, LICENSE-Wine.txt).
+
+          The corresponding source is the release asset $source.tar.xz: the untouched upstream
+          sources, Nightforge's patches (applied in name order) and graphics.yml, the workflow that builds them."
+          printf '%s\n' "$notice" > "$root/licenses/NOTICE.txt"
+          cp "$root/licenses/NOTICE.txt" "$source/"
+          ls -lR "$root" "$source"
           tar -czf "$name" "$root"
-          sha256sum "$name"
+          tar -cf "$source.tar" "$source"
+          xz -T0 "$source.tar"
+          sha256sum "$name" "$source.tar.xz"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "source=$source.tar.xz" >> "$GITHUB_OUTPUT"
 
       - name: Publish release
         if: github.ref == 'refs/heads/main'
@@ -313,6 +373,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "graphics-${{ steps.assemble.outputs.version }}" "${{ steps.assemble.outputs.name }}" \
+            "${{ steps.assemble.outputs.source }}" \
             --repo "$GITHUB_REPOSITORY" --latest=false \
             --title "Graphics ${{ steps.assemble.outputs.version }}" \
-            --notes "DXMT $DXMT_VERSION with Nightforge's Wine 11 patches, winemac.so from Wine $WINE_VERSION built with visible symbols, ntdll.so + wineserver from Wine $WINE_VERSION with msync (from CodeWeavers' CrossOver sources), and winebus.so from Wine $WINE_VERSION with the SDL bus, pads reporting as Xbox 360 controllers. Licences: DXMT LGPL-2.1-or-later, Wine LGPL-2.1-or-later; sources: https://github.com/3Shain/dxmt, https://gitlab.winehq.org/wine/wine, patches in engine/patches."
+            --notes "DXMT $DXMT_VERSION with Nightforge's Wine 11 patches, winemac.so from Wine $WINE_VERSION built with visible symbols, ntdll.so + wineserver from Wine $WINE_VERSION with msync (from CodeWeavers' CrossOver sources), and winebus.so from Wine $WINE_VERSION with the SDL bus, pads reporting as Xbox 360 controllers. Licences: DXMT MIT (with DXVK code, zlib, and NVAPI headers, MIT), Wine LGPL-2.1-or-later (texts in licenses/ inside the package). Corresponding source: ${{ steps.assemble.outputs.source }} (untouched DXMT and Wine sources, Nightforge's patches, the build workflow)."

@@ -19,7 +19,9 @@ BIN_DIR="$(swift build -c release --arch arm64 --show-bin-path)"
 
 echo "▸ Building app bundle …"
 rm -rf "$OUT"
-mkdir -p "$OUT/Contents/MacOS" "$OUT/Contents/Resources"
+# The two languages Nightforge speaks: empty .lproj folders let macOS show its own menus, panels
+# and text-field menus in German on a German Mac (the app's own text comes from Strings.swift).
+mkdir -p "$OUT/Contents/MacOS" "$OUT/Contents/Resources/en.lproj" "$OUT/Contents/Resources/de.lproj"
 cp "$BIN_DIR/$APP" "$OUT/Contents/MacOS/$APP"
 cp Resources/Info.plist "$OUT/Contents/Info.plist"
 # Offline fallback for the component list; the app prefers the online copy once it's published.
@@ -30,6 +32,12 @@ cp profiles/profiles.json "$OUT/Contents/Resources/profiles.json"
 cp LICENSE "$OUT/Contents/Resources/LICENSE"
 cp profiles/LICENSE-umu-protonfixes "$OUT/Contents/Resources/LICENSE-umu-protonfixes"
 cp profiles/LICENSE-areweanticheatyet "$OUT/Contents/Resources/LICENSE-areweanticheatyet"
+# What else is inside the app (Vulkan headers in the layer, the mingw runtime in the wrapper) and
+# what Nightforge downloads, with their licences.
+cp Resources/THIRD_PARTY_NOTICES.txt "$OUT/Contents/Resources/THIRD_PARTY_NOTICES.txt"
+mkdir -p "$OUT/Contents/Resources/licenses"
+cp wrapper/vulkan-headers/LICENSE.md "$OUT/Contents/Resources/licenses/Vulkan-Headers-LICENSE.md"
+cp wrapper/vulkan-headers/Apache-2.0.txt wrapper/vulkan-headers/MIT.txt "$OUT/Contents/Resources/licenses/"
 
 # Steam's browser needs this wrapper under Wine (see wrapper/steamwebhelper-wrapper.c).
 # Rebuilt when mingw-w64 is installed, otherwise the checked-in build is used.
@@ -71,12 +79,17 @@ echo "✓ Done: $OUT"
 
 if [ "${1:-}" = "--install" ]; then
   mkdir -p "$HOME/Applications"
-  # `open` would only bring an already running copy to the front, so quit it first.
-  osascript -e "tell application id \"io.github.lordhayne.nightforge\" to quit" >/dev/null 2>&1 || true
+  # `open` would only bring an already running copy to the front, so quit it first. Only when it
+  # runs: AppleScript starts an app it is told to quit.
+  if pgrep -qf "Applications/$APP.app/Contents/MacOS/$APP"; then
+    osascript -e "tell application id \"io.github.lordhayne.nightforge\" to quit" >/dev/null 2>&1 || true
+  fi
   pkill -f "$HOME/Applications/$APP.app/Contents/MacOS/$APP" 2>/dev/null || true
   rm -rf "$HOME/Applications/$APP.app"
   # Nightforge's earlier name: quit and replace it (its data moves over on first start).
-  osascript -e 'tell application id "local.thomas.nachtschicht" to quit' >/dev/null 2>&1 || true
+  if pgrep -qf "Nachtschicht.app/Contents/MacOS/Nachtschicht"; then
+    osascript -e 'tell application id "local.thomas.nachtschicht" to quit' >/dev/null 2>&1 || true
+  fi
   pkill -f "$HOME/Applications/Nachtschicht.app/Contents/MacOS/Nachtschicht" 2>/dev/null || true
   rm -rf "$HOME/Applications/Nachtschicht.app"
   cp -R "$OUT" "$HOME/Applications/"

@@ -44,7 +44,9 @@ jobs:
           version="$CABEXTRACT_VERSION-$GITHUB_RUN_NUMBER"
           name="nightforge-cabextract-$version.tar.gz"
           tar -czf "$name" -C tools cabextract
-          gh release create "cabextract-$version" "$name" \
+          # GPL-3.0: the source the binary is built from is attached to the same release, not only
+          # linked. The name doesn't match the package asset pattern in components/sources.json.
+          gh release create "cabextract-$version" "$name" "cabextract-$CABEXTRACT_VERSION.tar.gz" \
             --repo "$GITHUB_REPOSITORY" --latest=false \
             --title "cabextract $version" \
-            --notes "cabextract $CABEXTRACT_VERSION for macOS (arm64 + x86_64), used by winetricks for Nightforge's per-game profiles. Licence: GPL-3.0-or-later. Source: https://www.cabextract.org.uk/cabextract-$CABEXTRACT_VERSION.tar.gz (unmodified), build steps in .github/workflows/tools.yml."
+            --notes "cabextract $CABEXTRACT_VERSION for macOS (arm64 + x86_64), used by winetricks for Nightforge's per-game profiles. Licence: GPL-3.0-or-later (COPYING inside the package). Source: cabextract-$CABEXTRACT_VERSION.tar.gz attached here (unmodified upstream release), build steps in .github/workflows/tools.yml."

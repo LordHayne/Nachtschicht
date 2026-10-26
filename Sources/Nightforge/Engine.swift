@@ -229,6 +229,18 @@ enum Engine {
         return String(cString: buffer)
     }
 
+    /// Runs engine work that waits on Wine or copies files (regedit, wineserver -k, installs) away
+    /// from the main thread, so the window and the controller keep responding meanwhile.
+    @discardableResult
+    static func offMain<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
+        await Task.detached(priority: .userInitiated) { work() }.value
+    }
+
+    @discardableResult
+    static func offMain<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+        try await Task.detached(priority: .userInitiated) { try work() }.value
+    }
+
     /// Ends every Windows process in Nightforge's prefix.
     static func stopAll(_ wine: URL) {
         let server = Process()
@@ -281,12 +293,23 @@ enum Engine {
             if size == wrapperSize { continue }
             // Valve's helper is several MB, the wrapper ~150 KB: anything else is Steam's (new) original.
             guard size > 1_000_000 else { continue }
+            // The wrapper is copied in beside it first, so a failed copy (disk full) never leaves Steam
+            // without any helper: with -noverifyfiles it wouldn't repair that, and its window stays black.
+            let staged = dir.appendingPathComponent("steamwebhelper.nightforge-new")
             do {
+                try? fm.removeItem(at: staged)
+                try fm.copyItem(at: wrapper, to: staged)
                 try? fm.removeItem(at: real)
                 try fm.moveItem(at: helper, to: real)
-                try fm.copyItem(at: wrapper, to: helper)
+                do {
+                    try fm.moveItem(at: staged, to: helper)
+                } catch {
+                    try? fm.moveItem(at: real, to: helper)  // Steam's own helper back in place
+                    throw error
+                }
                 changed = true
             } catch {
+                try? fm.removeItem(at: staged)
                 continue
             }
         }
@@ -402,7 +425,28 @@ enum Engine {
             }
             if written { writeStamp(prefixStamp, prefixWanted) }
         }
+        // Only once the engine points at the current versions: with a game running, the graphics
+        // install above waits, and the engine's links (D3DMetal, MoltenVK) may still lead to older ones.
+        if !gameRunning, !windowsGameRunning { removeUnusedComponents(keeping: manifest, store: store) }
         return wine
+    }
+
+    /// Versions the component list no longer names, and components it dropped (an older engine
+    /// line, say), take space for nothing – a gigabyte and more after a few updates. Anything
+    /// still running from a folder stays, like the old engine a game keeps until it ends.
+    private static func removeUnusedComponents(keeping manifest: ComponentManifest, store: ComponentStore) {
+        let fm = FileManager.default
+        let wanted = Dictionary(manifest.components.map { ($0.id, $0.version) }, uniquingKeysWith: { first, _ in first })
+        let ids = (try? fm.contentsOfDirectory(at: store.root, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
+        for id in ids where !id.lastPathComponent.hasPrefix(".")
+            && (try? id.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+            let versions = (try? fm.contentsOfDirectory(at: id, includingPropertiesForKeys: nil)) ?? []
+            for version in versions where version.lastPathComponent != wanted[id.lastPathComponent] {
+                guard ownProcesses(under: version).isEmpty else { continue }
+                try? fm.removeItem(at: version)
+            }
+            if (try? fm.contentsOfDirectory(atPath: id.path))?.isEmpty == true { try? fm.removeItem(at: id) }
+        }
     }
 
     /// What `ensureEngine` last set up in a folder (the engine's lib/wine, the prefix).
@@ -519,10 +563,14 @@ enum Engine {
         [ -n "$WINE" ] || exit 0
         # WINEMSYNC like every other Wine process of the session (Engine.environment).
         export WINEPREFIX="$PREFIX" WINEDEBUG=-all WINEMSYNC=1
+        # Nightforge opened again meanwhile has its own plans for Steam (and may start a game right
+        # away): asked again before each step that would end the session.
+        reopened && exit 0
         if steam_running; then
           "$WINE" 'C:\Program Files (x86)\Steam\steam.exe' -shutdown >/dev/null 2>&1
-          for i in $(seq 1 20); do steam_running || break; sleep 1; done
+          for i in $(seq 1 20); do steam_running || break; reopened && exit 0; sleep 1; done
         fi
+        reopened && exit 0
         "$(dirname "$WINE")/wineserver" -k
         sleep 2
         # Wine helpers that outlive the server, recognisable by their working directory in the prefix.
@@ -946,6 +994,12 @@ enum Engine {
         let logs = supportDir.appendingPathComponent("Logs", isDirectory: true)
         try? fm.createDirectory(at: logs, withIntermediateDirectories: true)
         let logFile = logs.appendingPathComponent("winetricks.log")
+        // Like wine.log: one older copy, so it doesn't grow with every game for good.
+        if let size = (try? fm.attributesOfItem(atPath: logFile.path))?[.size] as? UInt64, size > 8_000_000 {
+            let previous = logs.appendingPathComponent("winetricks.previous.log")
+            try? fm.removeItem(at: previous)
+            try? fm.moveItem(at: logFile, to: previous)
+        }
         if !fm.fileExists(atPath: logFile.path) { fm.createFile(atPath: logFile.path, contents: nil) }
         let log = try? FileHandle(forWritingTo: logFile)
         _ = try? log?.seekToEnd()
@@ -1360,7 +1414,10 @@ enum Engine {
                                 steamapps: URL = steamRoot.appendingPathComponent("steamapps", isDirectory: true)) throws {
         let manifest = steamapps.appendingPathComponent("appmanifest_\(appID).acf")
         guard !FileManager.default.fileExists(atPath: manifest.path) else { return }
-        func quoted(_ text: String) -> String { "\"" + text.replacingOccurrences(of: "\"", with: "'") + "\"" }
+        // Steam's text format reads a backslash as an escape: a name ending in one would swallow the closing quote.
+        func quoted(_ text: String) -> String {
+            "\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "'") + "\""
+        }
         let text = """
         "AppState"
         {

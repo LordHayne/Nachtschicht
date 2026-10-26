@@ -62,17 +62,18 @@ Prefer clicking? Download the DMG from the [latest release](https://github.com/L
 
 | Action | Keyboard | Controller |
 |---|---|---|
-| Choose a game | ← → (Home / End to jump) | D-pad, left stick, LB/RB jump 5 |
+| Choose a game | ← → (Home / End to jump) | D-pad or left stick; LB/RB jump 5, LT/RT to the first / last |
 | Play | Enter | A |
-| Whole library | L | |
-| Search | ⌘F | |
+| Whole library | L or ↓ | X, or stick / D-pad down |
+| Search | ⌘F or / | Up to the top bar, then A on the search field |
 | Game options | O | Y or Menu |
-| Uninstall | ⌘⌫ | |
-| Close / back | Esc | B |
+| Buttons above the games (update, rescan, settings) and next to Play | | Stick / D-pad up from the games, A to press |
+| Uninstall | ⌘⌫ | The trash button next to Play |
+| Close / back, clear a search, cancel a start Steam hasn't begun | Esc | B |
 | Rescan library | ⌘R | |
 | Settings | ⌘, | |
 
-Clicking a cover selects it; a second click launches the game.
+In the cover row, clicking a cover selects it and a second click launches the game; in the whole library a second click opens it in the big view.
 
 ## Settings
 

@@ -13,6 +13,26 @@
       "source": "https://github.com/Gcenx/macOS_Wine_builds"
     },
     {
+      "id": "winecx",
+      "kind": "engine",
+      "version": "4.7.3",
+      "url": "https://github.com/dappermint/winecx-gptk/releases/download/runtime-v4.7.3/Libraries.tar.gz",
+      "sha256": "a4b5d63493f80698cce5cad8e7212d9a51c8292037b00c478f4652636fcfd331",
+      "size": 461131598,
+      "license": "LGPL-2.1-or-later",
+      "source": "https://github.com/dappermint/winecx-gptk"
+    },
+    {
+      "id": "d3dmetal",
+      "kind": "graphics",
+      "version": "4.0b3",
+      "url": "https://github.com/LordHayne/Nightforge/releases/download/d3dmetal-4.0b3/nightforge-d3dmetal-4.0b3.tar.gz",
+      "sha256": "6fc51897f848454ed7f4b0f2e39c56b08d33fc235483b9560c8fdeb3c3ecd3f3",
+      "size": 24033436,
+      "license": "LicenseRef-Apple-Game-Porting-Toolkit (non-commercial, Apple hardware only)",
+      "source": "https://github.com/LordHayne/Nightforge"
+    },
+    {
       "id": "dxmt",
       "kind": "graphics",
       "version": "0.80",

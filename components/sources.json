@@ -1,5 +1,5 @@
 {
-  "comment": "What scripts/update-components.py tracks. Each entry becomes one component in manifest.json, pinned to the newest stable GitHub release. 'license' overrides GitHub's detection when the repo has no recognisable LICENSE file. 'tag' pins a specific release (the later DXVK-macOS repack dropped dxgi.dll, which games need; MoltenVK publishes release candidates as stable releases, so it moves only on purpose). The engine stays pinned to the Wine version .github/workflows/graphics.yml builds winemac.so for. 'tagPrefix' picks the newest release whose tag starts with it (our own graphics builds).",
+  "comment": "What scripts/update-components.py tracks. Each entry becomes one component in manifest.json, pinned to the newest stable GitHub release. 'license' overrides GitHub's detection when the repo has no recognisable LICENSE file. 'tag' pins a specific release (the later DXVK-macOS repack dropped dxgi.dll, which games need; MoltenVK publishes release candidates as stable releases, so it moves only on purpose). The engine stays pinned to the Wine version .github/workflows/graphics.yml builds winemac.so for. 'tagPrefix' picks the newest release whose tag starts with it (our own graphics builds). 'winecx' (CodeWeavers' CrossOver changes on Wine, pinned like the Gcenx engine) is the engine D3DMetal runs on; Nightforge prefers it over 'wine', which stays for older app versions reading this list. 'd3dmetal' is Apple's D3DMetal, packed unmodified by scripts/package-d3dmetal.sh and passed on non-commercially under Apple's licence.",
   "sources": [
     {
       "id": "wine",
@@ -8,6 +8,23 @@
       "asset": "^wine-devel-[0-9.]+-osx64\\.tar\\.xz$",
       "license": "LGPL-2.1-or-later",
       "tag": "11.18"
+    },
+    {
+      "id": "winecx",
+      "kind": "engine",
+      "repo": "dappermint/winecx-gptk",
+      "tagPrefix": "runtime-v",
+      "asset": "^Libraries\\.tar\\.gz$",
+      "license": "LGPL-2.1-or-later",
+      "tag": "runtime-v4.7.3"
+    },
+    {
+      "id": "d3dmetal",
+      "kind": "graphics",
+      "repo": "LordHayne/Nightforge",
+      "tagPrefix": "d3dmetal-",
+      "asset": "^nightforge-d3dmetal-.*\\.tar\\.gz$",
+      "license": "LicenseRef-Apple-Game-Porting-Toolkit (non-commercial, Apple hardware only)"
     },
     {
       "id": "dxmt",

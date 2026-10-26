@@ -238,12 +238,13 @@
   - **Design:** `Dialogs.tsx` → Tab „Storage“.
   - **Stand:** Tab „Storage“: Balken für das Laufwerk mit Nightforges Daten (Spiele / Nightforge ohne Spiele, im Hintergrund gemessen / Anderes / frei) und die Spiele auf dem Mac nach Größe mit „Im Finder zeigen“ und „Uninstall …“ (fragt im Hauptfenster). Offen: „Move to …“ (braucht 4.2), Shader-Caches leeren (Ordner recherchieren), „Remove Nightforge completely …“.
 
-- [ ] **4.4 Download-Warteschlange & Ruhezustand** · `M` · braucht 0.3
+- [ ] **4.4 Download-Warteschlange & Ruhezustand** · `M` · braucht 0.3 · teilweise in `claude/ux-downloads-4-4`
   - **Was:**
     - **Top-Bar:** Download-Ring mit Anzahl (Taste D).
     - **Panel:** Reihenfolge („Download this next“), Pause/Fortsetzen, Geschwindigkeit/Restzeit, „Only download overnight (1–7 am)“.
     - **Ruhezustand:** Während eines Downloads verhindert eine `IOPMAssertion` das Einschlafen, mit Hinweis.
     - **Fertig:** Download fertig → Toast mit „Play“ + macOS-Mitteilung (5.1). *(Toast erledigt mit 1.4.)*
+  - **Stand** (`claude/ux-downloads-4-4`, teilweise): Ring in der Top-Bar (Durchschnitt aller Downloads, Anzahl in der Mitte, Taste D, per Pad erreichbar) mit Panel: je Spiel Fortschritt „42 % von 20 GB“ bzw. „Pausiert – zu wenig Platz“ und „Cancel“. Während Downloads laufen, hält `KeepAwake` eine `IOPMAssertion` gegen den Ruhezustand (der Bildschirm darf ausgehen) – das Panel sagt es. Fertig → Toast + Mitteilung (5.1). Offen: Reihenfolge, Pause/Fortsetzen, Geschwindigkeit/Restzeit, „Only download overnight“ – dafür erst recherchieren, was sich an Steams Warteschlange von außen steuern lässt. In der App nicht gesehen (gerade lädt nichts).
   - **Wo:** Steam-Download-Warteschlange über Steam steuern (recherchieren, was von außen geht), sonst eigene Reihenfolge.
   - **Design:** `Overlays.tsx` → `DownloadsPanel`.
 

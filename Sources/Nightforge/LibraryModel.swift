@@ -80,6 +80,10 @@ final class LibraryModel: ObservableObject {
     @Published var pendingLeftoverRemoval: Game?
     /// Steam for Mac being set up for a game whose Mac version is wanted.
     @Published var macSetup: MacSteamSetup?
+    /// The downloads panel under the top bar's ring (D).
+    @Published var showingDownloads = false
+    /// What Steam is downloading now, in the library's order.
+    var downloads: [Game] { allGames.filter { Self.isDownloading($0.install) } }
     /// A download that wouldn't fit: which games could make room (SpaceCheck).
     @Published var pendingSpace: SpaceRequest?
     /// A game about to open in GeForce Now for the first time: what that means is said once.
@@ -350,6 +354,8 @@ final class LibraryModel: ObservableObject {
         for game in finished { prepare(game) }
         applyFilter()
         MacIntegration.announceFinished(finished)
+        KeepAwake.update(downloading: found.filter { Self.isDownloading($0.install) && $0.downloadNeedsSpace == nil }.map(\.name))
+        if downloads.isEmpty { showingDownloads = false }
         MacIntegration.libraryLoaded()
         if let game = finished.first {
             Toasts.shared.show(finished.count == 1 ? L10n.t("%@ is ready to play", game.name) : L10n.t("%ld games are ready to play", finished.count),

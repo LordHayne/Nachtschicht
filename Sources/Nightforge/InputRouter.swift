@@ -102,6 +102,9 @@ final class InputRouter {
         case "/":
             model.focusSearch()
             return true
+        case "d" where !model.downloads.isEmpty:
+            model.showingDownloads.toggle()
+            return true
         default:
             return false
         }

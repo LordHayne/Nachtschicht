@@ -575,6 +575,9 @@ private struct TopBar: View {
                 SearchField()
             }
 
+            if !model.downloads.isEmpty {
+                DownloadsButton()
+            }
             if model.isScanning {
                 ProgressView().controlSize(.small)
             }

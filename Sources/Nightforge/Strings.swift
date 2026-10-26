@@ -476,6 +476,19 @@ enum L10n {
         "An update is waiting – Steam downloads it before the game starts": "Ein Update wartet – Steam lädt es, bevor das Spiel startet",
         "Installed, update waiting": "Installiert, Update wartet",
 
+        // Downloads
+        "Nightforge is downloading %@": "Nightforge lädt %@",
+        "1 download (D)": "1 Download (D)",
+        "%ld downloads (D)": "%ld Downloads (D)",
+        "1 download": "1 Download",
+        "%ld downloads": "%ld Downloads",
+        "Downloads": "Downloads",
+        "Nothing is downloading.": "Gerade lädt nichts.",
+        "Your Mac stays awake while games download. The display can still turn off.": "Dein Mac bleibt wach, solange Spiele laden. Der Bildschirm darf trotzdem ausgehen.",
+        "Paused – not enough space": "Pausiert – zu wenig Platz",
+        "%ld %% of %@": "%ld %% von %@",
+        "Preparing …": "Wird vorbereitet …",
+
         // Cloud saves
         "Your save is in the Steam Cloud. You can close your Mac.": "Dein Spielstand ist in der Steam Cloud. Du kannst den Mac zuklappen.",
         "Steam syncs your save in the background.": "Steam gleicht deinen Spielstand im Hintergrund ab.",

@@ -17,6 +17,8 @@ enum Engine {
     /// DirectX 9–11 → Vulkan → Metal. Draws reliably on Wine 11 today, while DXMT can't attach to
     /// Wine 11's windows yet (that needs a patched DXMT build).
     static let dxvkID = "dxvk-macos"
+    /// Vulkan → Metal for DXVK and Vulkan games, newer than the copy the engine brings along.
+    static let moltenVKID = "moltenvk"
     static let steamSetupURL = URL(string: "https://cdn.akamai.steamstatic.com/client/installer/SteamSetup.exe")!
     static let steamExeWindowsPath = #"C:\Program Files (x86)\Steam\steam.exe"#
     /// Steam's web UI (CEF) paints a black window under Wine on macOS unless it renders in software
@@ -285,9 +287,13 @@ enum Engine {
         let matchesEngine = graphics.version.hasPrefix(engine.version + "-")
         let graphicsStamp = stamp(in: wine.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lib/wine", isDirectory: true), name: "graphics")
-        let graphicsWanted = "\(graphics.id) \(graphics.version) engine-match \(matchesEngine)"
+        let moltenVK = manifest.component(moltenVKID)
+        let graphicsWanted = "\(graphics.id) \(graphics.version) engine-match \(matchesEngine) moltenvk \(moltenVK?.version ?? "engine")"
         if readStamp(graphicsStamp) != graphicsWanted {
             try installGraphics(graphicsDir, into: wine, matchesEngine: matchesEngine)
+            var moltenVKDir: URL?
+            if let moltenVK { moltenVKDir = try await store.install(moltenVK) }
+            try installMoltenVK(moltenVKDir, into: wine)
             writeStamp(graphicsStamp, graphicsWanted)
         }
         installGameBundle(wine: wine)  // after the graphics: its links must point at the new files
@@ -439,6 +445,27 @@ enum Engine {
                 try fm.copyItem(at: file, to: destination)
             }
         }
+    }
+
+    /// Puts MoltenVK from its component in place of the engine's own (kept as libMoltenVK.dylib.engine,
+    /// which comes back when the component list drops it: `moltenVKDir` nil). The Vulkan loader finds
+    /// it there inside and outside the game bundle. Copied, not moved: a running Steam keeps the
+    /// library it has loaded.
+    static func installMoltenVK(_ moltenVKDir: URL?, into wine: URL) throws {
+        let fm = FileManager.default
+        let lib = wine.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib", isDirectory: true)
+        let installed = lib.appendingPathComponent("libMoltenVK.dylib")
+        let original = lib.appendingPathComponent("libMoltenVK.dylib.engine")
+        if !fm.fileExists(atPath: original.path), fm.fileExists(atPath: installed.path) {
+            try fm.copyItem(at: installed, to: original)
+        }
+        let source = moltenVKDir.map { $0.appendingPathComponent("MoltenVK/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib") }
+            ?? original
+        guard fm.fileExists(atPath: source.path) else { return }
+        let staged = lib.appendingPathComponent("libMoltenVK.dylib.new")
+        try? fm.removeItem(at: staged)
+        try fm.copyItem(at: source, to: staged)
+        _ = try fm.replaceItemAt(installed, withItemAt: staged)
     }
 
     /// Direct3D DLLs a game can take from DXVK (native, in the prefix) or DXMT (builtin, in the engine).

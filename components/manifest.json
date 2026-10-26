@@ -43,6 +43,16 @@
       "source": "https://github.com/Gcenx/DXVK-macOS"
     },
     {
+      "id": "moltenvk",
+      "kind": "graphics",
+      "version": "1.4.2",
+      "url": "https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.2/MoltenVK-macos.tar",
+      "sha256": "f95765a6229cb7b915990a2890ce12ebe36a730b021545d3d52ae69ce4c4024e",
+      "size": 59563008,
+      "license": "Apache-2.0",
+      "source": "https://github.com/KhronosGroup/MoltenVK"
+    },
+    {
       "id": "winetricks",
       "kind": "tool",
       "version": "20260125",

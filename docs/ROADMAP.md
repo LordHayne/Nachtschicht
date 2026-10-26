@@ -253,11 +253,12 @@
   - **Stand** (`claude/ux-macos-5-1-5-2`): `MacIntegration.swift` – Mitteilung mit „Play“, wenn ein Download fertig wird und Nightforge nicht vorne ist (vorne: Toast). Klick auf die Mitteilung zeigt das Spiel, „Play“ startet es. Schalter „Notify me when downloads finish“ in General (an). macOS fragt beim ersten Mal nach der Erlaubnis. **Abweichung:** nur solange Nightforge läuft – „geschlossen“ ginge nur mit einem Hintergrunddienst, und „No background service“ steht in About. Noch nicht in der echten App angeklickt.
 - [x] **5.2 Dock-Menü** · `S` — `applicationDockMenu`: die letzten 5 Spiele direkt startbar.
   - **Stand** (`claude/ux-macos-5-1-5-2`): installierte, schon gespielte Spiele, zuletzt gespielt zuerst, ohne ausgeblendete (`MacIntegration.recentGames`, Test in `tests/NavigationTest/`). Ein Klick holt Nightforge nach vorne und startet das Spiel. Noch nicht in der echten App angeklickt.
-- [ ] **5.3 Spiele als Kurzbefehle** · `M`
+- [ ] **5.3 Spiele als Kurzbefehle** · `M` · teilweise in `claude/ux-shortcuts-5-3`
   - **Verknüpfungen:** `~/Applications/Nightforge Games/<Spiel>.app` (kleiner Starter mit Cover-Icon, der `nightforge://play/<id>` öffnet), damit Spotlight und Launchpad die Spiele finden.
   - **URL-Schema:** `nightforge://play/<id>` registrieren.
   - **Siri/Kurzbefehle:** App Intents für „Siri, play Hades II“.
   - **Detailseite:** Button „Add to Applications“.
+  - **Stand** (`claude/ux-shortcuts-5-3`, teilweise): `nightforge://play/<App-ID>` und `nightforge://show/<App-ID>` im Info.plist registriert (`AppDelegate.application(_:open:)`; kommt ein Link vor dem ersten Scan, wartet er darauf). Ein Link startet nur installierte Spiele, sonst öffnet er die Spielseite – er lädt nie etwas herunter. Detailseite: Knopf „Add to Applications“ legt `~/Applications/Nightforge Games/<Spiel>.app` an (Skript, das den Link öffnet, Cover als Icon, ohne Dock-Symbol); danach zeigt der Knopf die App im Finder. Test `tests/GameShortcutTest/`. Offen: App Intents für Siri/Kurzbefehle; in der echten App noch nicht durchgeklickt (Bildschirmfreigabe fehlte).
 - [ ] **5.4 Controller-Tab** · `M`
   - **Anzeige:** Verbundene Controller mit Akkustand (`GCController.battery`).
   - **Koppeln:** „Pair a controller“ mit Anleitung je Hersteller. Direktes Bluetooth-Koppeln ist eingeschränkt → bei Bedarf die Bluetooth-Einstellungen öffnen und dort warten, bis der Controller erscheint.

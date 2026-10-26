@@ -864,6 +864,18 @@ private struct GameDetail: View {
                         model.toggleHidden(game)
                     }
                 }
+                if !compact && game.isInstalled {
+                    let added = model.shortcutsChanged >= 0 && GameShortcut.exists(for: game)
+                    RoundIconButton(symbol: added ? "app.badge.checkmark" : "app.badge",
+                                    help: added ? L10n.t("In Applications – show it") : L10n.t("Add to Applications – Spotlight and Launchpad find it"),
+                                    focusID: "detail.shortcut") {
+                        if added {
+                            NSWorkspace.shared.activateFileViewerSelecting([GameShortcut.appURL(for: game)])
+                        } else {
+                            model.addShortcut(for: game)
+                        }
+                    }
+                }
                 if !compact && (model.canPin(game) || model.isPinned(game)) {
                     let pinned = model.isPinned(game)
                     RoundIconButton(symbol: pinned ? "pin.fill" : "pin",

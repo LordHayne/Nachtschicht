@@ -333,6 +333,7 @@ final class LibraryModel: ObservableObject {
         for game in finished { prepare(game) }
         applyFilter()
         MacIntegration.announceFinished(finished)
+        MacIntegration.libraryLoaded()
         if let game = finished.first {
             Toasts.shared.show(finished.count == 1 ? L10n.t("%@ is ready to play", game.name) : L10n.t("%ld games are ready to play", finished.count),
                                action: .init(label: L10n.t("Play")) { [weak self] in self?.play(game) })
@@ -1646,6 +1647,24 @@ final class LibraryModel: ObservableObject {
     func compatibility(of game: Game) -> Compatibility {
         Compatibility.of(game, profile: profiles[game.appID], analysis: insights[game.appID]?.analysis)
     }
+
+    /// The detail page's "Add to Applications": a little app that opens the game, found by Spotlight.
+    func addShortcut(for game: Game) {
+        Task {
+            let cover = await ArtworkStore.shared.image(for: game, kind: .cover)
+            do {
+                let app = try GameShortcut.create(for: game, icon: cover)
+                shortcutsChanged += 1
+                Toasts.shared.show(L10n.t("%@ is in Applications now – Spotlight finds it", game.name),
+                                   action: .init(label: L10n.t("Show")) { NSWorkspace.shared.activateFileViewerSelecting([app]) })
+            } catch {
+                errorMessage = L10n.t("%@ couldn't be added to Applications: %@", game.name, error.localizedDescription)
+            }
+        }
+    }
+
+    /// Bumped when a game's app was added, so its button turns into "Show in Applications".
+    @Published private(set) var shortcutsChanged = 0
 
     /// After a failed start: every way again from the first, as if the game were new.
     func startOver(_ failed: FailedLaunch) {

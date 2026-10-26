@@ -53,6 +53,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         MacIntegration.dockMenu(target: self, action: #selector(playFromDock(_:)))
     }
 
+    /// nightforge://play/<app ID> – from a game's app in ~/Applications, Spotlight or a shortcut.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        urls.forEach { MacIntegration.open($0) }
+    }
+
     @MainActor @objc private func playFromDock(_ item: NSMenuItem) {
         MacIntegration.open(id: item.representedObject as? String, play: true)
     }

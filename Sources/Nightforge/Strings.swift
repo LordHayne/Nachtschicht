@@ -443,6 +443,12 @@ enum L10n {
             "Erster Start mit dieser Grafikversion: Shader werden vorbereitet, das kann eine Minute dauern. Beim nächsten Mal geht es schneller.",
         "Steam asks something before the game starts – answer it in its window.": "Steam fragt vor dem Start etwas – antworte in seinem Fenster.",
 
+        // Shortcuts
+        "%@ is in Applications now – Spotlight finds it": "%@ ist jetzt in den Programmen – Spotlight findet es",
+        "%@ couldn't be added to Applications: %@": "%@ konnte nicht zu den Programmen hinzugefügt werden: %@",
+        "In Applications – show it": "In den Programmen – zeigen",
+        "Add to Applications – Spotlight and Launchpad find it": "Zu den Programmen hinzufügen – Spotlight und Launchpad finden es",
+
         // Library filters
         "Sort": "Sortieren",
         "Recently played": "Zuletzt gespielt",

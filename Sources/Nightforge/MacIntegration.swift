@@ -32,12 +32,41 @@ enum MacIntegration {
         return menu
     }
 
-    /// From the Dock menu or a notification's Play button: Nightforge comes to the front and plays
-    /// the game; a click on the notification itself only shows it.
+    /// From the Dock menu, a notification's Play button or a game's link: Nightforge comes to the
+    /// front and plays the game – or shows its page when it isn't installed (a link never downloads).
     static func open(id: String? = nil, appID: Int? = nil, play: Bool) {
         guard let model, let game = model.allGames.first(where: { $0.id == id || (appID != nil && $0.appID == appID) }) else { return }
         NSApp.activate()
-        if play { model.play(game) } else { model.reveal(game) }
+        if play && game.isInstalled {
+            model.play(game)
+        } else if model.reveal(game), play {
+            model.openDetail()
+        }
+    }
+
+    /// A link that came before the library was read: opened once it is.
+    private static var pendingLink: GameShortcut.Action?
+
+    static func open(_ url: URL) {
+        guard let action = GameShortcut.action(from: url) else { return }
+        guard let model, !model.allGames.isEmpty else {
+            pendingLink = action
+            return
+        }
+        switch action {
+        case .play(let appID): open(appID: appID, play: true)
+        case .show(let appID): open(appID: appID, play: false)
+        }
+    }
+
+    /// After a scan: a link that waited for the library.
+    static func libraryLoaded() {
+        guard let link = pendingLink else { return }
+        pendingLink = nil
+        switch link {
+        case .play(let appID): open(appID: appID, play: true)
+        case .show(let appID): open(appID: appID, play: false)
+        }
     }
 
     // MARK: - Notifications

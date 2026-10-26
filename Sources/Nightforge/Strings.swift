@@ -331,6 +331,22 @@ enum L10n {
         "Gives games priority on the CPU and graphics and halves Bluetooth latency for controllers and headphones. Turn it off if a game's sound crackles.":
             "Gibt Spielen Vorrang bei CPU und Grafik und halbiert die Bluetooth-Latenz für Controller und Kopfhörer. Schalte ihn aus, wenn der Ton eines Spiels knackt.",
 
+        // Compatibility
+        "Runs great": "Läuft super",
+        "Runs with tweaks": "Läuft mit Anpassungen",
+        "Not tested yet": "Noch nicht getestet",
+        "Needs a VR headset.": "Braucht eine VR-Brille.",
+        "Its anti-cheat needs Windows itself.": "Sein Anti-Cheat braucht Windows selbst.",
+        "Its anti-cheat needs Windows – playable on GeForce Now instead.":
+            "Sein Anti-Cheat braucht Windows – stattdessen auf GeForce Now spielbar.",
+        "DirectX 12 only: it runs through Apple's D3DMetal, which not every game likes.":
+            "Nur DirectX 12: Es läuft über Apples D3DMetal, das nicht jedes Spiel mag.",
+        "Online play with %@ doesn't work on a Mac.": "Online-Spiel mit %@ geht auf dem Mac nicht.",
+        "Starts with fixes from umu-protonfixes, applied automatically.":
+            "Startet mit Korrekturen aus umu-protonfixes, die automatisch angewendet werden.",
+        "Nightforge found what it needs by itself and applies it at every start.":
+            "Nightforge hat selbst herausgefunden, was es braucht, und wendet es bei jedem Start an.",
+
         // Errors
         "Component list version %ld needs a newer Nightforge.": "Komponentenliste Version %ld braucht ein neueres Nightforge.",
         "No component list available. Check your internet connection.": "Keine Komponentenliste verfügbar. Prüfe deine Internetverbindung.",

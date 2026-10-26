@@ -92,6 +92,14 @@ enum LaunchHealth {
         return (min(state.index, max(attempts.count - 1, 0)), state.confirmed)
     }
 
+    /// How it stands without touching what's saved: nil when the game hasn't been started this way yet.
+    static func peek(_ appID: Int, _ attempts: [LaunchAttempt]) -> (index: Int, confirmed: Bool)? {
+        guard let data = UserDefaults.standard.data(forKey: key(appID)),
+              let state = try? JSONDecoder().decode(State.self, from: data), state.ladder == attempts.map(\.id)
+        else { return nil }
+        return (min(state.index, max(attempts.count - 1, 0)), state.confirmed)
+    }
+
     static func recordStart(_ appID: Int, _ attempts: [LaunchAttempt], at date: Date = Date()) {
         var state = load(appID, attempts)
         state.startedAt = date

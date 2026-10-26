@@ -8,6 +8,12 @@ enum Theme {
     static let muted = Color(red: 0x9A / 255, green: 0xA3 / 255, blue: 0xAF / 255)   // #9AA3AF
     static let slate = Color(red: 0x1C / 255, green: 0x24 / 255, blue: 0x30 / 255)   // #1C2430
 
+    // How well a game runs (Compatibility). Never on their own: an icon and a word go with them.
+    // "With tweaks" is a paler amber than sodium, which stays for the one main action and focus.
+    static let runsGreat = Color(red: 0x7E / 255, green: 0xE2 / 255, blue: 0xA0 / 255)       // #7EE2A0
+    static let runsWithTweaks = Color(red: 0xE8 / 255, green: 0xC6 / 255, blue: 0x8A / 255)  // #E8C68A
+    static let runsNot = Color(red: 0xFF / 255, green: 0x9E / 255, blue: 0x94 / 255)         // #FF9E94
+
     /// Wide, heavy display face for titles and the play button.
     static func display(_ size: CGFloat) -> Font {
         .system(size: size, weight: .heavy).width(.expanded)

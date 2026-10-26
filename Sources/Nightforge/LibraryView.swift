@@ -835,15 +835,17 @@ private struct HintBar: View {
     var body: some View {
         HStack(spacing: 22) {
             Spacer()
+            let pad = model.padSymbols
             if model.showingLibrary {
-                Hint(symbol: model.controllerConnected ? "a.circle.fill" : "return", text: L10n.t("Open"))
-                Hint(symbol: "arrow.up.and.down.and.arrow.left.and.right", text: L10n.t("Select"))
-                Hint(symbol: model.controllerConnected ? "b.circle.fill" : "escape", text: L10n.t("Back"))
+                Hint(symbol: model.controllerConnected ? pad.confirm : "return", text: L10n.t("Open"))
+                Hint(symbol: model.controllerConnected ? pad.stick : "arrow.up.and.down.and.arrow.left.and.right",
+                     text: L10n.t("Select"))
+                Hint(symbol: model.controllerConnected ? pad.back : "escape", text: L10n.t("Back"))
             } else if model.controllerConnected {
-                Hint(symbol: "a.circle.fill", text: L10n.t("Play"))
-                Hint(symbol: "y.circle.fill", text: L10n.t("Options"))
-                Hint(symbol: "x.circle.fill", text: L10n.t("Library"))
-                Hint(symbol: "arrow.left.and.right", text: L10n.t("Select"))
+                Hint(symbol: pad.confirm, text: L10n.t("Play"))
+                Hint(symbol: pad.options, text: L10n.t("Options"))
+                Hint(symbol: pad.library, text: L10n.t("Library"))
+                Hint(symbol: pad.stick, text: L10n.t("Select"))
             } else {
                 Hint(symbol: "return", text: L10n.t("Play"))
                 Hint(symbol: "o.square", text: L10n.t("Options"))

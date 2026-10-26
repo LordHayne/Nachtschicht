@@ -24,7 +24,6 @@ import ast
 import datetime
 import json
 import pathlib
-import re
 import subprocess
 import sys
 

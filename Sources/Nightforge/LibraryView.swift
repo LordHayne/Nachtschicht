@@ -62,10 +62,19 @@ struct LibraryView: View {
         }
         .animation(.easeOut(duration: 0.28), value: model.selected?.id)
         .animation(.easeOut(duration: 0.22), value: model.showingLibrary)
-        .sheet(isPresented: $model.showingOptions) {
+        // A changed version moves the game to another Steam: scan again.
+        .sheet(isPresented: $model.showingOptions, onDismiss: { model.reload(quiet: true) }) {
             if let game = model.selected {
                 GameOptionsSheet(game: game, insight: model.insights[game.appID]) { model.reportProblem(for: game) }
             }
+        }
+        // Esc closes it like Cancel: the setup stops.
+        .sheet(item: Binding(get: { model.macSetup }, set: { if $0 == nil { model.closeMacSetup() } })) { setup in
+            MacSteamSetupView(
+                setup: setup,
+                useWindows: setup.game.switchable ? { model.useWindowsVersion(of: setup.game) } : nil,
+                close: { model.closeMacSetup() }
+            )
         }
         .alert(
             L10n.t("Something went wrong"),
@@ -109,6 +118,22 @@ struct LibraryView: View {
                 Text(game.isInstalled
                      ? L10n.t("This removes the game from your Mac and frees %@. It stays in your Steam library, so you can download it again any time. Saves in the Steam Cloud are kept.", Format.bytes(game.sizeOnDisk))
                      : L10n.t("The part downloaded so far is deleted. You can start the download again any time."))
+            }
+        )
+        .alert(
+            L10n.t("Remove the Windows version of %@?", model.pendingLeftoverRemoval?.name ?? ""),
+            isPresented: Binding(
+                get: { model.pendingLeftoverRemoval != nil },
+                set: { if !$0 { model.pendingLeftoverRemoval = nil } }
+            ),
+            presenting: model.pendingLeftoverRemoval,
+            actions: { _ in
+                Button(L10n.t("Remove"), role: .destructive) { model.confirmLeftoverRemoval() }
+                Button(L10n.t("Keep"), role: .cancel) {}
+            },
+            message: { game in
+                Text(L10n.t("Nightforge uses the Mac version of this game now. Removing the Windows version frees %@; you can switch back and download it again any time.",
+                            Format.bytes(game.windowsLeftover ?? 0)))
             }
         )
         .onAppear {
@@ -366,7 +391,10 @@ private struct GameDetail: View {
                 case .downloading:
                     Stat(label: L10n.t("Download"), value: Format.bytes(game.sizeOnDisk))
                 }
-                if !game.bottle.isBuiltIn {  // only means something with several CrossOver bottles
+                if game.switchable {
+                    Stat(label: L10n.t("Version"), value: game.platform == .mac ? "Mac" : "Windows")
+                }
+                if !game.bottle.isBuiltIn && game.platform == .windows {  // only means something with several CrossOver bottles
                     Stat(label: "Bottle", value: game.bottle.name)
                 }
             }
@@ -391,14 +419,7 @@ private struct GameDetail: View {
                     .controlSize(.small)
                 }
             }
-            if game.macNative {
-                Label(L10n.t("Steam also has a Mac version of this game. It often runs better than the Windows version, but older Mac versions sometimes don't start on current Macs."),
-                      systemImage: "laptopcomputer")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.muted)
-                    .frame(maxWidth: 620, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            VersionNotes(game: game, playsAfterDownload: model.playsAfterDownload(game))
 
             HStack(spacing: 14) {
                 PlayButton(install: game.install, isLaunching: model.launchingID == game.id,
@@ -406,7 +427,8 @@ private struct GameDetail: View {
                            isRunning: model.isRunning(game),
                            needsConfirmation: model.launchNeedsConfirmation,
                            status: model.launchStatus,
-                           vrOnly: game.isVROnly && game.install == .notInstalled) {
+                           vrOnly: game.isVROnly && game.install == .notInstalled,
+                           playsAfterDownload: model.playsAfterDownload(game)) {
                     model.primaryAction()
                 }
                 if game.install != .inStore {
@@ -461,6 +483,8 @@ private struct PlayButton: View {
     var status: String?
     /// VR-only and not downloaded: nothing useful to do on a Mac.
     var vrOnly = false
+    /// Not downloaded, but Play fetches the game and starts it (LibraryModel.playsAfterDownload).
+    var playsAfterDownload = false
     let action: () -> Void
     @State private var hovering = false
 
@@ -478,7 +502,7 @@ private struct PlayButton: View {
         if vrOnly { return L10n.t("VR only") }
         switch install {
         case .installed: return L10n.t("Play")
-        case .notInstalled: return L10n.t("Download")
+        case .notInstalled: return playsAfterDownload ? L10n.t("Play") : L10n.t("Download")
         case .downloading(let fraction?): return L10n.t("Downloading … %ld %%", Int(fraction * 100))
         case .downloading(nil): return L10n.t("Preparing download …")
         case .inStore: return L10n.t("View in Steam Store")
@@ -498,7 +522,8 @@ private struct PlayButton: View {
                         .controlSize(.small)
                         .environment(\.colorScheme, .light)
                 } else {
-                    Image(systemName: install == .notInstalled ? "arrow.down" : install == .inStore ? "cart" : "play.fill")
+                    Image(systemName: install == .notInstalled && !playsAfterDownload ? "arrow.down"
+                          : install == .inStore ? "cart" : "play.fill")
                         .font(.system(size: 15, weight: .bold))
                 }
                 Text(title)
@@ -646,7 +671,8 @@ struct CoverCard: View {
         .saturation(game.install == .notInstalled || game.install == .inStore ? 0.15 : 1)
         .overlay(alignment: .bottom) { installBadge }
         .overlay(alignment: .topTrailing) {
-            if game.macNative {
+            // The version in use; in the store, that Steam has one.
+            if game.platform == .mac || (game.install == .inStore && game.macNative) {
                 Text("MAC")
                     .font(.system(size: 9.5, weight: .heavy).width(.expanded))
                     .foregroundStyle(Theme.ink)
@@ -654,7 +680,7 @@ struct CoverCard: View {
                     .padding(.vertical, 3)
                     .background(Theme.night.opacity(0.78), in: Capsule())
                     .padding(7)
-                    .help(L10n.t("Steam also has a Mac version"))
+                    .help(game.platform == .mac ? L10n.t("Uses the Mac version") : L10n.t("Steam also has a Mac version"))
             }
         }
         .overlay(alignment: .topLeading) {
@@ -811,6 +837,66 @@ private struct EmptyLibrary: View {
             }
             .controlSize(.large)
         }
+    }
+}
+
+/// Which version of the game Nightforge runs, and why – when Steam has both.
+private struct VersionNotes: View {
+    let game: Game
+    let playsAfterDownload: Bool
+    @EnvironmentObject private var model: LibraryModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let text {
+                note(text, systemImage: game.platform == .mac ? "apple.logo" : "laptopcomputer")
+            }
+            if let leftover = game.windowsLeftover {
+                HStack(spacing: 10) {
+                    Label(L10n.t("The Windows version is still installed and takes %@.", Format.bytes(leftover)),
+                          systemImage: "externaldrive")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.muted)
+                    Button(L10n.t("Remove …")) { model.requestLeftoverRemoval(game) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(model.uninstallingID != nil || model.launchingID != nil)
+                }
+            }
+        }
+    }
+
+    private var text: String? {
+        if game.install == .inStore {
+            return game.macNative ? L10n.t("Steam also has a Mac version of this game. Nightforge uses it once you own the game, if it runs on current Macs.") : nil
+        }
+        guard let reason = game.versionReason else { return nil }
+        if game.platform == .mac {
+            if playsAfterDownload {
+                return L10n.t("Nightforge now uses the Mac version of this game – no Windows translation needed. Play downloads it through Steam for Mac and starts it.")
+            }
+            return game.macAppleSilicon
+                ? L10n.t("Nightforge uses the Mac version of this game, made for Apple silicon – no Windows translation needed.")
+                : L10n.t("Nightforge uses the Mac version of this game – no Windows translation needed. It's made for Intel Macs, so Rosetta runs it.")
+        }
+        switch reason {
+        case .windowsBetter:
+            return L10n.t("Steam also has a Mac version, but the Windows version runs better, so Nightforge uses that.")
+        case .macTooOld:
+            return L10n.t("Steam's Mac version of this game is too old for current Macs, so Nightforge uses the Windows version.")
+        case .macFailed:
+            return L10n.t("The Mac version didn't start, so Nightforge uses the Windows version. You can switch back in the game's options.")
+        case .only, .chosen, .macRuns, .macInstalled:
+            return nil
+        }
+    }
+
+    private func note(_ text: String, systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(Theme.muted)
+            .frame(maxWidth: 620, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

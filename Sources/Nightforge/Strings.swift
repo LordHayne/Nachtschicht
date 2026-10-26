@@ -128,8 +128,53 @@ enum L10n {
         "Low Power Mode is on – games run much slower with it.": "Der Stromsparmodus ist an – Spiele laufen damit deutlich langsamer.",
         "Battery Settings": "Batterie-Einstellungen",
         "Steam also has a Mac version": "Steam hat auch eine Mac-Version",
-        "Steam also has a Mac version of this game. It often runs better than the Windows version, but older Mac versions sometimes don't start on current Macs.":
-            "Steam hat dieses Spiel auch als Mac-Version. Sie läuft oft besser als die Windows-Version, ältere Mac-Versionen starten auf aktuellen Macs aber manchmal nicht.",
+        "Steam also has a Mac version of this game. Nightforge uses it once you own the game, if it runs on current Macs.":
+            "Steam hat dieses Spiel auch als Mac-Version. Nightforge nutzt sie, sobald dir das Spiel gehört – wenn sie auf aktuellen Macs läuft.",
+
+        // Mac versions through Steam for Mac
+        "Version": "Version",
+        "Uses the Mac version": "Nutzt die Mac-Version",
+        "Nightforge uses the Mac version of this game, made for Apple silicon – no Windows translation needed.":
+            "Nightforge nutzt die Mac-Version dieses Spiels, gemacht für Apple Silicon – ganz ohne Windows-Übersetzung.",
+        "Nightforge uses the Mac version of this game – no Windows translation needed. It's made for Intel Macs, so Rosetta runs it.":
+            "Nightforge nutzt die Mac-Version dieses Spiels – ganz ohne Windows-Übersetzung. Sie ist für Intel-Macs gemacht, deshalb läuft sie über Rosetta.",
+        "Nightforge now uses the Mac version of this game – no Windows translation needed. Play downloads it through Steam for Mac and starts it.":
+            "Nightforge nutzt jetzt die Mac-Version dieses Spiels – ganz ohne Windows-Übersetzung. „Spielen“ lädt sie über Steam für Mac herunter und startet sie.",
+        "Steam also has a Mac version, but the Windows version runs better, so Nightforge uses that.":
+            "Steam hat auch eine Mac-Version, aber die Windows-Version läuft besser, deshalb nutzt Nightforge diese.",
+        "Steam's Mac version of this game is too old for current Macs, so Nightforge uses the Windows version.":
+            "Die Mac-Version dieses Spiels auf Steam ist zu alt für aktuelle Macs, deshalb nutzt Nightforge die Windows-Version.",
+        "The Mac version didn't start, so Nightforge uses the Windows version. You can switch back in the game's options.":
+            "Die Mac-Version ist nicht gestartet, deshalb nutzt Nightforge die Windows-Version. In den Optionen des Spiels kannst du zurückwechseln.",
+        "The Mac version of %@ ended right after starting, so Nightforge uses the Windows version from now on. You can switch back in the game's options.":
+            "Die Mac-Version von %@ hat sich direkt nach dem Start beendet, deshalb nutzt Nightforge ab jetzt die Windows-Version. In den Optionen des Spiels kannst du zurückwechseln.",
+        "The Windows version is still installed and takes %@.": "Die Windows-Version ist noch installiert und belegt %@.",
+        "Remove …": "Entfernen …",
+        "Remove": "Entfernen",
+        "Remove the Windows version of %@?": "Windows-Version von %@ entfernen?",
+        "Nightforge uses the Mac version of this game now. Removing the Windows version frees %@; you can switch back and download it again any time.":
+            "Nightforge nutzt jetzt die Mac-Version dieses Spiels. Das Entfernen der Windows-Version gibt %@ frei; du kannst jederzeit zurückwechseln und sie wieder herunterladen.",
+        "Mac runs Steam's native Mac version through Steam for Mac, without any Windows translation; its graphics settings are in the game itself. Windows runs the Windows version through Wine. Automatic takes the Mac version when it runs on current Macs.":
+            "Mac startet die echte Mac-Version über Steam für Mac, ganz ohne Windows-Übersetzung; ihre Grafikeinstellungen findest du im Spiel selbst. Windows startet die Windows-Version über Wine. Automatisch nimmt die Mac-Version, wenn sie auf aktuellen Macs läuft.",
+        "Mac runs Steam's native Mac version through Steam for Mac, without any Windows translation. Windows runs the Windows version through Wine. Automatic takes the Mac version when it runs on current Macs.":
+            "Mac startet die echte Mac-Version über Steam für Mac, ganz ohne Windows-Übersetzung. Windows startet die Windows-Version über Wine. Automatisch nimmt die Mac-Version, wenn sie auf aktuellen Macs läuft.",
+        "Steam for Mac": "Steam für Mac",
+        "%@ has a Mac version. It runs without any Windows translation, so it usually looks and runs better. To get it, Nightforge sets up Valve's Steam for Mac – once, in a few minutes.":
+            "%@ gibt es auch als Mac-Version. Sie läuft ganz ohne Windows-Übersetzung und sieht deshalb meist besser aus und läuft flüssiger. Dafür richtet Nightforge Valves Steam für Mac ein – einmalig, in wenigen Minuten.",
+        "Downloading Steam for Mac": "Steam für Mac wird geladen",
+        "You sign in in Steam's own window – Nightforge never sees your login. By installing you accept Valve's Steam Subscriber Agreement.":
+            "Du meldest dich in Steams eigenem Fenster an – Nightforge sieht deine Anmeldedaten nie. Mit der Installation akzeptierst du Valves Steam-Nutzungsvertrag.",
+        "Steam updates itself first, then asks you to sign in – with the QR code from the Steam app on your phone or with your password. Nightforge never sees your login.":
+            "Steam aktualisiert sich zuerst selbst und fragt dann nach deiner Anmeldung – mit dem QR-Code aus der Steam-App auf deinem Handy oder mit deinem Passwort. Nightforge sieht deine Anmeldedaten nie.",
+        "Use the Windows Version": "Windows-Version verwenden",
+        "Set Up Steam for Mac": "Steam für Mac einrichten",
+        "Starting Steam for Mac …": "Steam für Mac startet …",
+        "Sign in in the Steam window": "Melde dich im Steam-Fenster an",
+        "Steam for Mac could not be downloaded. Check your internet connection.":
+            "Steam für Mac konnte nicht geladen werden. Prüfe deine Internetverbindung.",
+        "The Steam for Mac download isn't signed by Valve, so it wasn't installed.":
+            "Der Download von Steam für Mac ist nicht von Valve signiert und wurde deshalb nicht installiert.",
+        "Steam for Mac could not be installed.": "Steam für Mac konnte nicht installiert werden.",
         "No games here yet": "Noch keine Spiele hier",
         "Nightforge shows the Steam games installed in your CrossOver bottles. Install Steam in a bottle, download a game there, then rescan your library.":
             "Nightforge zeigt die Steam-Spiele, die in deinen CrossOver-Bottles installiert sind. Installiere Steam in einer Bottle, lade dort ein Spiel herunter und lies die Bibliothek dann neu ein.",

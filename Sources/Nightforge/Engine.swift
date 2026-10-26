@@ -108,7 +108,7 @@ enum Engine {
     }
 
     /// Steam's self-update: (downloaded, total) in KB from the newest bootstrap log line, and when it last changed.
-    static func steamUpdateStatus() -> (fraction: Double?, lastChange: Date?) {
+    static func steamUpdateStatus(steamRoot: URL = steamRoot) -> (fraction: Double?, lastChange: Date?) {
         let log = steamRoot.appendingPathComponent("logs/bootstrap_log.txt")
         let modified = (try? log.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
         guard let text = try? String(contentsOf: log, encoding: .utf8),
@@ -296,14 +296,18 @@ enum Engine {
     /// When Nightforge quits, Steam should go too – but not while a game runs (it uploads cloud
     /// saves after the game ends) or a download is going. Nightforge itself quits right after a
     /// launch, so a small detached script waits for that and then stops Steam and the Wine session.
-    /// It gives up if Nightforge is opened again in the meantime.
+    /// It gives up if Nightforge is opened again in the meantime. Steam for Mac goes the same way
+    /// when Nightforge started it.
     static func scheduleSteamShutdown() {
-        guard isSteamInstalled, let wine = installedWineNow() else { return }
+        let wine = isSteamInstalled ? installedWineNow() : nil
+        let macSteam = MacSteam.startedByNightforge && MacSteam.isRunning
+        guard wine != nil || macSteam else { return }
         let script = supportDir.appendingPathComponent("steam-shutdown.sh")
         let text = #"""
         #!/bin/bash
         # Written by Nightforge on quit: ends the background Steam once nothing needs it.
-        WINE="$1"; PREFIX="$2"
+        # WINE is empty without Nightforge's own Steam, MAC_STEAMAPPS unless Steam for Mac should go too.
+        WINE="$1"; PREFIX="$2"; MAC_STEAMAPPS="$3"
         STEAMAPPS="$PREFIX/drive_c/Program Files (x86)/Steam/steamapps"
         # The process list is read before searching it, so the search never finds itself; -F
         # because the Windows paths are full of backslashes, which grep would read as escapes.
@@ -311,8 +315,14 @@ enum Engine {
         reopened() { pgrep -qf "Nightforge.app/Contents/MacOS/Nightforge"; }
         steam_running() { has_process '\steam\steam.exe'; }
         busy() {
-          has_process '\steamapps\common\' && return 0   # a game
-          find "$STEAMAPPS/downloading" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | grep -q . && return 0
+          if [ -n "$WINE" ]; then
+            has_process '\steamapps\common\' && return 0   # a game
+            find "$STEAMAPPS/downloading" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | grep -q . && return 0
+          fi
+          if [ -n "$MAC_STEAMAPPS" ]; then
+            has_process "$MAC_STEAMAPPS/common/" && return 0   # a Mac game
+            find "$MAC_STEAMAPPS/downloading" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | grep -q . && return 0
+          fi
           return 1
         }
         while true; do
@@ -321,6 +331,10 @@ enum Engine {
           reopened && exit 0
           busy || break
         done
+        if [ -n "$MAC_STEAMAPPS" ] && pgrep -qx steam_osx; then
+          osascript -e 'tell application id "com.valvesoftware.steam" to quit' >/dev/null 2>&1
+        fi
+        [ -n "$WINE" ] || exit 0
         export WINEPREFIX="$PREFIX" WINEDEBUG=-all
         if steam_running; then
           "$WINE" 'C:\Program Files (x86)\Steam\steam.exe' -shutdown >/dev/null 2>&1
@@ -335,7 +349,7 @@ enum Engine {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [script.path, wine.path, prefix.path]
+        process.arguments = [script.path, wine?.path ?? "", prefix.path, macSteam ? MacSteam.steamapps.path : ""]
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
@@ -815,8 +829,8 @@ enum Engine {
 
     /// Asks Steam to download a game without any Steam window: an appmanifest marked "update
     /// required" makes Steam fetch the game on its next start. Call `restartSteamInBackground` after.
-    static func requestDownload(appID: Int, name: String, installDir: String) throws {
-        let steamapps = steamRoot.appendingPathComponent("steamapps", isDirectory: true)
+    static func requestDownload(appID: Int, name: String, installDir: String,
+                                steamapps: URL = steamRoot.appendingPathComponent("steamapps", isDirectory: true)) throws {
         let manifest = steamapps.appendingPathComponent("appmanifest_\(appID).acf")
         guard !FileManager.default.fileExists(atPath: manifest.path) else { return }
         func quoted(_ text: String) -> String { "\"" + text.replacingOccurrences(of: "\"", with: "'") + "\"" }
@@ -939,9 +953,13 @@ enum Engine {
     static func uninstall(appID: Int, installDirName: String, wine: URL) async throws {
         try await stopSteam(wine)
         defer { try? startSteam(wine, arguments: ["-silent"]) }
+        try removeGameFiles(appID: appID, installDirName: installDirName,
+                            steamapps: steamRoot.appendingPathComponent("steamapps", isDirectory: true))
+    }
 
+    /// A game's manifest, files, download leftovers and shader cache in one Steam library folder.
+    static func removeGameFiles(appID: Int, installDirName: String, steamapps: URL) throws {
         let fm = FileManager.default
-        let steamapps = steamRoot.appendingPathComponent("steamapps", isDirectory: true)
         var targets = [
             steamapps.appendingPathComponent("appmanifest_\(appID).acf"),
             steamapps.appendingPathComponent("downloading/\(appID)", isDirectory: true),
@@ -971,7 +989,9 @@ enum Engine {
 
     /// Whether the Steam started last has signed in: connection_log tags its lines with the
     /// connection state, and "Client version" opens each start.
-    static var steamSignedIn: Bool {
+    static var steamSignedIn: Bool { signedIn(steamRoot: steamRoot) }
+
+    static func signedIn(steamRoot: URL) -> Bool {
         let log = steamRoot.appendingPathComponent("logs/connection_log.txt")
         guard let handle = try? FileHandle(forReadingFrom: log) else { return false }
         defer { try? handle.close() }

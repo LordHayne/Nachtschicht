@@ -22,6 +22,9 @@ struct GameProfile: Decodable, Equatable {
     /// Vulkan games: samplers per shader stage reported to the game. MoltenVK says 16, which
     /// stops some games at start; Metal's argument buffers hold more.
     var vulkanSamplers: Int?
+    /// The game's Windows version runs better than its Mac one (old OpenGL ports, say), so
+    /// "Automatic" keeps to Windows even though Steam has a 64-bit Mac version.
+    var preferWindows: Bool?
 
     struct RegistryEntry: Decodable, Equatable {
         let key: String
@@ -32,7 +35,7 @@ struct GameProfile: Decodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case name, graphics, arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX, frameLimit
-        case vulkanSamplers
+        case vulkanSamplers, preferWindows
     }
 
     init(from decoder: Decoder) throws {
@@ -48,6 +51,7 @@ struct GameProfile: Decodable, Equatable {
         metalFX = try? container.decodeIfPresent(Bool.self, forKey: .metalFX)
         frameLimit = try? container.decodeIfPresent(Int.self, forKey: .frameLimit)
         vulkanSamplers = try? container.decodeIfPresent(Int.self, forKey: .vulkanSamplers)
+        preferWindows = try? container.decodeIfPresent(Bool.self, forKey: .preferWindows)
     }
 }
 
@@ -76,15 +80,25 @@ actor ProfileStore {
 
     func profile(for appID: Int) async -> GameProfile? {
         if !refreshed { await refresh() }
-        if profiles == nil {
-            for local in [cachedURL, Bundle.main.url(forResource: "profiles", withExtension: "json")].compactMap({ $0 }) {
-                if let data = try? Data(contentsOf: local), let decoded = decode(data) {
-                    profiles = decoded
-                    break
-                }
+        loadLocalIfNeeded()
+        return profiles?[appID]
+    }
+
+    /// Games whose profile keeps them on the Windows version, from the list at hand: the library
+    /// scan doesn't wait for the online copy, the next scan picks it up.
+    func preferWindows() -> Set<Int> {
+        loadLocalIfNeeded()
+        return Set((profiles ?? [:]).filter { $0.value.preferWindows == true }.keys)
+    }
+
+    private func loadLocalIfNeeded() {
+        guard profiles == nil else { return }
+        for local in [cachedURL, Bundle.main.url(forResource: "profiles", withExtension: "json")].compactMap({ $0 }) {
+            if let data = try? Data(contentsOf: local), let decoded = decode(data) {
+                profiles = decoded
+                return
             }
         }
-        return profiles?[appID]
     }
 
     /// Fetches the online list; keeps what's there when offline or when the list is too new.

@@ -51,7 +51,7 @@ final class InputRouter {
     // MARK: - Keyboard
 
     private func handleKey(code: UInt16, chars: String, plain: Bool) -> Bool {
-        guard plain, let model, !model.showingOptions else { return false }
+        guard plain, let model, !model.showingOptions, model.macSetup == nil else { return false }
         guard let window = NSApp.keyWindow, window.title == "Nightforge" else { return false }
         if window.firstResponder is NSText { return false }
 
@@ -147,7 +147,7 @@ final class InputRouter {
     }
 
     private func primary() {
-        guard let model, !model.showingOptions else { return }
+        guard let model, !model.showingOptions, model.macSetup == nil else { return }
         if model.showingLibrary { model.showSelectedGame() } else { model.primaryAction() }
     }
 

@@ -43,6 +43,13 @@ final class LibraryModel: ObservableObject {
     @Published var showingOptions = false
     /// Waiting for the user to confirm removing this game (or its download).
     @Published var pendingUninstall: Game?
+    /// Waiting for the user to confirm removing the Windows version of a game that now runs its Mac one.
+    @Published var pendingLeftoverRemoval: Game?
+    /// Steam for Mac being set up for a game whose Mac version is wanted.
+    @Published var macSetup: MacSteamSetup?
+    /// Started once its download is done: the player pressed Play on a game that had to fetch its Mac version.
+    private var playWhenInstalled: String?
+    private var macSteamPrewarmed = false
     @Published private(set) var uninstallingID: String?
     /// Games whose Windows process is running right now, with that process's pid.
     @Published private(set) var running: [String: pid_t] = [:]
@@ -74,6 +81,9 @@ final class LibraryModel: ObservableObject {
     func startInput() {
         guard !inputStarted else { return }
         inputStarted = true
+        // Left over from an earlier run whose Steam for Mac has ended since: a Steam the player
+        // starts later isn't Nightforge's to quit.
+        if !MacSteam.isRunning { MacSteam.startedByNightforge = false }
         input.start(model: self)
         watchRunningGames()
         NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main) { [weak self] _ in
@@ -96,10 +106,7 @@ final class LibraryModel: ObservableObject {
     private func watchRunningGames() {
         Task {
             while !Task.isCancelled {
-                let folders = Dictionary(
-                    allGames.filter(\.isInstalled).map { ("\\steamapps\\common\\\($0.installDirName.lowercased())\\", $0.id) },
-                    uniquingKeysWith: { first, _ in first }
-                )
+                let folders = Self.processFolders(allGames)
                 let found = await Task.detached(priority: .utility) { Self.runningGames(folders) }.value
                 if found != running { running = found }
                 if restartSteamWhenIdle && found.isEmpty && launchingID == nil {
@@ -109,6 +116,16 @@ final class LibraryModel: ObservableObject {
                 try? await Task.sleep(for: .seconds(3))
             }
         }
+    }
+
+    /// What a game's processes show in `ps`, by game: Wine's Windows path of the game folder, or
+    /// for Mac versions the folder itself.
+    private static func processFolders(_ games: [Game]) -> [String: String] {
+        Dictionary(games.filter(\.isInstalled).map { game in
+            game.platform == .mac
+                ? (game.installDir.path.lowercased() + "/", game.id)
+                : ("\\steamapps\\common\\\(game.installDirName.lowercased())\\", game.id)
+        }, uniquingKeysWith: { first, _ in first })
     }
 
     nonisolated private static func runningGames(_ folders: [String: String]) -> [String: pid_t] {
@@ -126,9 +143,11 @@ final class LibraryModel: ObservableObject {
         for line in output.split(separator: "\n") {
             let lower = line.lowercased()
             // Steam's crash handler and similar helpers live in the same folder; the game's
-            // own process is the first .exe there that isn't one of those.
-            guard lower.contains(".exe"), !lower.contains("crashhandler"), !lower.contains("unitycrash") else { continue }
-            for (folder, id) in folders where result[id] == nil && lower.contains(folder) {
+            // own process is the first .exe there that isn't one of those. Mac versions run
+            // straight from their folder ("/…/steamapps/common/Game/Game.app/Contents/MacOS/Game").
+            guard !lower.contains("crashhandler"), !lower.contains("unitycrash") else { continue }
+            let windowsProgram = lower.contains(".exe")
+            for (folder, id) in folders where result[id] == nil && lower.contains(folder) && (windowsProgram || folder.hasPrefix("/")) {
                 let fields = line.split(separator: " ", maxSplits: 1)
                 if let pid = fields.first.flatMap({ pid_t($0) }) { result[id] = pid }
             }
@@ -137,6 +156,13 @@ final class LibraryModel: ObservableObject {
     }
 
     func isRunning(_ game: Game) -> Bool { running[game.id] != nil }
+
+    /// A game of this platform is running – Windows games depend on Nightforge's Wine Steam,
+    /// Mac versions on Steam for Mac.
+    private func anyRunning(_ platform: Platform) -> Bool {
+        let ids = Set(running.keys)
+        return allGames.contains { ids.contains($0.id) && $0.platform == platform }
+    }
 
     /// Brings the running game's window to the front.
     func switchToGame(_ game: Game) {
@@ -151,13 +177,36 @@ final class LibraryModel: ObservableObject {
         let root = Prefs.bottlesRoot
         let builtIn = Engine.isSteamInstalled ? [Engine.bottle] : []
         Task {
+            let preferWindows = await ProfileStore.shared.preferWindows()
             let found = await Task.detached(priority: .userInitiated) {
-                LibraryScanner.scan(bottlesRoot: root, extraBottles: builtIn)
+                LibraryScanner.merge(LibraryScanner.scan(bottlesRoot: root, extraBottles: builtIn),
+                                     mac: LibraryScanner.scanMac(), preferWindows: preferWindows)
             }.value
             allGames = found
             applyFilter()
             isScanning = false
             watchDownloads()
+            afterScan()
+        }
+    }
+
+    /// Steam for Mac starts in the background with Nightforge once a game uses its Mac version, so
+    /// downloads go on and Play is quick; a game whose Mac download the player wanted to play starts.
+    private func afterScan() {
+        let macGames = allGames.filter { $0.platform == .mac && $0.install != .notInstalled }
+        if !macSteamPrewarmed, !macGames.isEmpty, MacSteam.isReady {
+            macSteamPrewarmed = true
+            if !MacSteam.isRunning { MacSteam.start() }
+        }
+        guard let id = playWhenInstalled, let game = allGames.first(where: { $0.id == id }) else { return }
+        switch game.install {
+        case .installed:
+            playWhenInstalled = nil
+            if launchingID == nil && !isRunning(game) { launch(game) }
+        case .notInstalled, .inStore:
+            playWhenInstalled = nil  // the download was cancelled
+        case .downloading:
+            break
         }
     }
 
@@ -240,7 +289,11 @@ final class LibraryModel: ObservableObject {
     func primaryAction() {
         guard let game = selected, uninstallingID != game.id else { return }
         if launchingID == game.id {
-            if launchNeedsConfirmation && game.bottle.isBuiltIn { showSteamWindow() }
+            if launchNeedsConfirmation && game.platform == .mac {
+                MacSteam.show()
+            } else if launchNeedsConfirmation && game.bottle.isBuiltIn {
+                showSteamWindow()
+            }
             return
         }
         if isRunning(game) {
@@ -249,10 +302,17 @@ final class LibraryModel: ObservableObject {
         }
         switch game.install {
         case .installed: launchSelected()
-        case .notInstalled: if !game.isVROnly { download(game) }
+        case .notInstalled where game.isVROnly: break
+        case .notInstalled: download(game, thenPlay: playsAfterDownload(game))
         case .downloading: break
         case .inStore: openStorePage(game)
         }
+    }
+
+    /// The game was playable until Nightforge switched it to its Mac version, so its button still
+    /// says Play: that fetches the Mac version and starts it.
+    func playsAfterDownload(_ game: Game) -> Bool {
+        game.platform == .mac && game.install == .notInstalled && game.windowsLeftover != nil
     }
 
     /// Buying happens on Steam's own store page in the browser; Nightforge never sees payment data.
@@ -332,7 +392,11 @@ final class LibraryModel: ObservableObject {
     /// Steam then would end the game too.
     private var restartSteamWhenIdle = false
 
-    private func download(_ game: Game) {
+    private func download(_ game: Game, thenPlay: Bool = false) {
+        if game.platform == .mac {
+            downloadMac(game, thenPlay: thenPlay)
+            return
+        }
         Task {
             do {
                 guard let wine = await Engine.installedWine() else { return }
@@ -347,6 +411,188 @@ final class LibraryModel: ObservableObject {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    // MARK: - Mac versions
+
+    /// Opens the Steam for Mac setup when a game's Mac version is wanted and Steam for Mac isn't
+    /// ready yet; Nightforge carries on with `next` once the player has signed in.
+    private func needsMacSteam(_ game: Game, then next: MacSteamSetup.Next) -> Bool {
+        guard game.platform == .mac, !MacSteam.isReady else { return false }
+        guard macSetup == nil else { return true }
+        let setup = MacSteamSetup(game: game, next: next)
+        setup.onReady = { [weak self] setup in
+            guard let self else { return }
+            self.macSetup = nil
+            switch setup.next {
+            case .download: self.downloadMac(setup.game, thenPlay: self.playsAfterDownload(setup.game))
+            case .play: self.launch(setup.game)
+            }
+        }
+        macSetup = setup
+        return true
+    }
+
+    func closeMacSetup() {
+        macSetup?.cancel()
+        macSetup = nil
+    }
+
+    /// From the setup sheet: this game keeps to its Windows version.
+    func useWindowsVersion(of game: Game) {
+        closeMacSetup()
+        var options = GameOptionsStore.load(game.appID)
+        options.version = .windows
+        GameOptionsStore.save(options, for: game.appID)
+        MacHealth.reset(game.appID)
+        reload(quiet: true)
+    }
+
+    private func downloadMac(_ game: Game, thenPlay: Bool) {
+        guard !needsMacSteam(game, then: .download) else { return }
+        Task {
+            do {
+                try await MacSteam.download(appID: game.appID, name: game.name, installDir: game.installDirName,
+                                            macGameRunning: anyRunning(.mac))
+                if thenPlay { playWhenInstalled = game.id }
+                reload(quiet: true)
+                await watchMacDownloadStart(game)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// Steam for Mac normally takes up the requested download within a minute of signing in. If it
+    /// hasn't, its install dialog does the same with one click; if it hasn't signed in (an expired
+    /// login), its window comes up for that.
+    private func watchMacDownloadStart(_ game: Game) async {
+        var signedInFor = 0
+        for second in 1...180 {
+            try? await Task.sleep(for: .seconds(1))
+            if MacSteam.downloadStarted(appID: game.appID) { return }
+            signedInFor = MacSteam.signedIn ? signedInFor + 1 : 0
+            if second == 40 && signedInFor == 0 { MacSteam.show() }
+            if signedInFor >= 60 {
+                MacSteam.open("install/\(game.appID)", activate: true)
+                return
+            }
+        }
+    }
+
+    /// Starts a Mac version through Steam for Mac and follows it until the game runs.
+    private func launchMac(_ game: Game) {
+        guard !needsMacSteam(game, then: .play) else { return }
+        launchingID = game.id
+        launchNeedsConfirmation = false
+        launchStatus = nil
+        let behavior = Prefs.afterLaunch
+        let arguments = GameOptionsStore.load(game.appID).extraArgs.trimmingCharacters(in: .whitespaces)
+        Task {
+            defer {
+                launchingID = nil
+                launchNeedsConfirmation = false
+                launchStatus = nil
+            }
+            if !MacSteam.isRunning {
+                launchStatus = L10n.t("Starting Steam for Mac …")
+                MacSteam.start()
+            }
+            // A command sent while Steam is still starting can get lost; wait for its sign-in.
+            var waited = 0
+            while !MacSteam.signedIn && waited < 90 {
+                if waited == 25 {
+                    launchStatus = L10n.t("Sign in in the Steam window")
+                    MacSteam.show()
+                }
+                try? await Task.sleep(for: .seconds(1))
+                waited += 1
+            }
+            launchStatus = nil
+            // steam://run/<id>//<arguments>: the extra part goes to the game.
+            let extra = arguments.isEmpty ? ""
+                : "//" + (arguments.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "")
+            let watcher = LaunchWatcher(steamRoot: MacSteam.root, appID: game.appID)
+            MacSteam.open("run/\(game.appID)" + extra)
+            let start = await waitForMacStart(game, watcher: watcher)
+            guard start.started else { return }
+            launchingID = nil
+            await bringToFront(game)
+
+            // The first start of a Mac version: does it run past its first seconds? Only judged
+            // when its process was seen at all – Steam may know better where a game runs from.
+            if start.processSeen && !MacHealth.confirmed(game.appID) {
+                if await survivesFirstSeconds(game) {
+                    MacHealth.confirm(game.appID)
+                } else if game.switchable && GameOptionsStore.load(game.appID).version == .automatic {
+                    MacHealth.fail(game.appID)
+                    NSApp.activate()
+                    errorMessage = L10n.t("The Mac version of %@ ended right after starting, so Nightforge uses the Windows version from now on. You can switch back in the game's options.", game.name)
+                    reload(quiet: true)
+                    return
+                }
+            }
+            switch behavior {
+            case .quit: NSApp.terminate(nil)
+            case .hide: NSApp.hide(nil)
+            case .stay: break
+            }
+        }
+    }
+
+    /// Follows the start of a Mac game until its process is there, or Steam's log says it runs.
+    /// Steam's questions (licence, first-time setup) wait in its window as long as the player
+    /// needs; no sign of life ends after 2 min.
+    private func waitForMacStart(_ game: Game, watcher: LaunchWatcher) async -> (started: Bool, processSeen: Bool) {
+        var watcher = watcher
+        let folders = Self.processFolders([game])
+        var quietSeconds = 0
+        var seconds = 0
+        var askingSince: Int?
+        while quietSeconds < 120 && seconds < 900 {
+            try? await Task.sleep(for: .seconds(1))
+            seconds += 1
+            if await Task.detached(priority: .utility, operation: { Self.runningGames(folders) }).value[game.id] != nil {
+                launchNeedsConfirmation = false
+                return (true, true)
+            }
+            switch watcher.poll() {
+            case .running?:
+                // Give the process a few seconds to show up before trusting the log alone.
+                for _ in 0..<5 {
+                    try? await Task.sleep(for: .seconds(1))
+                    if await Task.detached(priority: .utility, operation: { Self.runningGames(folders) }).value[game.id] != nil {
+                        launchNeedsConfirmation = false
+                        return (true, true)
+                    }
+                }
+                launchNeedsConfirmation = false
+                return (true, false)
+            case .needsConfirmation?:
+                askingSince = askingSince ?? seconds
+                quietSeconds = 0
+            case .continued?:
+                launchNeedsConfirmation = false
+                askingSince = nil
+                quietSeconds = 0
+            case .cancelled?:
+                return (false, false)
+            case .failed?:
+                errorMessage = L10n.t("Steam couldn't start %@.", game.name)
+                return (false, false)
+            case nil:
+                if let since = askingSince {
+                    // Steam logs routine steps as questions too and answers them within a second.
+                    if seconds - since >= 3, !launchNeedsConfirmation {
+                        launchNeedsConfirmation = true
+                        MacSteam.show()
+                    }
+                } else {
+                    quietSeconds += 1
+                }
+            }
+        }
+        return (false, false)
     }
 
     // MARK: - Search & views
@@ -412,7 +658,16 @@ final class LibraryModel: ObservableObject {
     }
 
     func launchSelected() {
-        guard let game = selected, game.isInstalled, launchingID == nil else { return }
+        guard let game = selected else { return }
+        launch(game)
+    }
+
+    private func launch(_ game: Game) {
+        guard game.isInstalled, launchingID == nil else { return }
+        if game.platform == .mac {
+            launchMac(game)
+            return
+        }
         launchingID = game.id
         launchNeedsConfirmation = false
         launchStatus = nil
@@ -594,7 +849,7 @@ final class LibraryModel: ObservableObject {
     /// A launcher handing over to the game leaves a gap of a few seconds, so only a longer absence
     /// counts as the game having ended.
     private func survivesFirstSeconds(_ game: Game) async -> Bool {
-        let folders = ["\\steamapps\\common\\\(game.installDirName.lowercased())\\": game.id]
+        let folders = Self.processFolders([game])
         let started = Date()
         var absent = 0
         while Date().timeIntervalSince(started) < LaunchHealth.failureWindow || (absent > 0 && absent < 10) {
@@ -634,7 +889,7 @@ final class LibraryModel: ObservableObject {
     /// the front. Nightforge is the active app at this point, so it hands activation over as soon
     /// as the game shows its window (Wine makes it a regular app then) – before quitting or hiding.
     private func bringToFront(_ game: Game) async {
-        let folders = ["\\steamapps\\common\\\(game.installDirName.lowercased())\\": game.id]
+        let folders = Self.processFolders([game])
         var absent = 0
         for _ in 0..<60 {
             let pid = await Task.detached(priority: .utility) { Self.runningGames(folders)[game.id] }.value
@@ -665,12 +920,39 @@ final class LibraryModel: ObservableObject {
 
     // MARK: - Uninstall
 
-    /// Only games in Nightforge's own Steam; CrossOver bottles are managed by their own Steam.
-    /// Uninstalling stops Steam for a moment, so not while any game runs or starts – it would go too.
+    /// Only games in Nightforge's own Steam or Steam for Mac; CrossOver bottles are managed by their
+    /// own Steam. Uninstalling stops that Steam for a moment, so not while one of its games runs or
+    /// anything starts – it would go too.
     func canUninstall(_ game: Game) -> Bool {
         guard game.isInstalled || { if case .downloading = game.install { return true } else { return false } }()
         else { return false }
-        return game.bottle.isBuiltIn && uninstallingID == nil && launchingID == nil && running.isEmpty
+        guard uninstallingID == nil && launchingID == nil else { return false }
+        if game.platform == .mac { return !anyRunning(.mac) }
+        return game.bottle.isBuiltIn && !anyRunning(.windows)
+    }
+
+    /// The Windows version a game left behind when it moved to its Mac version.
+    func requestLeftoverRemoval(_ game: Game) {
+        guard game.windowsLeftover != nil, uninstallingID == nil, launchingID == nil, !anyRunning(.windows) else { return }
+        pendingLeftoverRemoval = game
+    }
+
+    func confirmLeftoverRemoval() {
+        guard let game = pendingLeftoverRemoval else { return }
+        pendingLeftoverRemoval = nil
+        uninstallingID = game.id
+        Task {
+            defer {
+                uninstallingID = nil
+                reload(quiet: true)
+            }
+            do {
+                guard let wine = await Engine.installedWine() else { return }
+                try await Engine.uninstall(appID: game.appID, installDirName: game.installDirName, wine: wine)
+            } catch {
+                errorMessage = L10n.t("%@ could not be uninstalled: %@", game.name, error.localizedDescription)
+            }
+        }
     }
 
     func requestUninstall(_ game: Game? = nil) {
@@ -688,6 +970,11 @@ final class LibraryModel: ObservableObject {
                 reload(quiet: true)
             }
             do {
+                if game.platform == .mac {
+                    try await MacSteam.uninstall(appID: game.appID, installDir: game.installDir)
+                    if playWhenInstalled == game.id { playWhenInstalled = nil }
+                    return
+                }
                 guard let wine = await Engine.installedWine() else { return }
                 try await Engine.uninstall(appID: game.appID, installDirName: game.installDirName, wine: wine)
             } catch {

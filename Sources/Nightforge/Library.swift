@@ -36,12 +36,41 @@ struct Game: Identifiable, Hashable {
     var installDirName = ""
     /// Steam also sells a macOS version (which may or may not run on current Macs).
     var macNative = false
+    /// That Mac version is 64-bit, so it runs on current macOS.
+    var mac64 = false
+    /// … and built for Apple silicon, not only for Intel Macs.
+    var macAppleSilicon = false
+    /// Download size of the Mac version.
+    var macSize: Int64 = 0
+    /// Steam has a Windows version of it (nearly always).
+    var windowsBuild = true
+    /// The version Nightforge runs: Windows through Wine, or Mac through Steam for Mac.
+    var platform = Platform.windows
+    /// Steam has both versions and Nightforge can run either, so the options offer the choice.
+    var switchable = false
+    /// Why this version (only for switchable games).
+    var versionReason: VersionChoice.Reason?
+    /// Mac version in use while the Windows one is still installed in Nightforge's own Steam: its size.
+    var windowsLeftover: Int64?
+    /// Keeps a game's place in the list when it changes version.
+    var listID: String?
     /// Store hits only: price as shown in the store, and the Metacritic score.
     var storePrice: String?
     var metascore: Int?
 
-    var id: String { "\(bottle.name)#\(appID)" }
+    var id: String { listID ?? "\(bottle.name)#\(appID)" }
     var isInstalled: Bool { install == .installed }
+}
+
+extension Game {
+    /// What the Steam catalog says about the game's Mac version.
+    mutating func adoptMacFacts(_ app: CatalogApp) {
+        macNative = app.macNative
+        mac64 = app.mac64
+        macAppleSilicon = app.macAppleSilicon
+        macSize = app.macSize
+        windowsBuild = app.windows
+    }
 }
 
 /// Reads installed Steam games straight from the bottles' appmanifest files.
@@ -72,9 +101,15 @@ enum LibraryScanner {
             }
         }
 
-        // Installed games first (most recently played first), then downloads, then the rest of the
-        // Steam library alphabetically.
+        return sorted(games)
+    }
+
+    /// Installed games first (most recently played first), then downloads, then the rest of the
+    /// Steam library alphabetically.
+    static func sorted(_ games: [Game]) -> [Game] {
         func rank(_ game: Game) -> Int {
+            // Switched to its Mac version but still playable (Play fetches it): keeps its place.
+            if game.windowsLeftover != nil { return 0 }
             switch game.install {
             case .installed: return 0
             case .downloading: return 1
@@ -125,11 +160,11 @@ enum LibraryScanner {
 
             // What Steam knows about each game: VR only, a Mac version.
             let catalog = SteamCatalog.ownedGames(steamRoot: steamRoot)
-            let vrOnly = Set(catalog.filter(\.vrOnly).map(\.appID))
-            let macNative = Set(catalog.filter(\.macNative).map(\.appID))
+            let known = Dictionary(catalog.map { ($0.appID, $0) }, uniquingKeysWith: { first, _ in first })
             for index in result.indices {
-                result[index].isVROnly = vrOnly.contains(result[index].appID)
-                result[index].macNative = macNative.contains(result[index].appID)
+                guard let app = known[result[index].appID] else { continue }
+                result[index].isVROnly = app.vrOnly
+                result[index].adoptMacFacts(app)
             }
 
             // Nightforge's own Steam: show the whole library, not only what's on disk.
@@ -149,12 +184,100 @@ enum LibraryScanner {
                     game.install = .notInstalled
                     game.installDirName = app.installDir
                     game.isVROnly = app.vrOnly
-                    game.macNative = app.macNative
+                    game.adoptMacFacts(app)
                     result.append(game)
                 }
             }
         }
         return result
+    }
+
+    // MARK: - Mac versions
+
+    /// Games in Steam for Mac's library (installed or downloading), as Mac versions.
+    static func scanMac(root: URL = MacSteam.root) -> [Game] {
+        guard FileManager.default.fileExists(atPath: root.appendingPathComponent("steamapps").path) else { return [] }
+        let bottle = Bottle(name: MacSteam.bottle.name, url: root)
+        let usage = readUsage(steamRoot: root)
+        let catalog = Dictionary(SteamCatalog.ownedGames(steamRoot: root).map { ($0.appID, $0) },
+                                 uniquingKeysWith: { first, _ in first })
+        var result: [Game] = []
+        var seen = Set<Int>()
+        for steamapps in libraryFolders(steamRoot: root, bottle: bottle) {
+            for manifest in manifests(in: steamapps) {
+                guard var game = readManifest(manifest, steamapps: steamapps, bottle: bottle,
+                                              steamRoot: root, steamExe: "", usage: usage),
+                      seen.insert(game.appID).inserted
+                else { continue }
+                game.platform = .mac
+                if let app = catalog[game.appID] {
+                    game.isVROnly = app.vrOnly
+                    game.adoptMacFacts(app)
+                }
+                game.macNative = true
+                result.append(game)
+            }
+        }
+        return result
+    }
+
+    /// One entry per game: the Windows scan's, switched to the Mac version where VersionChoice
+    /// says so, plus Mac versions in Steam for Mac that no scanned Windows Steam knows.
+    static func merge(_ windows: [Game], mac: [Game], preferWindows: Set<Int>,
+                      choice: (Int) -> GameVersion = { GameOptionsStore.load($0).version },
+                      macFailed: (Int) -> Bool = MacHealth.failed) -> [Game] {
+        let onMac = Dictionary(mac.map { ($0.appID, $0) }, uniquingKeysWith: { first, _ in first })
+        var taken = Set<Int>()  // two bottles with the same game: one entry gets the Mac version
+        var result: [Game] = []
+        for var game in windows {
+            let installedMac = onMac[game.appID]
+            guard game.install != .inStore, game.macNative || installedMac != nil, !taken.contains(game.appID) else {
+                result.append(game)
+                continue
+            }
+            taken.insert(game.appID)
+            let facts = VersionChoice.Facts(
+                macNative: true, mac64: game.mac64 || installedMac?.mac64 == true, windows: game.windowsBuild,
+                macInstalled: installedMac?.isInstalled == true, windowsInstalled: game.isInstalled)
+            let (platform, reason) = VersionChoice.decide(facts, choice: choice(game.appID),
+                                                          preferWindows: preferWindows.contains(game.appID),
+                                                          macFailed: macFailed(game.appID))
+            let switchable = reason != .only
+            game.switchable = switchable
+            game.versionReason = switchable ? reason : nil
+            guard platform == .mac else {
+                result.append(game)
+                continue
+            }
+            var entry: Game
+            if let installedMac {
+                entry = installedMac
+            } else {
+                entry = Game(appID: game.appID, name: game.name, bottle: MacSteam.bottle, steamRoot: MacSteam.root,
+                             steamExeWindowsPath: "",
+                             installDir: MacSteam.steamapps.appendingPathComponent("common/\(game.installDirName)", isDirectory: true),
+                             sizeOnDisk: game.macSize)
+                entry.install = .notInstalled
+                entry.installDirName = game.installDirName
+            }
+            entry.platform = .mac
+            entry.macNative = true
+            entry.mac64 = facts.mac64
+            entry.macAppleSilicon = game.macAppleSilicon || installedMac?.macAppleSilicon == true
+            entry.macSize = max(game.macSize, installedMac?.macSize ?? 0)
+            entry.isVROnly = game.isVROnly
+            entry.lastPlayed = [game.lastPlayed, installedMac?.lastPlayed].compactMap { $0 }.max()
+            entry.playtimeMinutes = [game.playtimeMinutes, installedMac?.playtimeMinutes].compactMap { $0 }.max()
+            entry.windowsBuild = game.windowsBuild
+            entry.switchable = switchable
+            entry.versionReason = switchable ? reason : nil
+            entry.listID = game.id
+            if game.isInstalled && game.bottle.isBuiltIn { entry.windowsLeftover = game.sizeOnDisk }
+            result.append(entry)
+        }
+        let listed = Set(windows.filter { $0.install != .inStore }.map(\.appID))
+        result += mac.filter { !listed.contains($0.appID) }
+        return sorted(result)
     }
 
     // MARK: - Manifests
@@ -239,10 +362,12 @@ enum LibraryScanner {
         if let folders = VDF.parse(contentsOf: vdfURL)?["libraryfolders"]?.object {
             for (_, entry) in folders {
                 // New format: "0" { "path" "C:\\..." }   Old format: "1" "D:\\SteamLibrary"
-                guard let windowsPath = entry["path"]?.string ?? entry.string,
-                      let macPath = macPath(forWindowsPath: windowsPath, in: bottle)
+                // Steam for Mac writes Mac paths.
+                guard let path = entry["path"]?.string ?? entry.string,
+                      let folder = path.hasPrefix("/") ? URL(fileURLWithPath: path, isDirectory: true)
+                                                       : macPath(forWindowsPath: path, in: bottle)
                 else { continue }
-                urls.append(macPath.appendingPathComponent("steamapps", isDirectory: true))
+                urls.append(folder.appendingPathComponent("steamapps", isDirectory: true))
             }
         }
 

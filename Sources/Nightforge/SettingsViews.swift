@@ -24,7 +24,23 @@ struct GameOptionsSheet: View {
                 .font(Theme.display(22))
                 .lineLimit(2)
 
-            if !game.bottle.isBuiltIn {
+            if game.switchable {
+                VStack(alignment: .leading, spacing: 6) {
+                    Picker(L10n.t("Version"), selection: $options.version) {
+                        Text(automaticLabel(automaticVersion == .mac ? "Mac" : "Windows")).tag(GameVersion.automatic)
+                        Text("Mac").tag(GameVersion.mac)
+                        Text("Windows").tag(GameVersion.windows)
+                    }
+                    Text(game.platform == .mac
+                         ? L10n.t("Mac runs Steam's native Mac version through Steam for Mac, without any Windows translation; its graphics settings are in the game itself. Windows runs the Windows version through Wine. Automatic takes the Mac version when it runs on current Macs.")
+                         : L10n.t("Mac runs Steam's native Mac version through Steam for Mac, without any Windows translation. Windows runs the Windows version through Wine. Automatic takes the Mac version when it runs on current Macs."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if !game.bottle.isBuiltIn && game.platform == .windows {
                 Toggle(isOn: $options.metalHUD) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(L10n.t("Performance HUD in game"))
@@ -107,8 +123,9 @@ struct GameOptionsSheet: View {
                 Button(L10n.t("Cancel")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button(L10n.t("Save")) {
-                    // Picking a layer by hand overrides what self-healing learned.
+                    // Picking a layer or version by hand overrides what self-healing learned.
                     if options.graphics != .automatic { LaunchHealth.reset(game.appID) }
+                    if options.version != GameOptionsStore.load(game.appID).version { MacHealth.reset(game.appID) }
                     GameOptionsStore.save(options, for: game.appID)
                     dismiss()
                 }
@@ -117,7 +134,9 @@ struct GameOptionsSheet: View {
         }
         .padding(28)
         .frame(width: 470)
-        .task { if game.bottle.isBuiltIn { profile = await ProfileStore.shared.profile(for: game.appID) } }
+        .task {
+            if game.bottle.isBuiltIn || game.switchable { profile = await ProfileStore.shared.profile(for: game.appID) }
+        }
     }
 }
 
@@ -125,6 +144,16 @@ private extension GameOptionsSheet {
     var refreshRate: Int { NSScreen.main?.maximumFramesPerSecond ?? 60 }
 
     func automaticLabel(_ value: String) -> String { L10n.t("Automatic (%@)", value) }
+
+    /// The version "Automatic" would play (VersionChoice), from what the entry knows about both.
+    var automaticVersion: Platform {
+        let facts = VersionChoice.Facts(
+            macNative: true, mac64: game.mac64, windows: game.windowsBuild,
+            macInstalled: game.platform == .mac && game.isInstalled,
+            windowsInstalled: game.platform == .windows ? game.isInstalled : game.windowsLeftover != nil)
+        return VersionChoice.decide(facts, choice: .automatic, preferWindows: profile?.preferWindows == true,
+                                    macFailed: MacHealth.failed(game.appID)).0
+    }
 
     /// The layers that fit what the game draws with; none for Vulkan, OpenGL and DirectX 12.
     var layers: [GraphicsLayer] {

@@ -81,7 +81,7 @@ private struct StepList: View {
     }
 }
 
-private struct StepRow: View {
+struct StepRow: View {
     enum State { case pending, active, waiting, done, failed }
 
     let title: String
@@ -124,7 +124,7 @@ private struct StepRow: View {
     }
 }
 
-private struct Note: View {
+struct Note: View {
     let text: String
     var isError = false
 
@@ -142,7 +142,7 @@ private struct Note: View {
     }
 }
 
-private struct SetupButton: View {
+struct SetupButton: View {
     let title: String
     let symbol: String
     let action: () -> Void

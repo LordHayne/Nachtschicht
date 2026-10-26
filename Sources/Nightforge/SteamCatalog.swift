@@ -11,6 +11,14 @@ struct CatalogApp: Hashable {
     var vrOnly = false
     /// Steam also has a macOS version of it.
     var macNative = false
+    /// That Mac version is 64-bit, so it still runs: macOS dropped 32-bit apps with Catalina.
+    var mac64 = false
+    /// It's built for Apple silicon, not only for Intel Macs (which Rosetta stands in for).
+    var macAppleSilicon = false
+    /// Download size of the Mac version, 0 if Steam doesn't say.
+    var macSize: Int64 = 0
+    /// Steam has a Windows version (nearly always; a few games are Mac or Linux only).
+    var windows = true
 }
 
 /// Reads the owned-games list from the binary caches Steam keeps after sign-in:
@@ -167,17 +175,42 @@ enum SteamCatalog {
                common["type"]?.string?.lowercased() == "game",
                let name = common["name"]?.string?.trimmingCharacters(in: .whitespaces), !name.isEmpty {
                 let installDir = info["config"]?.object?["installdir"]?.string ?? name
-                games.append(CatalogApp(appID: Int(appID), name: name, installDir: installDir,
-                                        size: windowsSize(info["depots"]?.object),
-                                        vrOnly: common["onlyvrsupport"]?.int == 1,
-                                        macNative: (common["oslist"]?.string ?? "").contains("macos")))
+                let oslist = common["oslist"]?.string ?? ""
+                let depots = info["depots"]?.object
+                var game = CatalogApp(appID: Int(appID), name: name, installDir: installDir,
+                                      size: downloadSize(depots, os: "windows"),
+                                      vrOnly: common["onlyvrsupport"]?.int == 1,
+                                      macNative: oslist.contains("macos"),
+                                      windows: oslist.isEmpty || oslist.contains("windows"))
+                if game.macNative {
+                    (game.mac64, game.macAppleSilicon) = macBuild(common: common, depots: depots,
+                                                                  launch: info["config"]?.object?["launch"]?.object)
+                    game.macSize = downloadSize(depots, os: "macos")
+                }
+                games.append(game)
             }
             reader.position = end
         }
         return games
     }
 
-    private static func windowsSize(_ depots: [String: BinaryKV]?) -> Int64 {
+    /// Whether the Mac version still runs on current macOS. Valve marks 64-bit Mac builds with
+    /// "macos64" in common/osextended (Apple silicon ones also with "macosapplesilicon"); some
+    /// entries only say it per depot or launch option (osarch 64). Unknown counts as 32-bit.
+    private static func macBuild(common: [String: BinaryKV], depots: [String: BinaryKV]?,
+                                 launch: [String: BinaryKV]?) -> (is64: Bool, appleSilicon: Bool) {
+        let extended = (common["osextended"]?.string ?? "").lowercased()
+            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        let appleSilicon = extended.contains("macosapplesilicon")
+        if appleSilicon || extended.contains("macos64") { return (true, appleSilicon) }
+        let configs = (depots ?? [:]).values.compactMap { $0.object?["config"]?.object }
+            + (launch ?? [:]).values.compactMap { $0.object?["config"]?.object }
+        let declares64 = configs.contains { ($0["oslist"]?.string ?? "").contains("macos") && $0["osarch"]?.string == "64" }
+        return (declares64, false)
+    }
+
+    /// Download size of the default (English) depots for one OS ("windows", "macos").
+    private static func downloadSize(_ depots: [String: BinaryKV]?, os: String) -> Int64 {
         var total: Int64 = 0
         for (key, value) in depots ?? [:] where Int(key) != nil {
             guard let depot = value.object else { continue }
@@ -188,7 +221,7 @@ enum SteamCatalog {
             if let arch = config?["osarch"]?.string, arch == "32", depots?.values.contains(where: {
                 $0.object?["config"]?.object?["osarch"]?.string == "64"
             }) == true { continue }
-            if let os = config?["oslist"]?.string, !os.isEmpty, !os.contains("windows") { continue }
+            if let list = config?["oslist"]?.string, !list.isEmpty, !list.contains(os) { continue }
             if let language = config?["language"]?.string, !language.isEmpty, language != "english" { continue }
             let manifest = depot["manifests"]?.object?["public"]
             let size = manifest?.object?["size"]?.string.flatMap { Int64($0) } ?? manifest?.object?["size"]?.int.map(Int64.init)

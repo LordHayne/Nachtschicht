@@ -6,5 +6,7 @@ let start = Date()
 let games = SteamCatalog.ownedGames(steamRoot: root)
 print("\(games.count) owned games in \(Int(Date().timeIntervalSince(start) * 1000)) ms")
 for game in games where CommandLine.arguments.count < 3 ? games.firstIndex(of: game)! < 8 : String(game.appID) == CommandLine.arguments[2] {
-    print(String(format: "%8d  %8.0f MB  %@  [%@]", game.appID, Double(game.size) / 1e6, game.name, game.installDir))
+    let mac = !game.macNative ? "" : String(format: "  Mac %@%@ %.0f MB", game.mac64 ? "64-bit" : "32-bit/unknown",
+                                                   game.macAppleSilicon ? " Apple silicon" : "", Double(game.macSize) / 1e6)
+    print(String(format: "%8d  %8.0f MB  %@  [%@]%@", game.appID, Double(game.size) / 1e6, game.name, game.installDir, mac))
 }

@@ -28,7 +28,7 @@ Nightforge sets up everything a Windows game needs on your Mac and then gets out
 - **Fixes that arrive by themselves.** A game database is rebuilt every night from the community fixes behind Proton, plus our own profiles tested on Macs. Nightforge applies the right one silently when a game starts.
 - **Anti-cheat aware.** Easy Anti-Cheat and BattlEye can't run on a Mac; when Steam offers a way to start a game without them, Nightforge takes it.
 - **Your whole library, and the store.** Every game you own, with downloads, uninstall and running games you can switch back to. The search also finds games in the Steam store, with price, Metascore and a link to buy them in your browser; once bought, they appear in your library.
-- **Mac versions marked.** A small MAC tag shows which games Steam also sells as a Mac version, which can be the better choice.
+- **Mac versions, automatically.** When Steam has a Mac version of a game that runs on current Macs (64-bit), Nightforge plays that instead of the Windows one – no translation in between. The first time, it sets up Valve's Steam for Mac for you (you sign in in Steam's own window), then downloads and starts the Mac version through it. A small MAC tag shows which games run that way; each game's options can switch back to Windows.
 - **Made for the couch too.** Keyboard and controller work everywhere. English and German.
 - **Free and quiet.** No account, no telemetry, no background service. Steam is closed when you quit Nightforge and no game or download is running.
 
@@ -82,7 +82,7 @@ Nightforge is meant to be switched on and enjoyed; the defaults give the best re
 - **Game Mode:** on by default. Turn it off if a game's sound crackles.
 - **Performance HUD:** frames per second and frame times in every game.
 - **Language:** English or German, or follow macOS.
-- **Per game (O):** graphics layer, frame limit, MetalFX and launch options, all on "Automatic" unless you change them.
+- **Per game (O):** Mac or Windows version, graphics layer, frame limit, MetalFX and launch options, all on "Automatic" unless you change them.
 - **Advanced:** CrossOver and Whisky bottles or your own Wine, folded away until you need them.
 
 ## Good to know
@@ -98,6 +98,7 @@ Nightforge is meant to be switched on and enjoyed; the defaults give the best re
 - **Components:** `components/sources.json` lists what's used; a nightly workflow pins the newest releases with checksums in `components/manifest.json`, which the app downloads and verifies.
 - **Steam in the background:** Steam's browser runs through a small wrapper (`wrapper/`) so it draws under Wine, and a tiny library keeps its windows out of the Dock. Games are started with Steam's own `-applaunch`, so licences, cloud saves and updates work as usual.
 - **Game Mode:** macOS only grants it to app bundles marked as games, so Wine's loader runs from a small "Nightforge Game" bundle.
+- **Mac versions:** the Windows Steam can't download macOS builds, so games that run their Mac version go through Valve's own Steam for Mac. Nightforge installs it from Valve's `steam.dmg` (checking Valve's signature) the first time it's needed, starts it hidden, asks it for downloads the same way as the Windows Steam (an app manifest it picks up at start, so there's no install dialog) and starts games with `steam://run`. Steam's catalog says which Mac builds are 64-bit (`osextended` "macos64", or a depot's `osarch`); 32-bit ones no longer run on macOS and stay on Windows, as does a Mac version that ends in its first seconds. Steam for Mac shows its icon in the Dock while it runs and is closed with Nightforge, like the Windows one, when Nightforge started it.
 - **Game profiles:** `profiles/profiles.json` is built every night (`.github/workflows/profiles.yml`) from [umu-protonfixes](https://github.com/Open-Wine-Components/umu-protonfixes) plus our Mac-tested profiles in `profiles/mac.json`, which win. `scripts/build-profiles.py` reads the upstream fixes as syntax trees without running them and leaves out what only matters on Linux or would change every game in the shared environment. Profiles set the graphics layer, launch arguments, DLL overrides, Windows version, registry entries and runtimes installed with [winetricks](https://github.com/Winetricks/winetricks).
 - **CrossOver and Whisky:** existing bottles are picked up too. Enter the bottles folder and, for anything but CrossOver, the path to `wine` in Settings.
 
@@ -113,7 +114,7 @@ Got a game running better with a specific setting? Add it to `profiles/mac.json`
 }
 ```
 
-Fields: `graphics` (`dxmt` or `dxvk`), `arguments`, `dllOverrides`, `registry`, `windowsVersion`, `winetricks`, `metalFX` (`false` keeps MetalFX off for a game it doesn't suit) `frameLimit` (the game's automatic FPS limit) and `vulkanSamplers` (for games that draw with Vulkan themselves: the samplers per shader stage reported to them, when MoltenVK's 16 make a game refuse to start).
+Fields: `graphics` (`dxmt` or `dxvk`), `arguments`, `dllOverrides`, `registry`, `windowsVersion`, `winetricks`, `metalFX` (`false` keeps MetalFX off for a game it doesn't suit), `frameLimit` (the game's automatic FPS limit), `vulkanSamplers` (for games that draw with Vulkan themselves: the samplers per shader stage reported to them, when MoltenVK's 16 make a game refuse to start) and `preferWindows` (`true` keeps a game on its Windows version although Steam has a 64-bit Mac version, e.g. an old OpenGL port that runs worse).
 
 ## Build from source
 

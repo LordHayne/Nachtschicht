@@ -23,8 +23,10 @@ enum SteamPriority {
         # the efficiency cores. Ends with the game and puts them back.
         PIDFILE="$1"; GAME="$2"; shift 2
         HELPERS=(); for helper in "$@"; do HELPERS+=(-e "$helper"); done
-        # One at a time: this game takes over from one that has just ended.
-        [ -f "$PIDFILE" ] && kill "$(cat "$PIDFILE")" 2>/dev/null
+        # One at a time: this game takes over from one that has just ended. Only if that PID still is
+        # this script: after a restart or a crash it can belong to anything.
+        OLD="$(cat "$PIDFILE" 2>/dev/null)"
+        [ -n "$OLD" ] && ps -p "$OLD" -o command= 2>/dev/null | grep -qF steam-priority.sh && kill "$OLD" 2>/dev/null
         echo $$ > "$PIDFILE"
         # -F: Windows paths are full of backslashes; game processes live under steamapps and never count as Steam.
         helpers() { printf '%s\n' "$1" | grep -iF "${HELPERS[@]}" | grep -viF steamapps; }

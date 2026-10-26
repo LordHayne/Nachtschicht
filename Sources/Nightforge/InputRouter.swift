@@ -79,6 +79,7 @@ final class InputRouter {
             if model.showingLibrary { model.showSelectedGame() } else { model.primaryAction() }
             return true
         case 53:                                         // Esc
+            if model.awaitingSteam { model.cancelLaunch(); return true }
             if model.showingLibrary { model.showingLibrary = false; return true }
             if !model.searchText.isEmpty { model.searchText = ""; return true }
             return false
@@ -159,8 +160,12 @@ final class InputRouter {
                     } else {
                         Self.press(53, "\u{1B}", in: dialog)
                     }
-                } else {
+                } else if model.awaitingSteam {
+                    model.cancelLaunch()  // stop waiting for a game Steam hasn't started
+                } else if model.showingLibrary {
                     model.showingLibrary = false
+                } else if !model.searchText.isEmpty {
+                    model.searchText = ""  // like Esc: back from a filtered list to the whole library
                 }
             }
         }
@@ -306,7 +311,7 @@ final class InputRouter {
             model.showingLibrary = true
             return true
         }
-        if step.dy < 0, model.showingLibrary, model.selectedIndex < max(model.gridColumns, 1) {
+        if step.dy < 0, model.showingLibrary, model.selectionInTopGridRow {
             model.showingLibrary = false
             return true
         }

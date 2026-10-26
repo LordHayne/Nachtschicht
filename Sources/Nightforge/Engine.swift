@@ -293,12 +293,23 @@ enum Engine {
             if size == wrapperSize { continue }
             // Valve's helper is several MB, the wrapper ~150 KB: anything else is Steam's (new) original.
             guard size > 1_000_000 else { continue }
+            // The wrapper is copied in beside it first, so a failed copy (disk full) never leaves Steam
+            // without any helper: with -noverifyfiles it wouldn't repair that, and its window stays black.
+            let staged = dir.appendingPathComponent("steamwebhelper.nightforge-new")
             do {
+                try? fm.removeItem(at: staged)
+                try fm.copyItem(at: wrapper, to: staged)
                 try? fm.removeItem(at: real)
                 try fm.moveItem(at: helper, to: real)
-                try fm.copyItem(at: wrapper, to: helper)
+                do {
+                    try fm.moveItem(at: staged, to: helper)
+                } catch {
+                    try? fm.moveItem(at: real, to: helper)  // Steam's own helper back in place
+                    throw error
+                }
                 changed = true
             } catch {
+                try? fm.removeItem(at: staged)
                 continue
             }
         }
@@ -531,10 +542,14 @@ enum Engine {
         [ -n "$WINE" ] || exit 0
         # WINEMSYNC like every other Wine process of the session (Engine.environment).
         export WINEPREFIX="$PREFIX" WINEDEBUG=-all WINEMSYNC=1
+        # Nightforge opened again meanwhile has its own plans for Steam (and may start a game right
+        # away): asked again before each step that would end the session.
+        reopened && exit 0
         if steam_running; then
           "$WINE" 'C:\Program Files (x86)\Steam\steam.exe' -shutdown >/dev/null 2>&1
-          for i in $(seq 1 20); do steam_running || break; sleep 1; done
+          for i in $(seq 1 20); do steam_running || break; reopened && exit 0; sleep 1; done
         fi
+        reopened && exit 0
         "$(dirname "$WINE")/wineserver" -k
         sleep 2
         # Wine helpers that outlive the server, recognisable by their working directory in the prefix.
@@ -1372,7 +1387,10 @@ enum Engine {
                                 steamapps: URL = steamRoot.appendingPathComponent("steamapps", isDirectory: true)) throws {
         let manifest = steamapps.appendingPathComponent("appmanifest_\(appID).acf")
         guard !FileManager.default.fileExists(atPath: manifest.path) else { return }
-        func quoted(_ text: String) -> String { "\"" + text.replacingOccurrences(of: "\"", with: "'") + "\"" }
+        // Steam's text format reads a backslash as an escape: a name ending in one would swallow the closing quote.
+        func quoted(_ text: String) -> String {
+            "\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "'") + "\""
+        }
         let text = """
         "AppState"
         {

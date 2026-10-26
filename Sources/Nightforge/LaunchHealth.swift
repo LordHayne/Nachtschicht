@@ -139,8 +139,8 @@ enum LaunchHealth {
     static func note(_ appID: Int, _ attempts: [LaunchAttempt]) -> String? {
         let (index, _) = current(appID, attempts)
         guard index > 0 else { return nil }
-        return L10n.t("This game didn't start with %@, so Nightforge uses %@ for it automatically.",
-                      attempts[index - 1].label, attempts[index].label)
+        // Which graphics layer that is shows in the game's options; here it's enough to know it was handled.
+        return L10n.t("This game didn't start the usual way, so Nightforge now starts it another way, automatically.")
     }
 
     /// How long the game's processes ran in the first session after `since`: from the first

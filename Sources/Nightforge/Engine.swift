@@ -942,10 +942,11 @@ enum Engine {
             // factor DXMT upscales to exactly the window's Retina pixels.
             dxmt.append("d3d11.metalSpatialUpscale = True")
         }
-        // Read by Nightforge's Vulkan layer (wrapper/nightforge-vulkan-layer.c); only games whose
-        // profile needs it get one.
+        // Read by Nightforge's Vulkan layer (wrapper/nightforge-vulkan-layer.c), for games that draw
+        // through Vulkan themselves or via DXVK.
         var vulkan = vulkanSamplers.map { ["maxPerStageDescriptorSamplers = \($0)"] } ?? []
         if hdr { vulkan.append("hdr = on") }
+        if upscaling { vulkan.append("upscale = on") }  // MetalFX, as DXMT does it
         var folders = Set([installDir.standardizedFileURL])
         for exe in executableFiles(in: installDir) { folders.insert(exe.deletingLastPathComponent().standardizedFileURL) }
         for folder in folders {

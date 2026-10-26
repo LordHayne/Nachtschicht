@@ -78,8 +78,8 @@ enum L10n {
         "MetalFX upscaling": "MetalFX-Hochskalierung",
         "On": "An",
         "Automatic (%@)": "Automatisch (%@)",
-        "Automatic follows “Sharp & smooth” in Settings. The frame limit keeps frames even; MetalFX (DXMT only) upscales the picture to full Retina sharpness – set a lower resolution in the game for more FPS.":
-            "Automatisch folgt „Schön & flüssig“ in den Einstellungen. Das FPS-Limit hält die Bilder gleichmäßig; MetalFX (nur DXMT) skaliert das Bild auf volle Retina-Schärfe hoch – für mehr FPS im Spiel eine niedrigere Auflösung wählen.",
+        "Automatic follows “Sharp & smooth” in Settings. The frame limit keeps frames even; MetalFX upscales the picture to full Retina sharpness (not with WineD3D) – set a lower resolution in the game for more FPS.":
+            "Automatisch folgt „Schön & flüssig“ in den Einstellungen. Das FPS-Limit hält die Bilder gleichmäßig; MetalFX skaliert das Bild auf volle Retina-Schärfe hoch (nicht mit WineD3D) – für mehr FPS im Spiel eine niedrigere Auflösung wählen.",
         "Sharp & smooth": "Schön & flüssig",
         "Update to %@": "Auf %@ aktualisieren",
         "Updating …": "Wird aktualisiert …",

@@ -86,7 +86,7 @@ struct GameOptionsSheet: View {
                         Text(L10n.t("Off")).tag(Choice.off)
                     }
                     .disabled(!drawsWith.upscales || layers.isEmpty)
-                    Text(L10n.t("Automatic follows “Sharp & smooth” in Settings. The frame limit keeps frames even; MetalFX (DXMT only) upscales the picture to full Retina sharpness – set a lower resolution in the game for more FPS."))
+                    Text(L10n.t("Automatic follows “Sharp & smooth” in Settings. The frame limit keeps frames even; MetalFX upscales the picture to full Retina sharpness (not with WineD3D) – set a lower resolution in the game for more FPS."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

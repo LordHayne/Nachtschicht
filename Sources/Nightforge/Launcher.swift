@@ -92,8 +92,9 @@ enum GraphicsLayer: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// Only DXMT draws through Metal directly, which MetalFX needs.
-    var upscales: Bool { self == .dxmt || self == .automatic }
+    /// DXMT upscales with MetalFX itself; DXVK and games drawing with Vulkan get it from
+    /// Nightforge's Vulkan layer. WineD3D draws through OpenGL, which MetalFX can't reach.
+    var upscales: Bool { self != .wined3d }
 }
 
 /// Automatic follows the global "Sharp & smooth" setting; on and off override it for one game.
@@ -107,7 +108,7 @@ struct GameOptions: Codable, Equatable {
     var graphics = GraphicsLayer.automatic
     /// Frames per second the game is held to: nil = automatic ("Sharp & smooth"), 0 = no limit.
     var frameLimit: Int?
-    /// MetalFX spatial upscaling of the game's picture (DXMT only).
+    /// MetalFX spatial upscaling of the game's picture (DXMT, DXVK and Vulkan).
     var upscaling = Choice.automatic
     /// HDR for games that draw through Vulkan (themselves or via DXVK); off, since under Wine it
     /// mostly looks washed out (wrapper/nightforge-vulkan-layer.c).

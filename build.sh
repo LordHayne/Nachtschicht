@@ -45,9 +45,12 @@ fi
 clang -arch x86_64 -mmacosx-version-min=11.0 -dynamiclib -framework AppKit -Wall \
   -o "$OUT/Contents/Resources/hide-steam-dock.dylib" wrapper/hide-steam-dock.m
 
-# Lets Windows games that render with Vulkan start on MoltenVK (x86_64, loaded by Wine's Vulkan loader).
-clang -arch x86_64 -mmacosx-version-min=11.0 -dynamiclib -fvisibility=hidden -O2 -Wall -I wrapper/vulkan-headers \
-  -o "$OUT/Contents/Resources/nightforge-vulkan-layer.dylib" wrapper/nightforge-vulkan-layer.c
+# Lets Windows games that render with Vulkan start on MoltenVK, and upscales them with MetalFX (x86_64,
+# loaded by Wine's Vulkan loader).
+# Its MetalFX upscaling is Objective-C (wrapper/nightforge-vulkan-metalfx.m); MetalFX is weak-linked for older Macs.
+clang -arch x86_64 -mmacosx-version-min=11.0 -dynamiclib -fvisibility=hidden -fobjc-arc -O2 -Wall \
+  -I wrapper/vulkan-headers -I wrapper -framework Metal -framework QuartzCore -framework CoreGraphics -weak_framework MetalFX \
+  -o "$OUT/Contents/Resources/nightforge-vulkan-layer.dylib" wrapper/nightforge-vulkan-layer.c wrapper/nightforge-vulkan-metalfx.m
 
 if [ -f Resources/AppIcon.png ]; then
   ICONSET="build/AppIcon.iconset"

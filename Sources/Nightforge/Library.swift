@@ -46,6 +46,8 @@ struct Game: Identifiable, Hashable {
     var windowsBuild = true
     /// Playable with a controller (from the couch) – or only in part, or not.
     var controller = ControllerSupport.none
+    /// Its anti-cheat stops it on a Mac (Windows versions only).
+    var antiCheatBlock: AntiCheatBlock?
     /// The version Nightforge runs: Windows through Wine, or Mac through Steam for Mac.
     var platform = Platform.windows
     /// Steam has both versions and Nightforge can run either, so the options offer the choice.
@@ -65,6 +67,10 @@ struct Game: Identifiable, Hashable {
 
     var id: String { listID ?? "\(bottle.name)#\(appID)" }
     var isInstalled: Bool { install == .installed }
+    /// Anti-cheat stops it on a Mac, but GeForce Now streams it: Play goes there instead.
+    var playsInCloud: Bool {
+        antiCheatBlock?.geforceNowURL != nil && (install == .notInstalled || install == .installed)
+    }
 }
 
 extension Game {
@@ -270,6 +276,19 @@ enum LibraryScanner {
         let listed = Set(windows.filter { $0.install != .inStore }.map(\.appID))
         result += mac.filter { !listed.contains($0.appID) }
         return sorted(result)
+    }
+
+    /// Marks Windows versions whose anti-cheat stops them on a Mac – unless Steam offers to start
+    /// them without it, which Launcher then does (`SteamCatalog.antiCheatOffArguments`).
+    static func markAntiCheat(_ games: [Game], blocks: [Int: AntiCheatBlock]) -> [Game] {
+        games.map { game in
+            var game = game
+            guard game.platform == .windows, game.install != .inStore, let block = blocks[game.appID],
+                  SteamCatalog.antiCheatOffArguments(appID: game.appID, steamRoot: game.steamRoot).isEmpty
+            else { return game }
+            game.antiCheatBlock = block
+            return game
+        }
     }
 
     /// The Mac version's entry for a game the Windows scan found: what Steam for Mac has of it

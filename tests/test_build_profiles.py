@@ -67,5 +67,24 @@ class TranslateTests(unittest.TestCase):
         self.assertNotIn("registry", profile)
 
 
+class AntiCheatTests(unittest.TestCase):
+    def test_only_games_that_cant_run_are_blocked(self):
+        blocks = build_profiles.anticheat_blocks([
+            {"name": "PUBG", "status": "Broken", "anticheats": ["BattlEye", "VAC"], "storeIds": {"steam": "578080"}},
+            {"name": "Elden Ring", "status": "Supported", "anticheats": ["Easy Anti-Cheat"], "storeIds": {"steam": "1245620"}},
+            {"name": "Only VAC", "status": "Denied", "anticheats": ["VAC"], "storeIds": {"steam": "1"}},
+            {"name": "Fortnite", "status": "Denied", "anticheats": ["Easy Anti-Cheat"], "storeIds": {}},
+        ])
+        self.assertEqual(blocks, {"578080": {"name": "PUBG", "antiCheat": ["BattlEye"]}})
+
+    def test_geforce_now_ids_come_from_available_steam_games(self):
+        ids = build_profiles.geforce_now_ids([
+            {"id": 7, "steamUrl": "https://store.steampowered.com/app/252490", "store": "Steam", "status": "AVAILABLE"},
+            {"id": 8, "steamUrl": "", "store": "Epic", "status": "AVAILABLE"},
+            {"id": 9, "steamUrl": "https://store.steampowered.com/app/1", "store": "Steam", "status": "MAINTENANCE"},
+        ])
+        self.assertEqual(ids, {"252490": 7})
+
+
 if __name__ == "__main__":
     unittest.main()

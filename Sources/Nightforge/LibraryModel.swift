@@ -47,6 +47,8 @@ final class LibraryModel: ObservableObject {
     @Published var pendingLeftoverRemoval: Game?
     /// Steam for Mac being set up for a game whose Mac version is wanted.
     @Published var macSetup: MacSteamSetup?
+    /// A game about to open in GeForce Now for the first time: what that means is said once.
+    @Published var pendingCloudGame: Game?
     private var macSteamPrewarmed = false
     @Published private(set) var uninstallingID: String?
     /// Games whose Windows process is running right now, with that process's pid.
@@ -254,9 +256,13 @@ final class LibraryModel: ObservableObject {
         let root = Prefs.bottlesRoot
         let builtIn = Engine.isSteamInstalled ? [Engine.bottle] : []
         let preferWindows = await ProfileStore.shared.preferWindows()
+        let blocks = await ProfileStore.shared.antiCheatBlocks()
+        antiCheatBlocks = blocks
         let found = await Task.detached(priority: .userInitiated) {
-            LibraryScanner.merge(LibraryScanner.scan(bottlesRoot: root, extraBottles: builtIn),
-                                 mac: LibraryScanner.scanMac(), preferWindows: preferWindows)
+            LibraryScanner.markAntiCheat(
+                LibraryScanner.merge(LibraryScanner.scan(bottlesRoot: root, extraBottles: builtIn),
+                                     mac: LibraryScanner.scanMac(), preferWindows: preferWindows),
+                blocks: blocks)
         }.value
         allGames = found
         applyFilter()
@@ -402,13 +408,35 @@ final class LibraryModel: ObservableObject {
             switchToGame(game)
             return
         }
+        if game.playsInCloud {
+            playInCloud(game)
+            return
+        }
         switch game.install {
         case .installed: launchSelected()
-        case .notInstalled where game.isVROnly: break
+        case .notInstalled where game.isVROnly || game.antiCheatBlock != nil: break
         case .notInstalled: download(game)
         case .downloading: break
         case .inStore: openStorePage(game)
         }
+    }
+
+    /// Anti-cheat games GeForce Now streams open there, with the copy the player owns on Steam.
+    /// The first time Nightforge says what that involves (NVIDIA account, free hour) before going.
+    func playInCloud(_ game: Game) {
+        guard let url = game.antiCheatBlock?.geforceNowURL else { return }
+        if UserDefaults.standard.bool(forKey: Prefs.Keys.geforceNowExplained) {
+            NSWorkspace.shared.open(url)
+        } else {
+            pendingCloudGame = game
+        }
+    }
+
+    func confirmCloud() {
+        guard let url = pendingCloudGame?.antiCheatBlock?.geforceNowURL else { return }
+        pendingCloudGame = nil
+        UserDefaults.standard.set(true, forKey: Prefs.Keys.geforceNowExplained)
+        NSWorkspace.shared.open(url)
     }
 
     /// Buying happens on Steam's own store page in the browser; Nightforge never sees payment data.
@@ -447,12 +475,15 @@ final class LibraryModel: ObservableObject {
             guard !Task.isCancelled else { return }
             let hits = await StoreSearch.shared.search(term)
             guard !Task.isCancelled, term == searchText.trimmingCharacters(in: .whitespaces) else { return }
-            storeResults = hits.map(Self.storeGame)
+            storeResults = hits.map(storeGame)
             applyFilter()
         }
     }
 
-    private static func storeGame(_ hit: StoreSearch.Hit) -> Game {
+    /// Games whose anti-cheat stops them on a Mac, so the store search can say so before buying.
+    private var antiCheatBlocks: [Int: AntiCheatBlock] = [:]
+
+    private func storeGame(_ hit: StoreSearch.Hit) -> Game {
         var game = Game(
             appID: hit.appID, name: hit.name, bottle: Engine.bottle, steamRoot: Engine.steamRoot,
             steamExeWindowsPath: Engine.steamExeWindowsPath,
@@ -464,6 +495,7 @@ final class LibraryModel: ObservableObject {
         game.controller = hit.controller ?? .none
         game.storePrice = hit.price
         game.metascore = hit.metascore
+        if hit.macNative != true { game.antiCheatBlock = antiCheatBlocks[hit.appID] }
         return game
     }
 
@@ -478,7 +510,7 @@ final class LibraryModel: ObservableObject {
             guard let hit = await StoreSearch.shared.details(for: game.appID),
                   let index = storeResults.firstIndex(where: { $0.appID == game.appID })
             else { return }
-            var updated = Self.storeGame(hit)
+            var updated = storeGame(hit)
             updated.metascore = hit.metascore ?? storeResults[index].metascore
             storeResults[index] = updated
             applyFilter()

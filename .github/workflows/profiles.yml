@@ -1,7 +1,8 @@
 name: Update game profiles
 
-# Rebuilds profiles/profiles.json every night from umu-protonfixes plus profiles/mac.json
-# (see scripts/build-profiles.py) and commits it when something changed. The app downloads it.
+# Rebuilds profiles/profiles.json every night from umu-protonfixes, AreWeAntiCheatYet and the
+# GeForce Now game list plus profiles/mac.json (see scripts/build-profiles.py) and commits it
+# when something changed. The app downloads it.
 
 on:
   schedule:
@@ -40,8 +41,15 @@ jobs:
       - name: Fetch umu-protonfixes
         run: git clone --depth 1 https://github.com/Open-Wine-Components/umu-protonfixes.git "$RUNNER_TEMP/umu-protonfixes"
 
+      - name: Fetch anti-cheat and GeForce Now lists
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/anticheat.json" https://raw.githubusercontent.com/AreWeAntiCheatYet/AreWeAntiCheatYet/HEAD/games.json
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/geforcenow.json" https://static.nvidiagrid.net/supported-public-game-list/locales/gfnpc-en-US.json
+
       - name: Build profiles
-        run: python3 -I scripts/build-profiles.py "$RUNNER_TEMP/umu-protonfixes"
+        run: |
+          python3 -I scripts/build-profiles.py "$RUNNER_TEMP/umu-protonfixes" \
+            --anticheat "$RUNNER_TEMP/anticheat.json" --geforcenow "$RUNNER_TEMP/geforcenow.json"
 
       - name: Validate
         run: |
@@ -55,7 +63,11 @@ jobs:
               assert game.get("graphics") in (None, "dxmt", "dxvk"), (app_id, game.get("graphics"))
               assert game.get("metalFX") in (None, True, False), (app_id, game.get("metalFX"))
               assert game.get("frameLimit") is None or isinstance(game["frameLimit"], int), (app_id, game.get("frameLimit"))
-          print("ok:", len(doc["games"]), "games")
+              assert game.get("antiCheat") is None or isinstance(game["antiCheat"], list), (app_id, game.get("antiCheat"))
+              assert game.get("geforceNow") is None or isinstance(game["geforceNow"], int), (app_id, game.get("geforceNow"))
+          blocked = sum(1 for game in doc["games"].values() if game.get("antiCheat"))
+          assert blocked > 50, "suspiciously few anti-cheat games"
+          print("ok:", len(doc["games"]), "games,", blocked, "blocked by anti-cheat")
           PY
 
       # GitHub switches off scheduled workflows in public repos after 60 days without activity.

@@ -102,6 +102,21 @@ struct LibraryView: View {
             }
         )
         .alert(
+            L10n.t("Play %@ on GeForce Now?", model.pendingCloudGame?.name ?? ""),
+            isPresented: Binding(
+                get: { model.pendingCloudGame != nil },
+                set: { if !$0 { model.pendingCloudGame = nil } }
+            ),
+            presenting: model.pendingCloudGame,
+            actions: { _ in
+                Button(L10n.t("Continue to GeForce Now")) { model.confirmCloud() }
+                Button(L10n.t("Cancel"), role: .cancel) {}
+            },
+            message: { _ in
+                Text(L10n.t("Its anti-cheat doesn't run on a Mac, so it runs on NVIDIA's servers and streams to your Mac – with the copy you own on Steam. The first time, sign in to GeForce Now with an NVIDIA account and link Steam there. Free play lasts an hour at a time, with ads and a queue; GeForce Now's paid plans lift that."))
+            }
+        )
+        .alert(
             uninstallTitle,
             isPresented: Binding(
                 get: { model.pendingUninstall != nil },
@@ -407,6 +422,9 @@ private struct GameDetail: View {
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Theme.muted)
             }
+            if let block = game.antiCheatBlock {
+                AntiCheatNote(block: block)
+            }
             if let insight = model.insights[game.appID] {
                 GameInsightNotes(game: game, insight: insight)
             }
@@ -430,7 +448,7 @@ private struct GameDetail: View {
                            isRunning: model.isRunning(game),
                            needsConfirmation: model.launchNeedsConfirmation,
                            status: model.launchStatus,
-                           vrOnly: game.isVROnly && game.install == .notInstalled) {
+                           unavailable: unavailable, cloud: game.playsInCloud) {
                     model.primaryAction()
                 }
                 if game.install != .inStore {
@@ -454,6 +472,37 @@ private struct GameDetail: View {
         .task(id: game.id) {
             logo = await ArtworkStore.shared.image(for: game, kind: .logo)
         }
+    }
+
+    /// Not downloaded and nothing a Mac can run: the button says why instead.
+    private var unavailable: PlayButton.Unavailable? {
+        guard game.install == .notInstalled else { return nil }
+        if game.isVROnly { return .init(title: L10n.t("VR only"), symbol: "visionpro") }
+        if game.antiCheatBlock != nil && !game.playsInCloud {
+            return .init(title: L10n.t("Doesn't run on a Mac"), symbol: "shield.slash")
+        }
+        return nil
+    }
+}
+
+/// Why a game with anti-cheat can't be played on a Mac, and where it can be streamed instead.
+private struct AntiCheatNote: View {
+    let block: AntiCheatBlock
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(L10n.t("This game's anti-cheat (%@) stops it on a Mac: it needs Windows itself, and getting around it would get your account banned.",
+                         block.antiCheat.joined(separator: ", ")),
+                  systemImage: "shield.slash")
+            if block.geforceNow != nil {
+                Label(L10n.t("Nightforge plays it on GeForce Now, NVIDIA's cloud gaming, with your Steam copy (own NVIDIA account; free sessions last an hour)."),
+                      systemImage: "cloud")
+            }
+        }
+        .font(.system(size: 13, weight: .medium))
+        .foregroundStyle(Theme.muted)
+        .frame(maxWidth: 620, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -483,13 +532,15 @@ private struct PlayButton: View {
     var needsConfirmation = false
     /// What the launch is busy with, when it's more than waiting for Steam.
     var status: String?
-    /// VR-only and not downloaded: nothing useful to do on a Mac.
-    var vrOnly = false
+    /// Not downloaded and nothing a Mac can run (VR only, anti-cheat): what the button says instead.
+    var unavailable: Unavailable?
+    /// Streams from GeForce Now instead (anti-cheat games it carries).
+    var cloud = false
     let action: () -> Void
     @State private var hovering = false
 
     private var busy: Bool {
-        if isLaunching || vrOnly || isUninstalling { return true }
+        if isLaunching || unavailable != nil || isUninstalling { return true }
         if case .downloading = install { return true }
         return false
     }
@@ -499,7 +550,8 @@ private struct PlayButton: View {
         if isLaunching { return needsConfirmation ? L10n.t("Confirm in the Steam window") : L10n.t("Launching …") }
         if isUninstalling { return L10n.t("Uninstalling …") }
         if isRunning { return L10n.t("Running – switch to game") }
-        if vrOnly { return L10n.t("VR only") }
+        if let unavailable { return unavailable.title }
+        if cloud { return L10n.t("Play on GeForce Now") }
         switch install {
         case .installed: return L10n.t("Play")
         case .notInstalled: return L10n.t("Download")
@@ -514,8 +566,11 @@ private struct PlayButton: View {
             HStack(spacing: 12) {
                 if isRunning && !busy {
                     Circle().fill(Color.green).frame(width: 10, height: 10)
-                } else if vrOnly {
-                    Image(systemName: "visionpro")
+                } else if let unavailable {
+                    Image(systemName: unavailable.symbol)
+                        .font(.system(size: 15, weight: .bold))
+                } else if cloud {
+                    Image(systemName: "cloud.fill")
                         .font(.system(size: 15, weight: .bold))
                 } else if busy {
                     ProgressView()
@@ -551,6 +606,11 @@ private struct PlayButton: View {
         .disabled(busy && !(isLaunching && needsConfirmation))  // then it brings Steam's window up
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.15), value: hovering)
+    }
+
+    struct Unavailable {
+        let title: String
+        let symbol: String
     }
 }
 
@@ -619,9 +679,11 @@ struct GameContextMenu: ViewModifier {
     func body(content: Content) -> some View {
         content.contextMenu {
             switch game.install {
+            case _ where game.playsInCloud:
+                Button(L10n.t("Play on GeForce Now")) { select(); model.primaryAction() }
             case .installed:
                 Button(model.isRunning(game) ? L10n.t("Switch to Game") : L10n.t("Play")) { select(); model.primaryAction() }
-            case .notInstalled where !game.isVROnly:
+            case .notInstalled where !game.isVROnly && game.antiCheatBlock == nil:
                 Button(L10n.t("Download")) { select(); model.primaryAction() }
             case .inStore:
                 Button(L10n.t("View in Steam Store")) { model.openStorePage(game) }
@@ -731,10 +793,23 @@ struct CoverCard: View {
         case .notInstalled, .inStore:
             HStack {
                 Spacer()
-                Image(systemName: game.install == .inStore ? "cart.circle.fill" : "arrow.down.circle.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Theme.ink, Theme.night.opacity(0.7))
-                    .padding(8)
+                if let block = game.antiCheatBlock {
+                    // Instead of the download sign: this one won't run here, or only in the cloud.
+                    Image(systemName: block.geforceNow != nil ? "cloud" : "shield.slash")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Theme.ink)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 5)
+                        .background(Theme.night.opacity(0.82), in: Capsule())
+                        .padding(7)
+                        .help(block.geforceNow != nil ? L10n.t("Plays on GeForce Now – its anti-cheat doesn't run on a Mac")
+                              : L10n.t("Anti-cheat stops this game on a Mac"))
+                } else {
+                    Image(systemName: game.install == .inStore ? "cart.circle.fill" : "arrow.down.circle.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Theme.ink, Theme.night.opacity(0.7))
+                        .padding(8)
+                }
             }
             .frame(maxHeight: .infinity, alignment: .bottom)
         case .downloading(let fraction):
@@ -977,7 +1052,7 @@ private struct GameInsightNotes: View {
                 note(L10n.t("Draws some windows (sign-in, news) with Microsoft WebView2, which can stay empty on a Mac."),
                      systemImage: "rectangle.dashed")
             }
-            if !insight.analysis.antiCheat.isEmpty {
+            if !insight.analysis.antiCheat.isEmpty && game.antiCheatBlock == nil {
                 note(L10n.t("Uses %@: online play with it doesn't work on a Mac, single player usually does.",
                             insight.analysis.antiCheat.joined(separator: ", ")),
                      systemImage: "shield.lefthalf.filled")

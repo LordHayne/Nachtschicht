@@ -22,6 +22,7 @@ enum Prefs {
         static let performanceHUD = "performanceHUD"
         static let gameMode = "gameMode"
         static let sharpAndSmooth = "sharpAndSmooth"
+        static let geforceNowExplained = "geforceNowExplained"
     }
 
     /// "Sharp & smooth": MetalFX upscaling to full Retina sharpness and an even frame rate that

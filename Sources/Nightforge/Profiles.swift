@@ -27,6 +27,11 @@ struct GameProfile: Decodable, Equatable {
     var preferWindows: Bool?
     /// Save folders for games Steam Cloud doesn't know the folders of (SaveTransfer).
     var saves: [SaveRule]?
+    /// Anti-cheat that stops the game's Windows version on a Mac ("BattlEye", …), from
+    /// AreWeAntiCheatYet; an empty list (a Mac profile) means it runs after all.
+    var antiCheat: [String]?
+    /// Its id on GeForce Now, NVIDIA's cloud gaming, where such a game can be streamed instead.
+    var geforceNow: Int?
 
     struct RegistryEntry: Decodable, Equatable {
         let key: String
@@ -37,7 +42,7 @@ struct GameProfile: Decodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case name, graphics, arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX, frameLimit
-        case vulkanSamplers, preferWindows, saves
+        case vulkanSamplers, preferWindows, saves, antiCheat, geforceNow
     }
 
     /// {"root": "WinAppDataRoaming", "path": "7DaysToDie/Saves", "pattern": "*", "recursive": true, "mac": "MacAppSupport"}
@@ -68,6 +73,21 @@ struct GameProfile: Decodable, Equatable {
             SaveRule(root: $0.root, path: $0.path, pattern: $0.pattern ?? "*", recursive: $0.recursive ?? true,
                      macRoot: $0.mac, macAddPath: $0.macPath ?? "")
         }
+        antiCheat = try? container.decodeIfPresent([String].self, forKey: .antiCheat)
+        geforceNow = try? container.decodeIfPresent(Int.self, forKey: .geforceNow)
+    }
+}
+
+/// A game that doesn't start on a Mac because its anti-cheat needs Windows itself: Wine can't
+/// run it, and getting around it would get the player banned.
+struct AntiCheatBlock: Hashable {
+    let antiCheat: [String]
+    /// Its GeForce Now id, when it can be streamed there instead.
+    let geforceNow: Int?
+
+    /// GeForce Now opens the game's page from this link, in its app or the browser.
+    var geforceNowURL: URL? {
+        geforceNow.flatMap { URL(string: "https://play.geforcenow.com/mall/#/deeplink?game-id=\($0)") }
     }
 }
 
@@ -105,6 +125,15 @@ actor ProfileStore {
     func preferWindows() -> Set<Int> {
         loadLocalIfNeeded()
         return Set((profiles ?? [:]).filter { $0.value.preferWindows == true }.keys)
+    }
+
+    /// Games whose anti-cheat stops them on a Mac, from the list at hand (like `preferWindows`).
+    func antiCheatBlocks() -> [Int: AntiCheatBlock] {
+        loadLocalIfNeeded()
+        return (profiles ?? [:]).compactMapValues { profile in
+            guard let antiCheat = profile.antiCheat, !antiCheat.isEmpty else { return nil }
+            return AntiCheatBlock(antiCheat: antiCheat, geforceNow: profile.geforceNow)
+        }
     }
 
     private func loadLocalIfNeeded() {

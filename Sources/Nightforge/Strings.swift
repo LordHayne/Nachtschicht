@@ -355,6 +355,12 @@ enum L10n {
         "Continue playing": "Weiterspielen",
         "Pinned, then what you played lately": "Angeheftet, dann was du zuletzt gespielt hast",
 
+        // Settings tabs
+        "Stores": "Stores",
+        "Not set up yet – Nightforge does it at the first start.": "Noch nicht eingerichtet – Nightforge macht das beim ersten Start.",
+        "Signed in · %@": "Angemeldet · %@",
+        "Not signed in · %@": "Nicht angemeldet · %@",
+
         // Library filters
         "Sort": "Sortieren",
         "Recently played": "Zuletzt gespielt",

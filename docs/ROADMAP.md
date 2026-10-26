@@ -149,10 +149,11 @@
   - **Fertig wenn:** Filter kombinierbar, Zustand bleibt beim Wechsel Detail ↔ Bibliothek erhalten, alles per Controller bedienbar.
   - **Stand:** `LibraryFilters.swift` (Status All / On this Mac / Not downloaded, „Runs great“, „Controller“ = volle Unterstützung, „Mac version“; Sortierung Recently played / Name / Disk space) und `LibrarySection.make` (Suche = eine Trefferliste, beste zuerst; Hidden = nach Name; „Recently played“ gruppiert nach Installiert / Lädt / Rest; Name/Größe eine Liste; Store-Treffer zuletzt). Leiste über dem Raster (nicht mitscrollend): Titel + „n von m Spielen“, Hidden-Schalter, Sortierung; darunter Status und Filter – jedes Segment ein eigener Pad-Knopf (↑ aus der obersten Rasterzeile). Filter gelten nur in der Bibliothek (Home bleibt vollständig) und bleiben über Detailseite und Home hinweg erhalten. Leeres Ergebnis: „No games match these filters“ + „Clear filters“. Pro-Store-Filter kommt mit Phase 7 (heute nur Steam). Test `tests/LibraryFiltersTest/`.
 
-- [ ] **2.2 Einstellungen in Tabs** · `M`
+- [ ] **2.2 Einstellungen in Tabs** · `M` · Branch `claude/ux-settings-2-2` (2 von 5 Tabs)
   - **Was:** Tabs `Stores` · `General` · `Controller` · `Storage` · `About`. Inhalte siehe 1.6, 4.3, 5.4, 2.5.
   - **Wo:** `SettingsViews.swift` (`SettingsView`).
   - **Design:** `Dialogs.tsx` → `SettingsDialog`.
+  - **Stand:** `SettingsView.swift` mit Tab-Leiste (eigene Pad-Knöpfe): **Stores** (Steam: angemeldet/Spiele, „Open Steam“; CrossOver/Whisky/eigenes Wine), **General** (wie bisher). `SettingsView(tab:)` öffnet direkt einen Tab. Offen: Tabs **About** (kommt mit 1.6), **Storage** (4.3) und **Controller** (5.4), Schalter aus 2.5/3.4/5.1 in General.
 
 - [ ] **2.3 Grafik-Voreinstellungen in Klartext + Profil-Herkunft** · `M`
   - **Was:** In den Spieloptionen statt Einzelschaltern zuerst vier Voreinstellungen:

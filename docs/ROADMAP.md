@@ -169,9 +169,10 @@
   - **Wo:** `SettingsViews.swift` (`GameOptionsSheet`), `Launcher.swift` (`GameOptions`, `GraphicsLayer`), `Profiles.swift`.
   - **Design:** `Dialogs.tsx` → `GameOptionsDialog`; `Detail.tsx` → `OptionsSummary`; `data.ts` → `PRESETS`.
 
-- [ ] **2.4 „Bereit für offline“** · `M` · Recherche
+- [x] **2.4 „Bereit für offline“** · `M` · Recherche · Branch `claude/ux-offline-2-4`
   - **Was:** Pro Spiel: „Ready“ oder „Start online once“. Steams Offline-Modus muss vorher online aktiviert worden sein – herausfinden, woran man das erkennt (z. B. `loginusers.vdf`, letzter erfolgreicher Online-Start).
   - **Design:** `Detail.tsx` → Zeile „Offline“.
+  - **Stand** (`claude/ux-offline-2-4`): Recherche – Steams Offline-Modus braucht ein gemerktes Konto (`config/loginusers.vdf`: `RememberPassword` 1; auf diesem Mac gesetzt). Pro installiertem Spiel auf der Detailseite „Offline: Ready / Start online once / Update first / Needs internet / Not yet“ mit Erklärung beim Darüberfahren (`OfflineReadiness.swift`): kein gemerktes Konto → „Not yet“; Steam nennt keinen Einzelspielermodus oder eigener Launcher mit Anmeldung → „Needs internet“; Update wartet → „Update first“; noch nie gestartet → „Start online once“; sonst „Ready“. Heuristik – was ein Spiel intern online prüft (DRM), sieht Nightforge nicht. Test `tests/OfflineReadinessTest/`.
 
 - [ ] **2.5 Barrierefreiheit** · `S` · teilweise in `claude/ux-accessibility-2-5`
   - **Was:** „Reduce motion“ (folgt `NSWorkspace.accessibilityDisplayShouldReduceMotion`, abschaltbar): kein Lampen-Flackern, kein Cover-Zoom, nur Überblenden. „Larger text“ (eine Stufe größer). VoiceOver-Labels für alle Icon-Buttons und Abzeichen.

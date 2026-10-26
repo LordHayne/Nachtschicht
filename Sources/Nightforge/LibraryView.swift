@@ -801,6 +801,14 @@ private struct GameDetail: View {
                 if !game.bottle.isBuiltIn && game.platform == .windows {  // only means something with several CrossOver bottles
                     Stat(label: L10n.t("Bottle"), value: game.bottle.name)
                 }
+                if !compact && game.isInstalled {
+                    let offline = OfflineReadiness.of(game, analysis: model.insights[game.appID]?.analysis,
+                                                      accountRemembered: OfflineReadiness.accountRemembered(steamRoot: game.steamRoot))
+                    Stat(label: L10n.t("Offline"), value: offline.label)
+                        .help(offline.help)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityHint(offline.help)
+                }
             }
 
             if game.isVROnly {

@@ -529,6 +529,24 @@ enum L10n {
         "Steam is syncing your save with the Steam Cloud …": "Steam gleicht deinen Spielstand mit der Steam Cloud ab …",
         "No Steam Cloud for this game – its saves are on this Mac.": "Keine Steam Cloud für dieses Spiel – seine Spielstände liegen auf diesem Mac.",
 
+        // Offline
+        "Offline": "Offline",
+        "Ready": "Bereit",
+        "Start online once": "Einmal online starten",
+        "Update first": "Erst aktualisieren",
+        "Needs internet": "Braucht Internet",
+        "Not yet": "Noch nicht",
+        "Plays without internet: Steam remembers your account and nothing in the game needs to be online.":
+            "Spielbar ohne Internet: Steam merkt sich dein Konto, und im Spiel muss nichts online sein.",
+        "Start it once while online – many games set themselves up the first time. After that it plays offline.":
+            "Starte es einmal mit Internet – viele Spiele richten sich beim ersten Mal ein. Danach läuft es offline.",
+        "An update is waiting; Steam won't start the game offline until it's downloaded.":
+            "Ein Update wartet; Steam startet das Spiel offline erst, wenn es geladen ist.",
+        "Steam lists no single-player mode for it – it needs internet.": "Steam nennt keinen Einzelspielermodus – es braucht Internet.",
+        "It starts through %@, which signs in online.": "Es startet über %@, das sich online anmeldet.",
+        "Steam doesn't remember your account: sign in once with “Remember me” so it can start offline.":
+            "Steam merkt sich dein Konto nicht: melde dich einmal mit „Angemeldet bleiben“ an, damit es offline starten kann.",
+
         // Library filters
         "Sort": "Sortieren",
         "Recently played": "Zuletzt gespielt",

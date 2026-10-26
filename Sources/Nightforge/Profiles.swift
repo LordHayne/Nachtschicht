@@ -4,6 +4,11 @@ import Foundation
 /// Nightforge's own Mac profiles (scripts/build-profiles.py). Applied silently at launch.
 struct GameProfile: Decodable, Equatable {
     var name: String?
+    /// Where it comes from: "mac" (Nightforge's own, tested on Macs), "umu", "anticheat", or a
+    /// mix like "umu+mac".
+    var source: String?
+    /// What testing found, for Nightforge's own profiles ("Tested 2026-10-26 on M5: …").
+    var note: String?
     /// Graphics layer for games left on "Automatic".
     var graphics: GraphicsLayer?
     /// Appended to the game's command line.
@@ -52,6 +57,7 @@ struct GameProfile: Decodable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case source, note
         case name, graphics, arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX, frameLimit
         case vulkanSamplers, preferWindows, saves, antiCheat, geforceNow, avx, fileEdits
     }
@@ -69,6 +75,8 @@ struct GameProfile: Decodable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try? container.decodeIfPresent(String.self, forKey: .name)
+        source = try? container.decodeIfPresent(String.self, forKey: .source)
+        note = try? container.decodeIfPresent(String.self, forKey: .note)
         // An unknown layer from a newer list just means "no preference" here.
         graphics = (try? container.decodeIfPresent(String.self, forKey: .graphics)).flatMap { $0.flatMap(GraphicsLayer.init(rawValue:)) }
         arguments = try? container.decodeIfPresent([String].self, forKey: .arguments)
@@ -131,6 +139,13 @@ actor ProfileStore {
         if !refreshed { await refresh() }
         loadLocalIfNeeded()
         return profiles?[appID]
+    }
+
+    /// Every game's profile from the list at hand, without waiting for the online copy (like
+    /// `preferWindows`): for working out how well games run.
+    func knownProfiles() -> [Int: GameProfile] {
+        loadLocalIfNeeded()
+        return profiles ?? [:]
     }
 
     /// Games whose profile keeps them on the Windows version, from the list at hand: the library

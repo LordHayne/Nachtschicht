@@ -229,6 +229,18 @@ enum Engine {
         return String(cString: buffer)
     }
 
+    /// Runs engine work that waits on Wine or copies files (regedit, wineserver -k, installs) away
+    /// from the main thread, so the window and the controller keep responding meanwhile.
+    @discardableResult
+    static func offMain<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
+        await Task.detached(priority: .userInitiated) { work() }.value
+    }
+
+    @discardableResult
+    static func offMain<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+        try await Task.detached(priority: .userInitiated) { try work() }.value
+    }
+
     /// Ends every Windows process in Nightforge's prefix.
     static func stopAll(_ wine: URL) {
         let server = Process()

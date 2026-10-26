@@ -86,8 +86,8 @@ final class SetupModel: ObservableObject {
             }
             progress = nil
             guard let wine = Engine.wineBinary(in: engineDir) else { throw SetupError.engineBroken }
-            try Engine.installGraphics(graphicsDir, into: wine,
-                                       matchesEngine: graphicsComponent.version.hasPrefix(engineComponent.version + "-"))
+            let matchesEngine = graphicsComponent.version.hasPrefix(engineComponent.version + "-")
+            try await Engine.offMain { try Engine.installGraphics(graphicsDir, into: wine, matchesEngine: matchesEngine) }
 
             step = .environment
             phase = .running(.environment)
@@ -95,13 +95,16 @@ final class SetupModel: ObservableObject {
                 try FileManager.default.createDirectory(at: Engine.prefix, withIntermediateDirectories: true)
                 guard try await Engine.run(wine, ["wineboot", "--init"]) == 0 else { throw SetupError.environmentFailed }
             }
-            Engine.installGameBundle(wine: wine)
-            Engine.detachUserFolders()
+            await Engine.offMain {
+                Engine.installGameBundle(wine: wine)
+                Engine.detachUserFolders()
+            }
 
             if let dxvk = manifest.component(Engine.dxvkID) {
-                try Engine.installDXVK(try await ComponentStore.shared.install(dxvk), wine: wine)
+                let dxvkDir = try await ComponentStore.shared.install(dxvk)
+                try await Engine.offMain { try Engine.installDXVK(dxvkDir, wine: wine) }
             }
-            Engine.applyGameEnvironment(wine: wine)  // games started from the first Steam need it too
+            await Engine.offMain { Engine.applyGameEnvironment(wine: wine) }  // games started from the first Steam need it too
 
             step = .steam
             phase = .running(.steam)
@@ -176,7 +179,7 @@ final class SetupModel: ObservableObject {
             // Steam unpacks its browser during the first update and starts it right away – still
             // unwrapped, i.e. black. Wrap it and restart Steam once that happens.
             if Engine.installWebHelperWrapper() {
-                Engine.stopAll(wine)
+                await Engine.offMain { Engine.stopAll(wine) }
                 try Engine.startSteam(wine)
                 lastRestart = Date()
                 continue
@@ -197,7 +200,7 @@ final class SetupModel: ObservableObject {
             if stalled || gone {
                 restarts += 1
                 guard restarts <= 5 else { throw SetupError.steamWontStart }
-                if stalled { Engine.stopAll(wine) }
+                if stalled { await Engine.offMain { Engine.stopAll(wine) } }
                 try Engine.startSteam(wine)
                 lastRestart = Date()
             }

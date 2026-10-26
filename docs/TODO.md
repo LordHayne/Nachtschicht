@@ -37,7 +37,9 @@ Die Tests vom 26.10. liefen größtenteils noch auf Wine 11.18 (Gcenx). Seit PR 
   (D3DMetal meldet sich als AMD); Frame Generation und DLSS schalten sich beim ersten Start ein und stürzen ab.
 - **MTL_HUD** erscheint unter D3DMetal 4.0 nicht (Metal-4-Backend?).
 - **Lizenz:** GPTK 4.0b3 erlaubt die Weitergabe nur nicht-kommerziell und unverändert. Nightforge muss
-  kostenlos bleiben, D3DMetal.framework wird nur ganz und unverändert weitergegeben.
+  kostenlos bleiben, D3DMetal.framework wird nur ganz und unverändert weitergegeben. Kein Streaming-Dienst
+  damit (2C). Apple kann die Lizenz jederzeit beenden (Abschnitt 5). Plan B wäre dann, dass Nightforge das
+  Toolkit aus Apples eigenem Download holt, wie die kommerzielle App Apara es macht.
 
 ## Steam und Start
 
@@ -106,6 +108,36 @@ Die Tests vom 26.10. liefen größtenteils noch auf Wine 11.18 (Gcenx). Seit PR 
   der Stand von 2020 ohne Online-Spiel.
 - Übersicht nach DX12- und winecx-Tests aktualisieren (Liste: `ISteamChartsService/GetMostPlayedGames`).
 
+## Wartung und Community
+
+Ziel: Mac-Gaming gemeinsam voranbringen, keine Konkurrenz und kein Geld. Nightforge soll nicht an einer
+Person hängen (Whisky ist 2025 daran gescheitert).
+
+- **Hinweis auf CrossOver.** In der README und in den Einstellungen (Über/Hilfe) erwähnen, dass CodeWeavers
+  einen großen Teil der Wine-Entwicklung finanziert und CrossOver für Fortgeschrittene und Support die
+  richtige Wahl ist. Freundlich, ohne Vergleichstabelle.
+- **Nur geprüfte Komponenten ausliefern.** `components.yml` committet neue Versionen heute direkt ins
+  `manifest.json` auf `main`. Besser: ein Bot-PR, den die Tests (`tests/*/run.sh` auf einem macOS-Runner)
+  durchlaufen müssen und der erst nach einem kurzen Spieltest gemergt wird. Dazu ein Rückweg: Die vorherige
+  Version bleibt im Manifest, und Nightforge kann auf sie zurückfallen (`ComponentStore`).
+- **Tests in der CI.** Die Testprogramme unter `tests/` bei jedem PR auf GitHubs macOS-Runner laufen lassen
+  (für öffentliche Repos kostenlos). Echte Spiele bleiben Handarbeit.
+- **Problembericht ausbauen.** `ProblemReport` öffnet schon ein GitHub-Issue. Ergänzen: Komponenten-Versionen,
+  Grafik-Layer und Profil mitschicken, Issue-Vorlage im Repo, der Nutzer sieht vorher alles. Nichts automatisch
+  senden, kein Tracking. Vorher den Benutzernamen-Befund unter „Aus dem Code-Audit“ beheben.
+- **Profile von der Community.** `profiles/` als Ort beschreiben, an dem jeder per PR ein Spiel eintragen kann:
+  kurze Anleitung (`CONTRIBUTING.md`), Format erklären, Prüfung per CI (JSON gültig, Felder bekannt).
+  Später überlegen, die Profile als offene Liste auch anderen Projekten anzubieten (ähnlich ProtonDB).
+- **Fixes an die Ursprungsprojekte zurückgeben.** Kandidaten: DXMT-Patch für Wine 11 (3Shain/dxmt), der
+  winebus-Xbox-ID-Patch und msync (Gcenx), die Patches in `engine/patches`. Was dort gemergt wird, müssen wir
+  nicht bei jedem Update selbst nachziehen.
+- **macOS-Betas früh testen.** Jeden Juni mit der neuen Beta Einrichtung, Steam-Start, ein DXMT-, ein D3DMetal- und
+  ein Mac-Spiel durchgehen, damit der September keine Überraschung wird.
+- **Ehrlich sagen, was geht.** Eine Liste „geprüft läuft“ in README oder App, alles andere als „probier es aus“.
+  Schützt vor Erwartungen, die niemand allein erfüllen kann.
+- **Mehr Leute mit Schreibrechten.** Sobald jemand regelmäßig beiträgt, Mitbetreuer aufnehmen. Releases und
+  Komponenten-Pakete (`scripts/package-d3dmetal.sh`) so dokumentieren, dass sie nicht nur auf einem Mac gehen.
+
 ## Aus dem Code-Audit
 
 Befunde vom 26.10., die noch nicht behoben sind. Behoben sind: Spiele, die ein Engine-Wechsel oder
@@ -123,9 +155,11 @@ auf dem Main-Thread und sich überholende Rescans.
 - **Build-Eingaben ohne Prüfsumme.** In `graphics.yml` sind das `WINE_TOOLCHAIN_URL`, das Gcenx-Archiv, der
   inotify-Header und Klone per Tag, in `tools.yml` das cabextract-Archiv. Dazu kommt `brew install … || true`.
   Die Actions sind per Tag statt per SHA festgelegt, Dependabot fehlt.
-- **LGPL beim Grafik-Paket.** Das `graphics-*`-Release bringt gepatchte Wine- und DXMT-Binaries ohne Lizenztexte
-  und ohne Quellarchiv. Lizenzdateien ins Tarball legen und das Quellarchiv mit Patches und Commit anhängen.
-  Bei cabextract (GPL, `tools.yml`) genauso.
+- **Lizenztexte und Quellen der eigenen Pakete** sind in `graphics.yml`, `gamepad.yml` und `tools.yml` eingebaut
+  (Lizenzen im Paket, Quellarchiv als zweites Release-Asset). Wirksam erst mit dem nächsten Lauf auf `main`: die
+  bestehenden Releases `graphics-*`, `gamepad-winecx*` und `cabextract-*` haben noch keine. Nach dem Lauf prüfen,
+  dass `update-components.py` weiter genau ein Asset findet. DXMT v0.80 ist MIT (nicht LGPL, wie die alten
+  Release-Notes sagen), erst neuere DXMT-Versionen sind LGPL. Beim nächsten DXMT-Update die Lizenzdateien prüfen.
 - **Lizenzhinweise im App-Bundle.** Es fehlen die Lizenz der Vulkan-Headers (im Vulkan-Layer einkompiliert) und
   die mingw-Runtime im `steamwebhelper.exe`. Eine `THIRD_PARTY_NOTICES` in `build.sh` mitkopieren.
 - **Problembericht.** `GameLog` entfernt nur `$HOME`. Windows-Pfade wie `C:\users\<name>` oder

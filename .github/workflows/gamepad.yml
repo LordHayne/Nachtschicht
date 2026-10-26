@@ -37,6 +37,8 @@ jobs:
           git fetch -q --depth 1 origin "$WINECX_COMMIT"
           git checkout -q FETCH_HEAD
           cd ..
+          # Wine is LGPL: the untouched winecx source goes into the release next to the package.
+          git -C winecx archive --format=tar --prefix="winecx-$WINECX_COMMIT/" HEAD | tar -cJf winecx-source.tar.xz @-
           git clone -q --depth 1 --branch "$SDL_HEADERS_TAG" https://github.com/libsdl-org/SDL.git sdl
           mkdir -p gcenx
           curl -fsSL "https://github.com/Gcenx/macOS_Wine_builds/releases/download/$GCENX_WINE/wine-devel-$GCENX_WINE-osx64.tar.xz" \
@@ -106,17 +108,29 @@ jobs:
           cp build/dlls/winebus.sys/winebus.so "$root/x86_64-unix/"
           cp "gcenx/Wine Devel.app/Contents/Resources/wine/lib/libSDL2-2.0.0.dylib" "$root/lib/"
           cp sdl/LICENSE.txt "$root/LICENSE-SDL2.txt"
-          printf 'winebus.so: Wine (LGPL-2.1-or-later), built from https://github.com/dappermint/winecx at %s with the SDL bus.\nlibSDL2-2.0.0.dylib: SDL2 (zlib), from the Gcenx Wine %s build.\n' \
-            "$WINECX_COMMIT" "$GCENX_WINE" > "$root/README.txt"
+          cp winecx/COPYING.LIB "$root/COPYING-Wine.txt"
+          cp winecx/LICENSE "$root/LICENSE-Wine.txt"
+          printf 'winebus.so: Wine (LGPL-2.1-or-later, COPYING-Wine.txt), built from https://github.com/dappermint/winecx at %s with the SDL bus.\nlibSDL2-2.0.0.dylib: SDL2 (zlib), from the Gcenx Wine %s build.\nCorresponding source: the release asset %s-source.tar.xz (untouched winecx, Nightforge'"'"'s patches, gamepad.yml as the build script).\n' \
+            "$WINECX_COMMIT" "$GCENX_WINE" "$root" > "$root/README.txt"
           tar -czf "$root.tar.gz" "$root"
+          # .tar.xz so it doesn't match the package asset pattern in components/sources.json.
+          source="$root-source"
+          mkdir -p "$source/patches"
+          mv winecx-source.tar.xz "$source/"
+          cp nightforge/engine/patches/winebus-winecx-*.patch "$source/patches/"
+          cp nightforge/.github/workflows/gamepad.yml "$root/COPYING-Wine.txt" "$root/LICENSE-Wine.txt" "$root/README.txt" "$source/"
+          tar -cJf "$source.tar.xz" "$source"
           echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "ASSET=$root.tar.gz" >> "$GITHUB_ENV"
-          shasum -a 256 "$root.tar.gz"
+          echo "SOURCE=$source.tar.xz" >> "$GITHUB_ENV"
+          shasum -a 256 "$root.tar.gz" "$source.tar.xz"
 
+      # From main only, like graphics.yml: a run on another branch just checks that it builds.
       - name: Publish release
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "gamepad-winecx$VERSION" "$ASSET" --repo "$GITHUB_REPOSITORY" --latest=false \
+          gh release create "gamepad-winecx$VERSION" "$ASSET" "$SOURCE" --repo "$GITHUB_REPOSITORY" --latest=false \
             --target "$GITHUB_SHA" --title "Gamepad (winecx $VERSION)" \
-            --notes "winebus.so for winecx $RUNTIME with the SDL bus (DualSense, DualShock 4 and others as XInput pads), plus SDL2 from the Gcenx engine. Licences: Wine LGPL-2.1-or-later, SDL2 zlib. Source: https://github.com/dappermint/winecx ($WINECX_COMMIT)."
+            --notes "winebus.so for winecx $RUNTIME with the SDL bus (DualSense, DualShock 4 and others as XInput pads), plus SDL2 from the Gcenx engine. Licences: Wine LGPL-2.1-or-later, SDL2 zlib (texts inside the package). Corresponding source: $SOURCE (untouched winecx $WINECX_COMMIT, Nightforge's patches, the build workflow)."

@@ -63,6 +63,7 @@ enum L10n {
         "Launching …": "Startet …",
         "Options": "Optionen",
         "Select": "Auswählen",
+        "Move": "Bewegen",
         "Something went wrong": "Etwas ist schiefgelaufen",
 
         // Steam store & Mac versions

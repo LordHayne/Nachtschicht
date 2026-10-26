@@ -126,21 +126,39 @@ final class InputRouter {
                 self?.model?.toggleLibrary()
             }
         }
-        // In a dialog or sheet A and B are its Return and Esc: confirm, or cancel and close.
+        // A presses the highlighted control (PadFocus). Otherwise, in a dialog or sheet, A and B
+        // are its Return and Esc: confirm, or cancel and close.
         pad.buttonA.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
             MainActor.assumeIsolated {
-                if let dialog = self?.dialog { Self.press(36, "\r", in: dialog) } else { self?.primary() }
+                if let key = NSApp.keyWindow, let item = PadFocus.shared.focusedItem(in: key) {
+                    item.activate()
+                } else if let window = self?.padWindow, window !== Self.mainWindow {
+                    // Nothing highlighted yet: the first press shows where you are, it doesn't save.
+                    PadFocus.shared.move(dx: 0, dy: 1, in: window)
+                } else if let dialog = self?.dialog {
+                    Self.press(36, "\r", in: dialog)
+                } else {
+                    self?.primary()
+                }
             }
         }
         pad.buttonB.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
             MainActor.assumeIsolated {
                 guard let self, let model = self.model else { return }
-                if model.showingOptions, NSApp.modalWindow == nil {
+                let main = Self.mainWindow
+                if let key = NSApp.keyWindow, key === main, PadFocus.shared.focusedItem(in: key) != nil {
+                    PadFocus.shared.clear()  // from the buttons back to the games
+                } else if model.showingOptions, NSApp.modalWindow == nil {
                     model.showingOptions = false
                 } else if let dialog = self.dialog {
-                    Self.press(53, "\u{1B}", in: dialog)
+                    // A window of its own (Settings) closes; a sheet or alert cancels.
+                    if dialog.sheetParent == nil, NSApp.modalWindow == nil {
+                        dialog.performClose(nil)
+                    } else {
+                        Self.press(53, "\u{1B}", in: dialog)
+                    }
                 } else {
                     model.showingLibrary = false
                 }
@@ -188,11 +206,19 @@ final class InputRouter {
     /// The window in front of the library when it's an alert or sheet (game options, Steam for
     /// Mac setup, a question): controller input belongs to it, not to the library behind.
     private var dialog: NSWindow? {
-        guard let main = NSApp.windows.first(where: { $0.title == "Nightforge" }) else { return nil }
+        guard let main = Self.mainWindow else { return nil }
         if let sheet = main.attachedSheet { return sheet }
         if let modal = NSApp.modalWindow { return modal }
         if let key = NSApp.keyWindow, key !== main, key.isVisible { return key }
         return nil
+    }
+
+    private static var mainWindow: NSWindow? { NSApp.windows.first { $0.title == "Nightforge" } }
+
+    /// The key window when its controls are on PadFocus's map (options, settings, setup sheets).
+    private var padWindow: NSWindow? {
+        guard let key = NSApp.keyWindow, PadFocus.shared.hasItems(in: key) else { return nil }
+        return key
     }
 
     /// One key press (down and up) into `window`, as if typed.
@@ -255,6 +281,26 @@ final class InputRouter {
     @discardableResult
     private func perform(_ step: Step) -> Bool {
         guard let model else { return false }
+        if let window = padWindow {
+            let focus = PadFocus.shared
+            if window !== Self.mainWindow {
+                focus.move(dx: step.dx, dy: step.dy, in: window)
+                return false
+            }
+            // Main window: the games have the pad until up on the start page enters the buttons
+            // above them; down past the lowest button hands back to the games.
+            if focus.focusedItem(in: window) != nil {
+                if !focus.move(dx: step.dx, dy: step.dy, in: window), step.dy > 0 {
+                    focus.clear()
+                    return true
+                }
+                return false
+            }
+            if step.dy < 0, !model.showingLibrary {
+                focus.move(dx: 0, dy: -1, in: window)
+                return true
+            }
+        }
         if step.dx != 0 { model.move(step.dx) }
         if step.dy > 0, !model.showingLibrary {
             model.showingLibrary = true
@@ -274,7 +320,7 @@ final class InputRouter {
         held = step
         repeatTimer?.invalidate()
         repeatTimer = nil
-        guard !step.isNone, model != nil, dialog == nil else { return }
+        guard !step.isNone, model != nil, dialog == nil || padWindow != nil else { return }
 
         guard !perform(step) else { return }
         repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.38, repeats: false) { [weak self] _ in

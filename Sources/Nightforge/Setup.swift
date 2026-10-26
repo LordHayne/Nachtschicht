@@ -72,7 +72,9 @@ final class SetupModel: ObservableObject {
             step = .engine
             phase = .running(.engine)
             let manifest = try await ComponentStore.shared.manifest()
-            guard let engineComponent = manifest.component(Engine.engineID),
+            // The engine every later start uses (winecx when the list has it), so a new Mac doesn't
+            // download one engine for setup and switch to another at the first start.
+            guard let engineComponent = Engine.engineComponent(in: manifest),
                   let graphicsComponent = Engine.graphicsComponent(in: manifest)
             else { throw ComponentError.noManifest }
 
@@ -81,13 +83,11 @@ final class SetupModel: ObservableObject {
             let engineDir = try await ComponentStore.shared.install(engineComponent) { value in
                 Task { @MainActor in self.progress = value * engineShare }
             }
-            let graphicsDir = try await ComponentStore.shared.install(graphicsComponent) { value in
+            _ = try await ComponentStore.shared.install(graphicsComponent) { value in
                 Task { @MainActor in self.progress = engineShare + value * (1 - engineShare) }
             }
             progress = nil
             guard let wine = Engine.wineBinary(in: engineDir) else { throw SetupError.engineBroken }
-            let matchesEngine = graphicsComponent.version.hasPrefix(engineComponent.version + "-")
-            try await Engine.offMain { try Engine.installGraphics(graphicsDir, into: wine, matchesEngine: matchesEngine) }
 
             step = .environment
             phase = .running(.environment)
@@ -95,16 +95,9 @@ final class SetupModel: ObservableObject {
                 try FileManager.default.createDirectory(at: Engine.prefix, withIntermediateDirectories: true)
                 guard try await Engine.run(wine, ["wineboot", "--init"]) == 0 else { throw SetupError.environmentFailed }
             }
-            await Engine.offMain {
-                Engine.installGameBundle(wine: wine)
-                Engine.detachUserFolders()
-            }
-
-            if let dxvk = manifest.component(Engine.dxvkID) {
-                let dxvkDir = try await ComponentStore.shared.install(dxvk)
-                try await Engine.offMain { try Engine.installDXVK(dxvkDir, wine: wine) }
-            }
-            await Engine.offMain { Engine.applyGameEnvironment(wine: wine) }  // games started from the first Steam need it too
+            // Graphics layers, D3DMetal, the controller package and the game environment, the same way
+            // every later start checks them (off the main thread: it copies files and runs regedit).
+            _ = try await Engine.ensureEngine()
 
             step = .steam
             phase = .running(.steam)

@@ -181,7 +181,7 @@
 
 ## Phase 3 – Der Kreis ums Spielen
 
-- [ ] **3.1 Sitzungsabschluss („Welcome back“)** · `M`
+- [ ] **3.1 Sitzungsabschluss („Welcome back“)** · `M` · teilweise in `claude/ux-session-3-1`
   - **Warum:** Wir denken bisher nur bis zum Start. Am Ende will man wissen: Ist der Spielstand sicher, kann ich zuklappen?
   - **Was:** Wenn das Spiel endet (Nightforge kommt ja schon nach vorne), Sheet mit:
     - Spielzeit dieser Sitzung und gesamt
@@ -191,6 +191,7 @@
   - **Wo:** `LibraryModel` (Erkennung Spielende), Steam-Cloud-Status aus dem Steam-Log/`remotecache.vdf` (recherchieren), `SaveTransfer.swift` (Speicherorte).
   - **Design:** `Overlays.tsx` → `SessionSummary`.
   - **Fertig wenn:** Erscheint nach jedem Spielende; die Bewertung wird lokal gespeichert und fließt in 1.3 (eigene Erfahrung schlägt Profil).
+  - **Stand** (`claude/ux-session-3-1`, teilweise): `SessionSummary.swift` – nach jedem von Nightforge gestarteten Spiel, das mindestens eine Minute lief, Sheet „Welcome back“: Spielzeit diesmal und insgesamt (Steams Zählung, ohne Doppelzählung), „How did it run?“ 👍/👎 mit Gründen (Stutters, Crashed, Low frame rate, Graphics glitches, Controller, Sound), „Play Again“ / „Done“. Bewertung lokal (`GameRatings`, UserDefaults) und in `Compatibility.rate` vor dem Profil (👍 → great, 👎 → tweaks mit „You said: …“; Anti-Cheat/VR bleiben „no“). Test in `tests/CompatibilityTest/`. Spielstand-Zeile: `CloudSaves.swift` liest `userdata/<Konto>/<App-ID>/remotecache.vdf` (pro Cloud-Datei `syncstate`, 1 = im Einklang); „Your save is in the Steam Cloud. You can close your Mac.“ erst, wenn Steam die Datei nach dem Spielende neu geschrieben hat und alle Dateien auf 1 stehen – vorher „Steam is syncing …“ (alle 2 s geprüft), nach einer Minute ohne Bestätigung „Steam syncs your save in the background.“, ohne Datei „No Steam Cloud for this game – its saves are on this Mac.“ Test `tests/CloudSavesTest/`. Die Bedeutung der anderen `syncstate`-Werte ist nicht dokumentiert – deshalb nur „1“ als sicher. Offen: „Use ‚Most compatible‘ next time“ (braucht 2.3).
 
 - [ ] **3.2 Spielstand-Konflikt lösen, bevor etwas überschrieben wird** · `L` · Recherche
   - **Was:** Weichen lokaler und Cloud-Spielstand voneinander ab: Vor dem Start „Keep this Mac · today 14:02 (Newer)“ vs. „Keep the cloud · yesterday“; der andere wird als Backup im Spielordner behalten. Play zeigt bis dahin „Choose a save first“.

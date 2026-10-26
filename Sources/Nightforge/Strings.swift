@@ -449,6 +449,31 @@ enum L10n {
         "In Applications – show it": "In den Programmen – zeigen",
         "Add to Applications – Spotlight and Launchpad find it": "Zu den Programmen hinzufügen – Spotlight und Launchpad finden es",
 
+        // Welcome back
+        "Welcome back": "Willkommen zurück",
+        "%@ this time · %@ in total": "%@ diesmal · %@ insgesamt",
+        "How did it run?": "Wie lief es?",
+        "Well": "Gut",
+        "Not well": "Nicht gut",
+        "Stutters": "Ruckelt",
+        "Crashed": "Abgestürzt",
+        "Low frame rate": "Niedrige Bildrate",
+        "Graphics glitches": "Grafikfehler",
+        "Sound": "Ton",
+        "Thanks – noted on this Mac. It shapes how Nightforge rates the game for you.":
+            "Danke – auf diesem Mac vermerkt. Es fließt in Nightforges Bewertung des Spiels für dich ein.",
+        "Play Again": "Nochmal spielen",
+        "Done": "Fertig",
+        "You said it runs well.": "Du hast gesagt, es läuft gut.",
+        "You said it didn't run well.": "Du hast gesagt, es lief nicht gut.",
+        "You said: %@.": "Du hast gesagt: %@.",
+
+        // Cloud saves
+        "Your save is in the Steam Cloud. You can close your Mac.": "Dein Spielstand ist in der Steam Cloud. Du kannst den Mac zuklappen.",
+        "Steam syncs your save in the background.": "Steam gleicht deinen Spielstand im Hintergrund ab.",
+        "Steam is syncing your save with the Steam Cloud …": "Steam gleicht deinen Spielstand mit der Steam Cloud ab …",
+        "No Steam Cloud for this game – its saves are on this Mac.": "Keine Steam Cloud für dieses Spiel – seine Spielstände liegen auf diesem Mac.",
+
         // Library filters
         "Sort": "Sortieren",
         "Recently played": "Zuletzt gespielt",

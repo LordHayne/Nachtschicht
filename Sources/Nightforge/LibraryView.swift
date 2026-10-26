@@ -85,6 +85,9 @@ struct LibraryView: View {
             actions: { Button("OK") {} },
             message: { Text(model.errorMessage ?? "") }
         )
+        .sheet(item: $model.sessionSummary) { summary in
+            SessionSummarySheet(summary: summary)
+        }
         .sheet(item: $model.failedLaunch) { failed in
             FailedLaunchSheet(failed: failed)
         }

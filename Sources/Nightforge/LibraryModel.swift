@@ -170,6 +170,10 @@ final class LibraryModel: ObservableObject {
     /// Games Nightforge started, from when their process shows up until it ends.
     private var startedHere: Set<String> = []
     private var playing: Set<String> = []
+    /// When each of them started running, and the play time Steam had for it then.
+    private var sessionStarts: [String: (date: Date, totalBefore: Int)] = [:]
+    /// The "Welcome back" sheet after a real session (a minute or more).
+    @Published var sessionSummary: SessionSummary?
     private var goneFor = 0
     private var idleLooks = 0
 
@@ -177,6 +181,9 @@ final class LibraryModel: ObservableObject {
     /// launcher handing over to the game doesn't count), Nightforge comes back to the front: the
     /// controller keeps working, and neither the desktop nor Steam is what the player sees.
     private func watchForGameEnd(_ found: [String: pid_t]) {
+        for id in startedHere.intersection(found.keys) where sessionStarts[id] == nil {
+            sessionStarts[id] = (Date(), allGames.first { $0.id == id }?.playtimeMinutes ?? 0)
+        }
         playing.formUnion(startedHere.intersection(found.keys))
         startedHere.subtract(playing)
         guard !playing.isEmpty else { return }
@@ -186,9 +193,19 @@ final class LibraryModel: ObservableObject {
         }
         goneFor += 1
         guard goneFor >= 3 else { return }
+        let ended = playing
         playing = []
         goneFor = 0
+        let sessions = ended.compactMap { id -> SessionSummary? in
+            guard let start = sessionStarts.removeValue(forKey: id), let game = allGames.first(where: { $0.id == id }) else { return nil }
+            let minutes = Int(Date().timeIntervalSince(start.date) / 60)
+            // Shorter is a start that didn't take (LaunchHealth deals with those).
+            // The processes were gone a few looks ago (~6–9 s, up to 30 s in the background).
+            return minutes >= 1 ? SessionSummary(game: game, minutes: minutes, totalBefore: start.totalBefore,
+                                                 endedAt: Date().addingTimeInterval(-30)) : nil
+        }
         comeBack()
+        sessionSummary = sessions.max { $0.minutes < $1.minutes }
     }
 
     private func comeBack() {

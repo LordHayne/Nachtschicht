@@ -171,6 +171,23 @@ struct EngineLayoutTest {
             }
         }
 
+        // MARK: Gamepad package
+        let pad = work.appendingPathComponent("gamepad/nightforge-gamepad-winecx-4.7.3-1", isDirectory: true)
+        write(Data("sdl winebus".utf8), pad.appendingPathComponent("x86_64-unix/winebus.so"))
+        write(Data("sdl2".utf8), pad.appendingPathComponent("lib/libSDL2-2.0.0.dylib"))
+        let unixDir = winecx.appendingPathComponent("Libraries/Wine/lib/wine/x86_64-unix", isDirectory: true)
+        write(Data("plain winebus".utf8), unixDir.appendingPathComponent("winebus.so"))
+        try? Engine.installGamepad(work.appendingPathComponent("gamepad"), into: wine)
+        check((try? String(contentsOf: unixDir.appendingPathComponent("winebus.so"), encoding: .utf8)) == "sdl winebus",
+              "winebus.so with SDL goes into the engine")
+        check((try? String(contentsOf: unixDir.appendingPathComponent("winebus.so.engine"), encoding: .utf8)) == "plain winebus",
+              "the engine's own is kept")
+        check(fm.fileExists(atPath: winecx.appendingPathComponent("Libraries/Wine/lib/libSDL2-2.0.0.dylib").path),
+              "SDL2 sits in the engine's lib, where winebus.so's rpath looks")
+        try? Engine.installGamepad(work.appendingPathComponent("gamepad"), into: wine)
+        check((try? String(contentsOf: unixDir.appendingPathComponent("winebus.so.engine"), encoding: .utf8)) == "plain winebus",
+              "installing again keeps the engine's original")
+
         // MARK: CrossOver's user folder
         let users = work.appendingPathComponent("prefix/drive_c/users", isDirectory: true)
         try? fm.createDirectory(at: users.appendingPathComponent("thomas"), withIntermediateDirectories: true)

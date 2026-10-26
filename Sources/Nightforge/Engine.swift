@@ -11,6 +11,9 @@ enum Engine {
     static let winecxEngineID = "winecx"
     /// Apple's D3DMetal (Game Porting Toolkit, /redist/lib): Direct3D 10–12 → Metal.
     static let d3dMetalID = "d3dmetal"
+    /// winebus.so with the SDL bus for winecx, plus SDL2 (.github/workflows/gamepad.yml): without it
+    /// a DualSense or DualShock 4 never reaches Windows games on winecx.
+    static let gamepadID = "gamepad"
 
     static func engineComponent(in manifest: ComponentManifest) -> Component? {
         manifest.component(winecxEngineID) ?? manifest.component(engineID)
@@ -357,6 +360,7 @@ enum Engine {
         // prefix as native DLLs (see `layerOverrides`).
         let gptk = isGPTKCapable(wine: wine)
         let d3dMetal = gptk ? manifest.component(d3dMetalID) : nil
+        let gamepad = gptk ? manifest.component(gamepadID) : nil
         // Copying the graphics files again would give them new inodes and so rebuild the game
         // bundle Steam runs from, and every regedit starts Wine: each part is only redone when what
         // it installs has changed. The stamps live in what they describe, so a fresh engine or
@@ -366,13 +370,14 @@ enum Engine {
             .appendingPathComponent("lib/wine", isDirectory: true), name: "graphics")
         let moltenVK = manifest.component(moltenVKID)
         let graphicsWanted = "\(graphics.id) \(graphics.version) engine-match \(matchesEngine) moltenvk \(moltenVK?.version ?? "engine")"
-            + " d3dmetal \(d3dMetal?.version ?? "-")"
+            + " d3dmetal \(d3dMetal?.version ?? "-") gamepad \(gamepad?.version ?? "-")"
         if readStamp(graphicsStamp) != graphicsWanted, !gameRunning, !windowsGameRunning {
             try installGraphics(graphicsDir, into: wine, matchesEngine: matchesEngine, nativeInPrefix: gptk)
             var moltenVKDir: URL?
             if let moltenVK { moltenVKDir = try await store.install(moltenVK) }
             try installMoltenVK(moltenVKDir, into: wine)
             if let d3dMetal { try installD3DMetal(try await store.install(d3dMetal), into: wine) }
+            if let gamepad { try installGamepad(try await store.install(gamepad), into: wine) }
             writeStamp(graphicsStamp, graphicsWanted)
         }
         installGameBundle(wine: wine)  // after the graphics: its links must point at the new files
@@ -646,6 +651,35 @@ enum Engine {
                 try fm.removeItem(at: bridge)
             }
             try fm.createSymbolicLink(atPath: bridge.path, withDestinationPath: "../../external/libd3dshared.dylib")
+        }
+    }
+
+    /// Puts the gamepad package's winebus.so in place of the engine's (kept as winebus.so.engine)
+    /// and its SDL2 next to the engine's other libraries, where winebus.so's rpath finds it.
+    /// Copied to a new file and swapped in: a running Wine session keeps the one it has loaded.
+    static func installGamepad(_ packageDir: URL, into wine: URL) throws {
+        let fm = FileManager.default
+        guard let files = fm.enumerator(at: packageDir, includingPropertiesForKeys: nil),
+              let bus = (files.compactMap { $0 as? URL }.first { $0.lastPathComponent == "winebus.so" })
+        else { throw SetupError.engineBroken }
+        let package = bus.deletingLastPathComponent().deletingLastPathComponent()
+        let lib = wine.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib", isDirectory: true)
+        let pairs = [(bus, lib.appendingPathComponent("wine/x86_64-unix/winebus.so")),
+                     (package.appendingPathComponent("lib/libSDL2-2.0.0.dylib"), lib.appendingPathComponent("libSDL2-2.0.0.dylib"))]
+        for (source, target) in pairs where fm.fileExists(atPath: source.path) {
+            if target.lastPathComponent == "winebus.so", fm.fileExists(atPath: target.path) {
+                let original = target.appendingPathExtension("engine")
+                if !fm.fileExists(atPath: original.path) { try fm.copyItem(at: target, to: original) }
+            }
+            if fm.fileExists(atPath: target.path), fm.contentsEqual(atPath: source.path, andPath: target.path) { continue }
+            let staged = target.appendingPathExtension("new")
+            try? fm.removeItem(at: staged)
+            try fm.copyItem(at: source, to: staged)
+            if fm.fileExists(atPath: target.path) {
+                _ = try fm.replaceItemAt(target, withItemAt: staged)
+            } else {
+                try fm.moveItem(at: staged, to: target)
+            }
         }
     }
 

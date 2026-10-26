@@ -14,8 +14,10 @@ on:
       - "engine/**"
       - ".github/workflows/graphics.yml"
 
+# Only the package job publishes; the build jobs run upstream code (DXMT, LLVM, Wine) and get a
+# read-only token that isn't left in the checkout.
 permissions:
-  contents: write
+  contents: read
 
 env:
   WINE_VERSION: "11.18"
@@ -69,6 +71,8 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Fetch DXMT and apply Nightforge patches
         run: |
@@ -125,6 +129,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: nightforge
+          persist-credentials: false
 
       - name: Tools and sources
         run: |
@@ -198,6 +203,8 @@ jobs:
   package:
     needs: [dxmt, winemac]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:

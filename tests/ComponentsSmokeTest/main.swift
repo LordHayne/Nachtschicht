@@ -70,6 +70,23 @@ do {
     check(await store.installedPath(for: broken) == nil, "checksum mismatch is refused and not installed")
 }
 
+// A list with entries this version can't use keeps the rest: unknown kind, a version that would
+// leave the components folder, plain HTTP, a missing field.
+func entry(_ id: String, kind: String = "tool", version: String = "1.0", url: String = "https://example.com/a.tar.gz") -> String {
+    #"{"id":"\#(id)","kind":"\#(kind)","version":"\#(version)","url":"\#(url)","sha256":"00","size":1,"license":"MIT","source":"https://example.com"}"#
+}
+let entries = [
+    entry("good"), entry("future", kind: "plugin"), entry("escape", version: "../../Documents"),
+    entry("plain", url: "http://example.com/a.tar.gz"), entry("hidden", url: "https://example.com/.."),
+    #"{"id":"incomplete"}"#,
+]
+let mixed = #"{"schemaVersion":1,"generated":"now","components":["# + entries.joined(separator: ",") + "]}"
+let lenient = try JSONDecoder().decode(ComponentManifest.self, from: Data(mixed.utf8))
+check(lenient.components.map(\.id) == ["good"], "only the usable entry is kept (\(lenient.components.map(\.id)))")
+let bundled = try JSONDecoder().decode(ComponentManifest.self, from: Data(contentsOf: URL(fileURLWithPath: "components/manifest.json")))
+let raw = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: "components/manifest.json"))) as? [String: Any]
+check(bundled.components.count == (raw?["components"] as? [Any])?.count, "every component of the shipped list is kept")
+
 print("All component checks passed.")
 
 final class ProgressBox: @unchecked Sendable {

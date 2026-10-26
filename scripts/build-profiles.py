@@ -63,6 +63,30 @@ HARMLESS_ANTICHEATS = {"VAC"}
 # controllers for every game.
 IGNORED_REGISTRY_PREFIXES = ("hklm\\system\\currentcontrolset\\services\\winebus",)
 
+# Where a profile may write at all: a game's own settings under Software, and drive letters. Never
+# autostart entries, file associations, policies or Wine's own settings (Engine.isAllowedRegistryKey).
+REGISTRY_ROOTS = {"hkcu": "hkey_current_user", "hklm": "hkey_local_machine"}
+REGISTRY_BLOCKED_VENDORS = {"microsoft", "classes", "policies", "wine", "wow6432node"}
+
+
+def registry_key_allowed(key) -> bool:
+    if not isinstance(key, str) or any(ord(c) < 0x20 or c in "[]" for c in key):
+        return False
+    lower = key.lower()
+    short, _, rest = lower.partition("\\")
+    lower = REGISTRY_ROOTS.get(short, short) + "\\" + rest
+    drives = "hkey_local_machine\\system\\mounteddevices"
+    if lower == drives or lower.startswith(drives + "\\"):
+        return True
+    for root in ("hkey_current_user\\software\\", "hkey_local_machine\\software\\"):
+        if lower.startswith(root):
+            rest = lower[len(root):]
+            if rest.startswith("wow6432node\\"):
+                rest = rest[len("wow6432node\\"):]
+            vendor = rest.split("\\", 1)[0]
+            return vendor != "" and vendor not in REGISTRY_BLOCKED_VENDORS
+    return False
+
 # Settings-style winetricks arguments ("sound=alsa", "hidewineexports=enable") are Linux/Proton
 # knobs; Steam runtime verbs that make no sense outside Proton are dropped as well.
 IGNORED_VERBS = {"ubisoftconnect"}
@@ -137,6 +161,8 @@ def translate(path: pathlib.Path):
                 partial = True
                 continue
             if str(bound["folder"]).lower().startswith(IGNORED_REGISTRY_PREFIXES):
+                continue
+            if not registry_key_allowed(bound["folder"]):
                 continue
             entry = {"key": str(bound["folder"])}
             for source, target in (("name", "name"), ("typ", "type"), ("value", "value")):

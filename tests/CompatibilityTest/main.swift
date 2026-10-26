@@ -53,7 +53,7 @@ struct CompatibilityTest {
     static func main() throws {
         typealias Facts = Compatibility.Facts
         let blocked = AntiCheatBlock(antiCheat: ["BattlEye"], geforceNow: nil)
-        let streamable = AntiCheatBlock(antiCheat: ["BattlEye"], geforceNow: 42)
+        let streamable = AntiCheatBlock(antiCheat: ["BattlEye"], geforceNow: "42")
 
         // What stops a game.
         check(level(Facts(vrOnly: true)) == .no, "VR only doesn't run")

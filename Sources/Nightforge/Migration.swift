@@ -39,7 +39,7 @@ enum LegacyMigration {
     /// Moves `old` to `new`. When `new` exists already (a start whose move failed goes on to create
     /// it, e.g. for the component list), whatever it lacks still comes over – above all the prefix
     /// with Steam and the games – instead of being left behind for good. False when a move failed.
-    private static func moveContents(of old: URL, into new: URL) -> Bool {
+    static func moveContents(of old: URL, into new: URL) -> Bool {
         let fm = FileManager.default
         guard fm.fileExists(atPath: new.path) else { return (try? fm.moveItem(at: old, to: new)) != nil }
         for item in (try? fm.contentsOfDirectory(at: old, includingPropertiesForKeys: nil)) ?? [] {

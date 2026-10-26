@@ -43,6 +43,19 @@ class TranslateTests(unittest.TestCase):
         self.assertEqual(profile["registry"], [{"key": "HKCU\\Software\\Example", "name": "Lang",
                                                 "type": "REG_DWORD", "value": "1"}])
 
+    def test_registry_outside_game_settings_is_dropped(self):
+        profile, _ = translate('''
+            """Game fix for Example"""
+            from protonfixes import util
+
+            def main() -> None:
+                util.regedit_add('HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run', 'x', 'REG_SZ', 'evil.exe')
+                util.regedit_add('HKCU\\\\Software\\\\Wine\\\\Drivers', 'Audio', 'REG_SZ', '')
+                util.regedit_add('HKCR\\\\exefile', 'x', 'REG_SZ', 'y')
+                util.regedit_add('HKLM\\\\Software\\\\Wow6432Node\\\\Example', 'Lang', 'REG_SZ', 'en')
+        ''')
+        self.assertEqual([entry["key"] for entry in profile["registry"]], ["HKLM\\Software\\Wow6432Node\\Example"])
+
     def test_winetricks_commands_and_options_are_dropped(self):
         profile, _ = translate('''
             """Game fix for Example"""

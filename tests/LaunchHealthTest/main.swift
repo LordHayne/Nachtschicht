@@ -240,6 +240,21 @@ struct LaunchHealthTest {
         check(steady.limit == 30, "far below 40 → 30")
 
         // MARK: Installed games
+        // Registry keys from the online fixes: a game's own settings and drive letters, nothing that
+        // reaches every program in the prefix, and no key that could start lines of its own.
+        for key in [#"HKEY_CURRENT_USER\Software\Sierra On-Line\Gabriel Knight 3"#,
+                    #"HKEY_LOCAL_MACHINE\Software\Wow6432Node\Ubisoft\Launcher"#,
+                    #"HKEY_LOCAL_MACHINE\System\MountedDevices"#] {
+            check(Engine.isAllowedRegistryKey(key), "registry key \(key) allowed")
+        }
+        for key in [#"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run"#,
+                    #"HKEY_LOCAL_MACHINE\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\RunOnce"#,
+                    #"HKEY_CURRENT_USER\Software\Classes\exefile\shell"#, #"HKEY_CURRENT_USER\Software\Wine\Drivers"#,
+                    #"HKEY_CLASSES_ROOT\exefile"#, #"HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services"#,
+                    "HKEY_CURRENT_USER\\Software\\Game]\n[HKEY_CURRENT_USER\\Software\\Microsoft", #"HKEY_CURRENT_USER\Software\"#] {
+            check(!Engine.isAllowedRegistryKey(key), "registry key \(key.debugDescription) refused")
+        }
+
         // Winetricks verbs from the online fixes: install verbs pass, commands and options don't.
         for verb in ["vcrun2019", "d3dcompiler_47", "xact_x64"] {
             check(Engine.isSafeWinetricksVerb(verb), "winetricks verb \(verb) allowed")

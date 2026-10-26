@@ -1046,19 +1046,37 @@ enum Engine {
         importRegistry(sections.joined(separator: "\n\n"), wine: wine)
     }
 
-    /// A quoted .reg string.
+    /// A quoted .reg string. Line breaks and other control characters are dropped: in a .reg file
+    /// they would end the line and start lines of their own.
     private static func regString(_ text: String) -> String {
-        "\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+        let plain = String(text.unicodeScalars.filter { $0.value >= 0x20 && $0.value != 0x7f })
+        return "\"" + plain.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+    }
+
+    /// Where a profile from the online fixes may write: a game's own settings under Software, and
+    /// drive letters (MountedDevices). Never autostart entries, file associations, policies or Wine's
+    /// own settings, which would reach every program in the prefix. scripts/build-profiles.py checks the same.
+    static func isAllowedRegistryKey(_ key: String) -> Bool {
+        guard !key.unicodeScalars.contains(where: { $0.value < 0x20 || $0 == "[" || $0 == "]" }) else { return false }
+        let lower = key.lowercased()
+        let drives = #"hkey_local_machine\system\mounteddevices"#
+        if lower == drives || lower.hasPrefix(drives + #"\"#) { return true }
+        guard let root = [#"hkey_current_user\software\"#, #"hkey_local_machine\software\"#].first(where: lower.hasPrefix)
+        else { return false }
+        var rest = lower.dropFirst(root.count)
+        if rest.hasPrefix(#"wow6432node\"#) { rest = rest.dropFirst(#"wow6432node\"#.count) }
+        let vendor = rest.split(separator: "\\", maxSplits: 1).first.map(String.init) ?? ""
+        return !vendor.isEmpty && !["microsoft", "classes", "policies", "wine", "wow6432node"].contains(vendor)
     }
 
     /// One registry entry from a profile as a .reg section; nil for types it can't express safely.
     private static func regSection(_ entry: GameProfile.RegistryEntry) -> String? {
-        let roots = ["HKLM": "HKEY_LOCAL_MACHINE", "HKCU": "HKEY_CURRENT_USER", "HKCR": "HKEY_CLASSES_ROOT"]
+        let roots = ["HKLM": "HKEY_LOCAL_MACHINE", "HKCU": "HKEY_CURRENT_USER"]
         var key = entry.key
         for (short, long) in roots where key.uppercased().hasPrefix(short + "\\") {
             key = long + key.dropFirst(short.count)
         }
-        guard key.hasPrefix("HKEY_") else { return nil }
+        guard isAllowedRegistryKey(key) else { return nil }
         let header = "[\(key)]"
         guard let name = entry.name, let type = entry.type?.uppercased(), let value = entry.value else { return header }
         let data: String

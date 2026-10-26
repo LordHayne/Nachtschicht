@@ -11,6 +11,7 @@ on:
   push:
     paths:
       - ".github/workflows/gamepad.yml"
+      - "engine/patches/winebus-winecx-*.patch"
 
 permissions:
   contents: write
@@ -40,6 +41,20 @@ jobs:
           mkdir -p gcenx
           curl -fsSL "https://github.com/Gcenx/macOS_Wine_builds/releases/download/$GCENX_WINE/wine-devel-$GCENX_WINE-osx64.tar.xz" \
             | tar -xJ -C gcenx
+
+      - uses: actions/checkout@v4
+        with:
+          path: nightforge
+
+      - name: Nightforge's winebus patches
+        run: |
+          # engine/patches/winebus-winecx-xbox360-ids.patch: SDL-mapped pads reach games as an
+          # Xbox 360 controller, so Unity doesn't read a DualSense in its own report format.
+          for patch in nightforge/engine/patches/winebus-winecx-*.patch; do
+            echo "Applying $patch"
+            git -C winecx apply --verbose "$GITHUB_WORKSPACE/$patch"
+          done
+          grep -q "0x028e" winecx/dlls/winebus.sys/bus_sdl.c
 
       - name: Configure (x86_64, SDL bus)
         run: |
@@ -75,6 +90,7 @@ jobs:
           make -j"$(sysctl -n hw.logicalcpu)" dlls/winebus.sys/winebus.so
           so=dlls/winebus.sys/winebus.so
           strings "$so" | grep -q "libSDL2-2.0.0.dylib" || { echo "winebus.so without SDL"; exit 1; }
+          strings "$so" | grep -q "Controller (XBOX 360 For Windows)" || { echo "winebus.so without the Xbox 360 IDs"; exit 1; }
           nm "$so" | grep -q "sdl_bus_init" || { echo "no SDL bus"; exit 1; }
           # The SDL library sits in the engine's lib/, two levels up from lib/wine/x86_64-unix.
           install_name_tool -add_rpath @loader_path/../../ "$so"

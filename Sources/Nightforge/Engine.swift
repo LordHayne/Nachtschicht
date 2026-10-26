@@ -613,7 +613,7 @@ enum Engine {
     }
 
     /// Windows programs in a game folder (a few levels deep, where Unity/Unreal put them).
-    private static func executables(in dir: URL) -> [String] {
+    static func executables(in dir: URL) -> [String] {
         Set(executableFiles(in: dir).map(\.lastPathComponent)).sorted()
     }
 

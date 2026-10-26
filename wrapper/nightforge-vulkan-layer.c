@@ -16,7 +16,8 @@
 //         maxPerStageDescriptorSamplers = 64
 //         hdr = on
 // Each swapchain's size, format and colour space goes to stderr, i.e. Nightforge's wine.log, and
-// so does the frame rate: every 10 s for the first two minutes, then every minute.
+// so does the frame rate: every 10 s for the first two minutes, then every minute. Nightforge learns
+// from it which frame limit the game holds (FramePacing.swift).
 //
 // Inside the "Nightforge Game" bundle the Vulkan loader finds it as an implicit layer in
 // Contents/Resources/vulkan/implicit_layer.d (see Engine.installVulkanLayer).
@@ -200,6 +201,15 @@ static double now_seconds(void) {
     return time.tv_sec + time.tv_nsec / 1e9;
 }
 
+/// The game's program ("Game.exe"), named in each frame-rate line: wine.log is shared by all games.
+static const char *program_name(void) {
+    char **argv = *_NSGetArgv();
+    if (!argv || !argv[0]) return "?";
+    const char *name = argv[0];
+    for (const char *c = argv[0]; *c; c++) if (*c == '\\' || *c == '/') name = c + 1;
+    return name;
+}
+
 static VKAPI_ATTR VkResult VKAPI_CALL QueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *info) {
     static double started, period_start, last;
     static unsigned frames;
@@ -212,8 +222,8 @@ static VKAPI_ATTR VkResult VKAPI_CALL QueuePresentKHR(VkQueue queue, const VkPre
     double period = time - started < 120 ? 10 : 60;
     if (time - period_start >= period) {
         double seconds = time - period_start;
-        fprintf(stderr, "[nightforge-vulkan] %.1f FPS, frames %.1f ms on average, slowest %.0f ms\n",
-                frames / seconds, seconds * 1000 / frames, slowest * 1000);
+        fprintf(stderr, "[nightforge-vulkan] %s: %.1f FPS over %.0f s, frames %.1f ms on average, slowest %.0f ms\n",
+                program_name(), frames / seconds, seconds, seconds * 1000 / frames, slowest * 1000);
         period_start = time;
         frames = 0;
         slowest = 0;

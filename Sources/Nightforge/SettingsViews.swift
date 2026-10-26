@@ -71,7 +71,10 @@ struct GameOptionsSheet: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Picker(L10n.t("Frame limit"), selection: $options.frameLimit) {
-                        Text(automaticLabel(GameOptions().effectiveFrameLimit(displayRefreshRate: refreshRate, profile: profile).fpsLabel))
+                        // What the next start uses, including what Nightforge learned (FramePacing).
+                        Text(automaticLabel(FramePacing.automaticLimit(
+                            appID: game.appID, options: { var o = options; o.frameLimit = nil; return o }(),
+                            profile: profile, refreshRate: refreshRate).limit.fpsLabel))
                             .tag(Int?.none)
                         ForEach(GameOptions.frameLimits, id: \.self) { limit in
                             Text(limit.fpsLabel).tag(Int?.some(limit))

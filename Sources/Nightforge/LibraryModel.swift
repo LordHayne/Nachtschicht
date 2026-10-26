@@ -847,6 +847,12 @@ final class LibraryModel: ObservableObject {
             let attempts = insight?.attempts ?? []
             if automatic { LaunchHealth.review(game.appID, attempts, steamRoot: game.steamRoot) }
             let refreshRate = NSScreen.main?.maximumFramesPerSecond ?? 60  // the game opens on the main display
+            if game.bottle.isBuiltIn {
+                // The last session's frame rates decide this one's automatic frame limit.
+                await Task.detached(priority: .utility) {
+                    FramePacing.learn(appID: game.appID, installDir: game.installDir)
+                }.value
+            }
 
             if let preparing = preparations[game.appID] {
                 launchStatus = L10n.t("Setting up the game …")
@@ -869,8 +875,14 @@ final class LibraryModel: ObservableObject {
                 }
                 let logMark = GameLog.mark()
                 LearnedFixes.setLastLaunch(game.appID, logMark: logMark)
+                let (frameLimit, learning) = FramePacing.automaticLimit(appID: game.appID, options: options,
+                                                                         profile: profile, refreshRate: refreshRate)
+                if game.bottle.isBuiltIn {
+                    FramePacing.recordStart(appID: game.appID, options: options, profile: profile, refreshRate: refreshRate,
+                                            logMark: logMark, limit: frameLimit, learning: learning)
+                }
                 guard await start(game, runner: runner, options: options, profile: profile,
-                                  arguments: arguments, refreshRate: refreshRate)
+                                  arguments: arguments, frameLimit: frameLimit)
                 else { return }
                 launchingID = nil
                 if game.bottle.isBuiltIn { SteamPriority.watch(game) }
@@ -952,14 +964,14 @@ final class LibraryModel: ObservableObject {
     /// Hands the game to Steam and follows Steam's log until the game runs. True once it does; a
     /// question from Steam can take as long as the player needs, no sign of life ends after 2 min.
     private func start(_ game: Game, runner: String?, options: GameOptions, profile: GameProfile?,
-                       arguments: [String], refreshRate: Int) async -> Bool {
+                       arguments: [String], frameLimit: Int) async -> Bool {
         var watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
         do {
             // Off the main thread: it reads Steam's app catalog and writes the registry, which
             // would freeze the window for a moment.
             try await Task.detached(priority: .userInitiated) {
                 try Launcher.launch(game, runnerPath: runner ?? "", options: options, profile: profile,
-                                    displayRefreshRate: refreshRate, extraArguments: arguments)
+                                    frameLimit: frameLimit, extraArguments: arguments)
             }.value
         } catch {
             errorMessage = error.localizedDescription
@@ -1000,7 +1012,7 @@ final class LibraryModel: ObservableObject {
                         resent = true
                         try? await Task.detached(priority: .userInitiated) {
                             try Launcher.launch(game, runnerPath: runner ?? "", options: options, profile: profile,
-                                                displayRefreshRate: refreshRate, extraArguments: arguments)
+                                                frameLimit: frameLimit, extraArguments: arguments)
                         }.value
                         continue
                     }
@@ -1015,7 +1027,7 @@ final class LibraryModel: ObservableObject {
                         watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
                         try? await Task.detached(priority: .userInitiated) {
                             try Launcher.launch(game, runnerPath: runner, options: options, profile: profile,
-                                                displayRefreshRate: refreshRate, extraArguments: arguments)
+                                                frameLimit: frameLimit, extraArguments: arguments)
                         }.value
                     }
                     launchStatus = nil

@@ -304,8 +304,9 @@ enum Launcher {
         crossOverCandidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? crossOverCandidates[0]
     }
 
+    /// `frameLimit`: what the game is held to (FramePacing.automaticLimit or the player's choice).
     static func launch(_ game: Game, runnerPath: String, options: GameOptions, profile: GameProfile? = nil,
-                       displayRefreshRate: Int = 60, extraArguments: [String] = []) throws {
+                       frameLimit: Int = 0, extraArguments: [String] = []) throws {
         guard FileManager.default.isExecutableFile(atPath: runnerPath) else {
             throw LaunchError.runnerMissing(runnerPath)
         }
@@ -329,7 +330,7 @@ enum Launcher {
         }
         if game.bottle.isBuiltIn {
             Engine.writeGameConfigs(installDir: game.installDir,
-                                    frameLimit: options.effectiveFrameLimit(displayRefreshRate: displayRefreshRate, profile: profile),
+                                    frameLimit: frameLimit,
                                     upscaling: options.effectiveUpscaling(profile: profile),
                                     vulkanSamplers: profile?.vulkanSamplers, hdr: options.hdr)
             Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner)

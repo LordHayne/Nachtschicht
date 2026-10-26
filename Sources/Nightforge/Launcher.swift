@@ -321,7 +321,7 @@ enum Launcher {
         let runner = URL(fileURLWithPath: runnerPath)
         // If Steam isn't running yet, this call starts it, so it needs the same game settings.
         var environment = game.bottle.isBuiltIn
-            ? Engine.environment(wine: runner).merging(Engine.gameEnvironment) { _, new in new }
+            ? Engine.environment(wine: runner).merging(Engine.steamEnvironment) { _, new in new }
             : ProcessInfo.processInfo.environment
         var arguments: [String] = []
 
@@ -341,9 +341,7 @@ enum Launcher {
                                     upscaling: options.effectiveUpscaling(profile: profile),
                                     vulkanSamplers: profile?.vulkanSamplers, hdr: options.hdr)
             Engine.applyFileEdits(profile?.fileEdits ?? [], installDir: game.installDir)
-            Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner,
-                                     avx: LearnedFixes.avx(game.appID, profile: profile), frameLimit: frameLimit,
-                                     upscaling: options.effectiveUpscaling(profile: profile))
+            Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner)
         }
         // CrossOver bottles: the game inherits this process's environment. Nightforge's own
         // games get the HUD from the background Steam instead (Prefs.performanceHUD).

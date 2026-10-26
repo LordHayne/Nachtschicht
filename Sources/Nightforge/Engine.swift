@@ -98,7 +98,36 @@ enum Engine {
 
     /// Changes whenever the background Steam has to restart to hand games different settings.
     static var steamConfigSignature: String {
-        "\(steamConfigVersion)-hud\(Prefs.performanceHUD ? 1 : 0)-gamemode\(Prefs.gameMode ? 1 : 0)"
+        "\(steamConfigVersion)-hud\(Prefs.performanceHUD ? 1 : 0)-gamemode\(Prefs.gameMode ? 1 : 0)-"
+            + launchEnvironment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ",")
+    }
+
+    /// What the game about to start needs on top of `gameEnvironment` ("" takes a variable away).
+    /// A game gets the environment of the Steam that starts it, as it was when that Steam started –
+    /// whatever the registry says by then doesn't reach it. So these go into Steam's own.
+    static var launchEnvironment: [String: String] = [:]
+
+    /// The environment the background Steam starts with, and its games with it.
+    static var steamEnvironment: [String: String] {
+        var env = gameEnvironment
+        for (name, value) in launchEnvironment { env[name] = value.isEmpty ? nil : value }
+        return env
+    }
+
+    /// Sets what a game needs from Steam's environment: Rosetta's AVX hint, and D3DMetal's
+    /// settings, which it only takes from there (Apple's readme): D3DM_MAX_FPS caps the frame rate,
+    /// D3DM_ENABLE_METALFX hands DLSS to MetalFX. A game on another layer leaves D3DMetal's as they
+    /// are, so going back and forth costs no restart. True when the running Steam has to restart.
+    static func prepareLaunchEnvironment(avx: Bool, d3dMetal: Bool, frameLimit: Int, upscaling: Bool) -> Bool {
+        var wanted = launchEnvironment
+        wanted["ROSETTA_ADVERTISE_AVX"] = avx ? nil : ""
+        if d3dMetal {
+            wanted["D3DM_MAX_FPS"] = frameLimit > 0 ? String(frameLimit) : ""
+            wanted["D3DM_ENABLE_METALFX"] = upscaling ? "1" : ""
+        }
+        wanted = wanted.filter { name, value in (value.isEmpty ? nil : value) != gameEnvironment[name] }
+        defer { launchEnvironment = wanted }
+        return wanted != launchEnvironment
     }
 
     /// Wine's builtin crypto avoids TLS failures in Steam's browser; the overlay DLL deadlocks games.
@@ -890,9 +919,6 @@ enum Engine {
         }
     }
 
-    /// Per-program settings for a game's executables (Wine's AppDefaults): the Direct3D layer, the
-    /// profile's DLL overrides and Windows version. Rewritten in full at every launch, so a changed
-    /// choice or profile never leaves stale entries. The profile's registry entries go in as well.
     /// Which copy of each Direct3D DLL a layer takes. Gcenx's engine: DXMT is the builtin, DXVK
     /// the native in system32 (the default). winecx (`d3dMetalEngine`): D3DMetal is the builtin,
     /// DXMT the native in system32 and DXVK the native next to the game (`placeDXVK`), which Wine
@@ -919,28 +945,17 @@ enum Engine {
         }
     }
 
-    /// `avx`: Rosetta tells the game it may use AVX/AVX2 (`ROSETTA_ADVERTISE_AVX`). Most newer games
-    /// need that; a few crash on it (LaunchHealth learns which). Steam builds each game's
-    /// environment from HKCU\Environment, so it's set there right before the start.
-    /// D3DMetal takes its settings from the environment only (Apple's readme): `frameLimit` as
-    /// D3DM_MAX_FPS, `upscaling` as D3DM_ENABLE_METALFX, which hands a game's DLSS to MetalFX.
-    static func applyGameSettings(_ choice: GraphicsLayer, profile: GameProfile?, installDir: URL, wine: URL, avx: Bool = true,
-                                  frameLimit: Int = 0, upscaling: Bool = false) {
+    /// Per-program settings for a game's executables (Wine's AppDefaults): the Direct3D layer, the
+    /// profile's DLL overrides and Windows version. Rewritten in full at every launch, so a changed
+    /// choice or profile never leaves stale entries. The profile's registry entries go in as well.
+    static func applyGameSettings(_ choice: GraphicsLayer, profile: GameProfile?, installDir: URL, wine: URL) {
         let layer = choice == .automatic ? (profile?.graphics ?? defaultGraphics) : choice
         let d3dMetalEngine = isGPTKCapable(wine: wine)
         if d3dMetalEngine, let dxvk = installedComponentNow(dxvkID) {
             placeDXVK(layer == .dxvk, dxvkDir: dxvk, installDir: installDir)
         }
         let exes = executables(in: installDir)
-        let metal = layer == .d3dmetal
-        let environment = [
-            ("ROSETTA_ADVERTISE_AVX", avx ? "1" : nil),
-            ("D3DM_MAX_FPS", metal && frameLimit > 0 ? String(frameLimit) : nil),
-            ("D3DM_ENABLE_METALFX", metal && upscaling ? "1" : nil),
-        ]
-        var sections = ["[HKEY_CURRENT_USER\\Environment]\n" + environment.map { name, value in
-            "\"\(name)\"=" + (value.map { "\"\($0)\"" } ?? "-")
-        }.joined(separator: "\n")]
+        var sections: [String] = []
         for exe in exes {
             let app = "HKEY_CURRENT_USER\\Software\\Wine\\AppDefaults\\\(exe)"
             var overrides = profile?.dllOverrides ?? [:]
@@ -1372,6 +1387,7 @@ enum Engine {
     static func restartSteamInBackground(_ wine: URL) async throws {
         try await stopSteam(wine)
         try startSteam(wine, arguments: ["-silent"])
+        UserDefaults.standard.set(steamConfigSignature, forKey: "steamConfigSignature")
     }
 
     /// Asks Steam to quit and waits up to 20 s before ending it the hard way.
@@ -1485,7 +1501,7 @@ enum Engine {
         let loader = loader(for: wine)
         process.executableURL = loader
         process.arguments = [steamExeWindowsPath] + steamArguments + arguments
-        var env = environment(wine: wine).merging(gameEnvironment) { _, new in new }
+        var env = environment(wine: wine).merging(steamEnvironment) { _, new in new }
         env["WINEDLLOVERRIDES"] = steamDLLOverrides
         if loader != wine { env["WINELOADER"] = loader.path }
         env["WINEDEBUG"] = GameLog.wineDebug

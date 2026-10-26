@@ -199,6 +199,24 @@ struct EngineLayoutTest {
         check(!LearnedFixes.avx(app, profile: nil), "a learned crash turns it off")
         UserDefaults.standard.removeObject(forKey: "learned.noAVX.\(app)")
 
+        // MARK: Steam's environment
+        Engine.launchEnvironment = [:]
+        check(!Engine.prepareLaunchEnvironment(avx: true, d3dMetal: false, frameLimit: 60, upscaling: true),
+              "a DXMT game with AVX needs no restart")
+        check(Engine.prepareLaunchEnvironment(avx: true, d3dMetal: true, frameLimit: 60, upscaling: true)
+              && Engine.steamEnvironment["D3DM_MAX_FPS"] == "60" && Engine.steamEnvironment["D3DM_ENABLE_METALFX"] == "1",
+              "a D3DMetal game brings its frame limit and MetalFX into Steam's environment")
+        check(!Engine.prepareLaunchEnvironment(avx: true, d3dMetal: true, frameLimit: 60, upscaling: true),
+              "the next D3DMetal game with the same settings needs no restart")
+        check(!Engine.prepareLaunchEnvironment(avx: true, d3dMetal: false, frameLimit: 40, upscaling: false),
+              "a DXMT game in between leaves D3DMetal's settings alone")
+        check(Engine.prepareLaunchEnvironment(avx: false, d3dMetal: true, frameLimit: 60, upscaling: true)
+              && Engine.steamEnvironment["ROSETTA_ADVERTISE_AVX"] == nil, "a game without AVX gets a Steam without the hint")
+        check(Engine.prepareLaunchEnvironment(avx: true, d3dMetal: false, frameLimit: 60, upscaling: true)
+              && Engine.steamEnvironment["ROSETTA_ADVERTISE_AVX"] == "1", "…and the next one gets it back")
+        check(Engine.steamConfigSignature.contains("D3DM_MAX_FPS=60"), "Steam restarts when these change")
+        Engine.launchEnvironment = [:]
+
         // MARK: Settings files
         let settings = game.appendingPathComponent("b1/Saved/Config/Windows/GameUserSettings.ini")
         let edits = (try? JSONDecoder().decode(GameProfile.self, from: Data(#"""

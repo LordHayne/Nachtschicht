@@ -565,6 +565,8 @@ final class LibraryModel: ObservableObject {
                 break
             }
             launchingID = nil
+            // Steam's window may still be up from a question it asked; the game has the stage now.
+            MacSteam.hide()
             await bringToFront(game)
 
             // The first start of a Mac version: does it run past its first seconds? Only judged

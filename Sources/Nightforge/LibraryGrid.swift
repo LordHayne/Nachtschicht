@@ -72,7 +72,7 @@ struct GridLayout {
 /// button is.
 struct LibraryGrid: View {
     @EnvironmentObject private var model: LibraryModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.reduceMotion) private var reduceMotion
 
     private static let cardWidth: CGFloat = 154
     private static let spacing: CGFloat = 24

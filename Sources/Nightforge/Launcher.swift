@@ -24,6 +24,16 @@ enum Prefs {
         static let sharpAndSmooth = "sharpAndSmooth"
         static let geforceNowExplained = "geforceNowExplained"
         static let notifyDownloads = "notifyDownloads"
+        static let reduceMotion = "reduceMotion"
+    }
+
+    /// "Reduce motion": "on" or "off" once changed in Settings, else whatever macOS says.
+    static func reduceMotion(system: Bool, stored: String) -> Bool {
+        switch stored {
+        case "on": return true
+        case "off": return false
+        default: return system
+        }
     }
 
     /// A macOS notification when a download finishes while Nightforge isn't in front. On by default.

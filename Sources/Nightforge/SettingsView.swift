@@ -112,6 +112,8 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.Keys.gameMode) private var gameMode = true
     @AppStorage(Prefs.Keys.sharpAndSmooth) private var sharpAndSmooth = true
     @AppStorage(Prefs.Keys.notifyDownloads) private var notifyDownloads = true
+    @AppStorage(Prefs.Keys.reduceMotion) private var reduceMotionSetting = ""
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
     var body: some View {
         Form {
@@ -173,7 +175,30 @@ private struct GeneralSettings: View {
             } header: {
                 Text(L10n.t("General"))
             }
+
+            Section {
+                Toggle(isOn: reduceMotion) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(L10n.t("Reduce motion"))
+                        Text(L10n.t("No zoom on covers, no sliding – plain cross-fades. Follows “Reduce motion” in macOS until you change it here."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .padFocus("settings.reduceMotion", toggle: reduceMotion)
+            } header: {
+                Text(L10n.t("Accessibility"))
+            }
         }
+    }
+
+    /// Shows what applies now; set back to what macOS says, it follows macOS again.
+    private var reduceMotion: Binding<Bool> {
+        Binding(
+            get: { Prefs.reduceMotion(system: systemReduceMotion, stored: reduceMotionSetting) },
+            set: { reduceMotionSetting = $0 == systemReduceMotion ? "" : ($0 ? "on" : "off") }
+        )
     }
 }
 

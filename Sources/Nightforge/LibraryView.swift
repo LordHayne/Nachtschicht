@@ -941,7 +941,7 @@ struct RoundIconButton: View {
 /// downloads anything.
 private struct CoverRail: View {
     @EnvironmentObject private var model: LibraryModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.reduceMotion) private var reduceMotion
 
     private static let allGamesID = "rail.allGames"
 
@@ -1013,7 +1013,7 @@ private struct CoverRail: View {
 private struct AllGamesTile: View {
     let count: Int
     let isSelected: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.reduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1093,7 +1093,7 @@ struct CoverCard: View {
     var isRunning = false
     var isPinned = false
     @State private var cover: NSImage?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.reduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {

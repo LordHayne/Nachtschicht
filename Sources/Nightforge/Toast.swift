@@ -75,7 +75,7 @@ final class Toasts: ObservableObject {
 /// Where messages show: bottom centre, above the hint bar. Put it over the main window's content.
 struct ToastHost: View {
     @ObservedObject private var toasts = Toasts.shared
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.reduceMotion) private var reduceMotion
 
     var body: some View {
         VStack {

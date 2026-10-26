@@ -387,6 +387,11 @@ enum L10n {
         "A macOS notification with a Play button while Nightforge is in the background. Your last five games are in the Dock menu, too.":
             "Eine macOS-Mitteilung mit „Spielen“-Knopf, während Nightforge im Hintergrund ist. Deine letzten fünf Spiele stehen auch im Dock-Menü.",
 
+        "Accessibility": "Bedienungshilfen",
+        "Reduce motion": "Bewegung reduzieren",
+        "No zoom on covers, no sliding – plain cross-fades. Follows “Reduce motion” in macOS until you change it here.":
+            "Kein Zoom auf Covern, kein Gleiten – nur Überblenden. Folgt „Bewegung reduzieren“ in macOS, bis du es hier änderst.",
+
         // Library filters
         "Sort": "Sortieren",
         "Recently played": "Zuletzt gespielt",

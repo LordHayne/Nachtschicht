@@ -93,8 +93,8 @@ enum L10n {
             "Das Update ist nicht korrekt signiert und wurde deshalb nicht installiert.",
         "Nightforge can't replace itself in this folder. Download the update from the release page instead.":
             "Nightforge kann sich in diesem Ordner nicht selbst ersetzen. Lade das Update stattdessen von der Release-Seite.",
-        "This game didn't start with %@, so Nightforge uses %@ for it automatically.":
-            "Mit %@ ist dieses Spiel nicht gestartet, deshalb nutzt Nightforge dafür automatisch %@.",
+        "This game didn't start the usual way, so Nightforge now starts it another way, automatically.":
+            "Dieses Spiel ist auf dem üblichen Weg nicht gestartet, deshalb startet Nightforge es jetzt automatisch anders.",
         "Starting again with %@ …": "Neuer Start mit %@ …",
         "Setting up .NET for the game …": ".NET wird für das Spiel eingerichtet …",
         "Starts through another launcher: %@. Under Wine its window can stay empty or fail to sign in; if the game doesn't come up, a problem report helps.":
@@ -106,8 +106,8 @@ enum L10n {
         "%@ didn't start": "%@ ist nicht gestartet",
         "Report problem": "Problem melden",
         "Report problem …": "Problem melden …",
-        "It ended right after starting, with every way Nightforge knows: %@. A problem report helps get it running – it opens on GitHub, filled in with what Nightforge found.":
-            "Es hat sich direkt nach dem Start beendet, mit jedem Weg, den Nightforge kennt: %@. Eine Problemmeldung hilft, es zum Laufen zu bringen – sie öffnet sich auf GitHub, schon ausgefüllt mit dem, was Nightforge herausgefunden hat.",
+        "It ended right after starting, with every way Nightforge knows to start it. A problem report helps get it running – it opens on GitHub, filled in with what Nightforge found.":
+            "Es hat sich direkt nach dem Start beendet, mit jedem Weg, den Nightforge kennt. Eine Problemmeldung hilft, es zum Laufen zu bringen – sie öffnet sich auf GitHub, schon ausgefüllt mit dem, was Nightforge herausgefunden hat.",
         "This game uses DirectX 12 only, which runs on a Mac in part at best.":
             "Dieses Spiel nutzt nur DirectX 12, das auf dem Mac bestenfalls teilweise läuft.",
         "Uses %@: online play with it doesn't work on a Mac, single player usually does.":
@@ -200,6 +200,7 @@ enum L10n {
             "Wähle den Ordner mit deinen Bottles oder eine einzelne Bottle.",
         "min": "Min.",
         "hrs": "Std.",
+        "hr": "Std.",
 
         // Game options
         "Performance HUD in game": "Leistungsanzeige im Spiel",
@@ -286,6 +287,9 @@ enum L10n {
         "Search (⌘F)": "Suchen (⌘F)",
         "Clear search": "Suche löschen",
         "%ld of %ld games": "%ld von %ld Spielen",
+        "%ld of 1 game": "%ld von 1 Spiel",
+        "Settings": "Einstellungen",
+        "Bottle": "Bottle",
         "No games match “%@”": "Keine Spiele zu „%@“",
         "Whole library (L)": "Ganze Bibliothek (L)",
         "Back to the game (L)": "Zurück zum Spiel (L)",

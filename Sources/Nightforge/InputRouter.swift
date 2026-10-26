@@ -162,8 +162,10 @@ final class InputRouter {
                     }
                 } else if model.awaitingSteam {
                     model.cancelLaunch()  // stop waiting for a game Steam hasn't started
-                } else {
+                } else if model.showingLibrary {
                     model.showingLibrary = false
+                } else if !model.searchText.isEmpty {
+                    model.searchText = ""  // like Esc: back from a filtered list to the whole library
                 }
             }
         }
@@ -309,7 +311,7 @@ final class InputRouter {
             model.showingLibrary = true
             return true
         }
-        if step.dy < 0, model.showingLibrary, model.selectedIndex < max(model.gridColumns, 1) {
+        if step.dy < 0, model.showingLibrary, model.selectionInTopGridRow {
             model.showingLibrary = false
             return true
         }

@@ -76,7 +76,8 @@ struct LaunchHealthTest {
         LaunchHealth.recordStart(app, ladder)
         check(LaunchHealth.advance(app, ladder), "there is a second way")
         check(LaunchHealth.current(app, ladder) == (1, false), "moved to DXVK")
-        check(LaunchHealth.note(app, ladder)?.contains("DXVK") == true, "the note names the new way")
+        // The note says it was handled in plain words; which layer it is shows in the game's options.
+        check(LaunchHealth.note(app, ladder) != nil, "a game on another way gets a note")
         LaunchHealth.confirm(app, ladder)
         check(LaunchHealth.current(app, ladder) == (1, true), "DXVK confirmed")
         check(!LaunchHealth.advance(app, ladder) && LaunchHealth.current(app, ladder) == (0, false), "after the last way it starts over")

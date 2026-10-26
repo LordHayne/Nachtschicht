@@ -19,7 +19,9 @@ BIN_DIR="$(swift build -c release --arch arm64 --show-bin-path)"
 
 echo "▸ Building app bundle …"
 rm -rf "$OUT"
-mkdir -p "$OUT/Contents/MacOS" "$OUT/Contents/Resources"
+# The two languages Nightforge speaks: empty .lproj folders let macOS show its own menus, panels
+# and text-field menus in German on a German Mac (the app's own text comes from Strings.swift).
+mkdir -p "$OUT/Contents/MacOS" "$OUT/Contents/Resources/en.lproj" "$OUT/Contents/Resources/de.lproj"
 cp "$BIN_DIR/$APP" "$OUT/Contents/MacOS/$APP"
 cp Resources/Info.plist "$OUT/Contents/Info.plist"
 # Offline fallback for the component list; the app prefers the online copy once it's published.

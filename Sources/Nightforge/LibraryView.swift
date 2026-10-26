@@ -85,24 +85,9 @@ struct LibraryView: View {
             actions: { Button("OK") {} },
             message: { Text(model.errorMessage ?? "") }
         )
-        .alert(
-            L10n.t("%@ didn't start", model.failedLaunch?.game.name ?? ""),
-            isPresented: Binding(
-                get: { model.failedLaunch != nil },
-                set: { if !$0 { model.failedLaunch = nil } }
-            ),
-            presenting: model.failedLaunch,
-            actions: { failed in
-                Button(L10n.t("Report problem")) { model.reportProblem(for: failed.game, tried: failed.tried) }
-                // A on a controller is Return: it closes the box rather than opening a browser.
-                Button("OK", role: .cancel) {}
-                    .keyboardShortcut(.defaultAction)
-            },
-            message: { failed in
-                // The ways it tried (graphics layers, launch options) go into the report, not into this box.
-                Text(L10n.t("It ended right after starting, with every way Nightforge knows to start it. A problem report helps get it running – it opens on GitHub, filled in with what Nightforge found."))
-            }
-        )
+        .sheet(item: $model.failedLaunch) { failed in
+            FailedLaunchSheet(failed: failed)
+        }
         .alert(
             L10n.t("Play %@ on GeForce Now?", model.pendingCloudGame?.name ?? ""),
             isPresented: Binding(
@@ -331,6 +316,83 @@ private struct AllGamesHero: View {
         }
         .frame(height: 340, alignment: .bottomLeading)
     }
+}
+
+// MARK: - Didn't start
+
+/// A game that ended right after starting with every way Nightforge knows: what was tried, and
+/// what's left to do – start over, choose by hand, or report it.
+struct FailedLaunchSheet: View {
+    let failed: FailedLaunch
+    @EnvironmentObject private var model: LibraryModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(L10n.t("%@ didn't start", failed.game.name))
+                .font(Theme.display(20))
+                .lineLimit(2)
+            Label(L10n.t("It ended right after starting, with every way Nightforge knows to start it."),
+                  systemImage: "exclamationmark.triangle")
+                .fixedSize(horizontal: false, vertical: true)
+            if !failed.tried.isEmpty {
+                Text(L10n.t("Tried: %@", failed.tried.joined(separator: " · ")))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                // A on a controller is Return: the first way out, not a browser.
+                Button(action: startOver) {
+                    Label(L10n.t("Try Again From the First Way"), systemImage: "arrow.counterclockwise")
+                        .frame(maxWidth: .infinity)
+                }
+                .keyboardShortcut(.defaultAction)
+                .controlSize(.large)
+                .padFocus("failed.again", activate: startOver)
+                Text(L10n.t("Helps when something got in the way the first time – Steam updating, a window asking something."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if hasLayers {
+                    Button(action: chooseByHand) {
+                        Label(L10n.t("Choose Graphics by Hand …"), systemImage: "slider.horizontal.3")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .controlSize(.large)
+                    .padFocus("failed.options", activate: chooseByHand)
+                }
+            }
+            HStack(alignment: .firstTextBaseline) {
+                Text(L10n.t("Still no luck? A problem report opens on GitHub, filled in with what Nightforge tried – nothing is sent until you submit it there."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 12)
+                Button(L10n.t("Report problem"), action: report)
+                    .padFocus("failed.report", activate: report)
+            }
+            HStack {
+                Spacer()
+                Button(L10n.t("Close")) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .padFocus("failed.close", activate: { dismiss() })
+            }
+        }
+        .padding(24)
+        .frame(width: 500)
+    }
+
+    /// Vulkan, OpenGL and DirectX 12 have one way each: nothing to pick by hand.
+    private var hasLayers: Bool {
+        guard failed.game.bottle.isBuiltIn, failed.game.platform == .windows else { return false }
+        guard let analysis = model.insights[failed.game.appID]?.analysis else { return true }
+        return analysis.usesD3D11 || analysis.usesD3D9 || analysis.apis.isEmpty
+    }
+
+    private func startOver() { model.startOver(failed) }
+    private func chooseByHand() { model.chooseGraphicsByHand(failed) }
+    private func report() { model.reportProblem(for: failed.game, tried: failed.tried) }
 }
 
 // MARK: - Not enough space

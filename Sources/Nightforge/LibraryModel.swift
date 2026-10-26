@@ -1626,6 +1626,23 @@ final class LibraryModel: ObservableObject {
         Compatibility.of(game, profile: profiles[game.appID], analysis: insights[game.appID]?.analysis)
     }
 
+    /// After a failed start: every way again from the first, as if the game were new.
+    func startOver(_ failed: FailedLaunch) {
+        failedLaunch = nil
+        LaunchHealth.reset(failed.game.appID)
+        play(failed.game)
+    }
+
+    /// After a failed start: the game's options, where the graphics layer is picked by hand.
+    func chooseGraphicsByHand(_ failed: FailedLaunch) {
+        failedLaunch = nil
+        guard reveal(failed.game) else { return }
+        Task {
+            try? await Task.sleep(for: .milliseconds(400))  // one sheet closes before the next opens
+            showingOptions = true
+        }
+    }
+
     /// Opens a pre-filled problem report for the game in the browser.
     func reportProblem(for game: Game, tried: [String] = []) {
         Task { ProblemReport.open(game: game, insight: await insight(of: game), tried: tried) }

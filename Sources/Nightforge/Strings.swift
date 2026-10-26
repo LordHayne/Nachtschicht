@@ -417,6 +417,17 @@ enum L10n {
         "No games on this Mac yet.": "Noch keine Spiele auf diesem Mac.",
         "Games on this Mac": "Spiele auf diesem Mac",
 
+        // Didn't start
+        "It ended right after starting, with every way Nightforge knows to start it.": "Es hat sich gleich nach dem Start beendet – mit jedem Weg, den Nightforge kennt.",
+        "Tried: %@": "Versucht: %@",
+        "Try Again From the First Way": "Nochmal mit dem ersten Weg versuchen",
+        "Helps when something got in the way the first time – Steam updating, a window asking something.":
+            "Hilft, wenn beim ersten Mal etwas dazwischenkam – ein Steam-Update oder ein Fenster mit einer Frage.",
+        "Choose Graphics by Hand …": "Grafik selbst wählen …",
+        "Still no luck? A problem report opens on GitHub, filled in with what Nightforge tried – nothing is sent until you submit it there.":
+            "Immer noch nicht? Ein Problembericht öffnet sich auf GitHub, ausgefüllt mit dem, was Nightforge versucht hat – nichts wird gesendet, bis du ihn dort abschickst.",
+        "Close": "Schließen",
+
         // Library filters
         "Sort": "Sortieren",
         "Recently played": "Zuletzt gespielt",

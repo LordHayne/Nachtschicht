@@ -84,11 +84,12 @@
   - **Design:** `Parts.tsx` → `LaunchPhase`, `playLabel`, `playHint`.
   - **Fertig wenn:** Jede Phase > 2 s hat einen eigenen Text; nach einem Grafik-Update zeigt der erste Start „Preparing shaders“, der zweite nicht.
 
-- [ ] **1.2 Fehlstart mit Lösung statt Sackgasse** · `M`
+- [x] **1.2 Fehlstart mit Lösung statt Sackgasse** · `M` · Branch `claude/ux-failed-launch-1-2`
   - **Was:** Das heutige Alert „didn't start“ wird zum Sheet: Erklärung + **„Start with ‚Most compatible‘“** (Primär) + **„Start through <anderer Store>“** (wenn vorhanden) + „Report problem“ (bestehend).
   - **Wo:** `LibraryView.swift` (`failedLaunch`-Alert), `LaunchHealth.swift` (Attempts), `ProblemReport.swift`.
   - **Design:** `Dialogs.tsx` → `LaunchFailedDialog`.
   - **Fertig wenn:** Kein Fehlstart endet ohne mindestens eine Aktion außer „OK“.
+  - **Stand:** Sheet `FailedLaunchSheet` statt Alert: was versucht wurde („Tried: DXMT · DXVK · D3DMetal“), **„Try Again From the First Way“** (Primär, ↩/A – setzt `LaunchHealth` zurück und startet neu; hilft bei Steam-Update oder Rückfrage-Fenster), **„Choose Graphics by Hand …“** (öffnet die Spieloptionen; nur wo es Ebenen zur Wahl gibt) und „Report problem“. **Abweichung:** „Most compatible“ gibt es erst mit den Voreinstellungen aus 2.3 – heute hat „Automatic“ bei einem Fehlstart schon jede passende Ebene probiert. „Start through <anderer Store>“ kommt mit Phase 7.
 
 - [ ] **1.3 Kompatibilitäts-Abzeichen („Runs great“)** · `M`
   - **Warum:** „Läuft das überhaupt?“ ist die erste Frage. Steam Deck Verified hat gezeigt, wie viel klare Stufen bringen – für den Mac gibt es so etwas nicht.

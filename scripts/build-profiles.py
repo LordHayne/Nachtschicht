@@ -8,7 +8,9 @@ Sources, merged per Steam app ID:
     are translated; anything else is left out and the game is marked "partial".
   * AreWeAntiCheatYet (MIT, https://github.com/AreWeAntiCheatYet/AreWeAntiCheatYet), optional:
     games whose anti-cheat stops them even under Proton. On a Mac they don't start at all, so
-    Nightforge says so before a download ("antiCheat").
+    Nightforge says so before a download ("antiCheat"). Games it runs under Proton only through
+    the anti-cheat's own Linux build lose their online play on a Mac ("antiCheatOnline"); the app
+    blocks those that have nothing else (no single player on Steam).
   * The GeForce Now catalog (scripts/fetch-geforce-now.py), optional: which of those games can be
     streamed instead ("geforceNow", the game id its deep links take).
   * profiles/mac.json: Nightforge's own profiles, tested on Macs. They win over upstream.
@@ -51,9 +53,11 @@ IGNORED_CALLS = {
 # Arguments that switch on anti-cheat runtimes Proton ships and macOS can't run.
 IGNORED_ARGUMENTS = {"-battleye", "-eac_launcher"}
 
-# AreWeAntiCheatYet statuses for games that don't run even under Proton; ones that run there
-# ("Supported", "Running") often still work on a Mac offline or with Steam's no-anti-cheat option.
+# AreWeAntiCheatYet statuses for games that don't run even under Proton.
 BLOCKING_STATUSES = {"Broken", "Denied"}
+# Runs under Proton because the anti-cheat ships a Linux build, which a Mac can't use: online play
+# is gone, single player often still works. ("Running" games run under Wine without that help.)
+ONLINE_BLOCKING_STATUSES = {"Supported"}
 
 # Anti-cheat that runs fine under Wine; it doesn't block a game.
 HARMLESS_ANTICHEATS = {"VAC"}
@@ -151,13 +155,18 @@ def translate(path: pathlib.Path):
 
 
 def anticheat_blocks(games):
-    """Steam app ID → anti-cheat names, for the AreWeAntiCheatYet games that can't run."""
+    """Steam app ID → {"name", and "antiCheat" or "antiCheatOnline": anti-cheat names}, for the
+    AreWeAntiCheatYet games that can't run on a Mac, or not online."""
     blocks = {}
     for game in games:
         app_id = str((game.get("storeIds") or {}).get("steam") or "")
         names = [n for n in game.get("anticheats") or [] if n not in HARMLESS_ANTICHEATS]
-        if app_id.isdigit() and game.get("status") in BLOCKING_STATUSES and names:
+        if not (app_id.isdigit() and names):
+            continue
+        if game.get("status") in BLOCKING_STATUSES:
             blocks[app_id] = {"name": game.get("name"), "antiCheat": names}
+        elif game.get("status") in ONLINE_BLOCKING_STATUSES:
+            blocks[app_id] = {"name": game.get("name"), "antiCheatOnline": names}
     return blocks
 
 
@@ -221,7 +230,9 @@ def main() -> int:
             sources["geforce-now"] = {"url": "https://play.geforcenow.com"}
         for app_id, block in anticheat_blocks(json.loads(options.anticheat.read_text(encoding="utf-8"))).items():
             profile = games.setdefault(app_id, {"name": block["name"], "source": "anticheat"})
-            profile["antiCheat"] = block["antiCheat"]
+            for field in ("antiCheat", "antiCheatOnline"):
+                if field in block:
+                    profile[field] = block[field]
             if app_id in cloud:
                 profile["geforceNow"] = cloud[app_id]
             blocked += 1

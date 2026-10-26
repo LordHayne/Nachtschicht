@@ -414,6 +414,7 @@ final class LibraryModel: ObservableObject {
         }
         switch game.install {
         case .installed: launchSelected()
+        case .installed where game.antiCheatBlock != nil: break
         case .notInstalled where game.isVROnly || game.antiCheatBlock != nil: break
         case .notInstalled: download(game)
         case .downloading: break

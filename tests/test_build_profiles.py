@@ -75,7 +75,10 @@ class AntiCheatTests(unittest.TestCase):
             {"name": "Only VAC", "status": "Denied", "anticheats": ["VAC"], "storeIds": {"steam": "1"}},
             {"name": "Fortnite", "status": "Denied", "anticheats": ["Easy Anti-Cheat"], "storeIds": {}},
         ])
-        self.assertEqual(blocks, {"578080": {"name": "PUBG", "antiCheat": ["BattlEye"]}})
+        self.assertEqual(blocks, {
+            "578080": {"name": "PUBG", "antiCheat": ["BattlEye"]},
+            "1245620": {"name": "Elden Ring", "antiCheatOnline": ["Easy Anti-Cheat"]},
+        })
 
     def test_geforce_now_ids_come_from_steam_variants(self):
         ids = build_profiles.geforce_now_ids([

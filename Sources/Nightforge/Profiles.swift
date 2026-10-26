@@ -30,6 +30,8 @@ struct GameProfile: Decodable, Equatable {
     /// Anti-cheat that stops the game's Windows version on a Mac ("BattlEye", …), from
     /// AreWeAntiCheatYet; an empty list (a Mac profile) means it runs after all.
     var antiCheat: [String]?
+    /// Anti-cheat that only stops online play on a Mac: it blocks games that have nothing else.
+    var antiCheatOnline: [String]?
     /// Its game id on GeForce Now, NVIDIA's cloud gaming, where such a game can be streamed instead.
     var geforceNow: String?
 
@@ -42,7 +44,7 @@ struct GameProfile: Decodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case name, graphics, arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX, frameLimit
-        case vulkanSamplers, preferWindows, saves, antiCheat, geforceNow
+        case vulkanSamplers, preferWindows, saves, antiCheat, antiCheatOnline, geforceNow
     }
 
     /// {"root": "WinAppDataRoaming", "path": "7DaysToDie/Saves", "pattern": "*", "recursive": true, "mac": "MacAppSupport"}
@@ -74,6 +76,7 @@ struct GameProfile: Decodable, Equatable {
                      macRoot: $0.mac, macAddPath: $0.macPath ?? "")
         }
         antiCheat = try? container.decodeIfPresent([String].self, forKey: .antiCheat)
+        antiCheatOnline = try? container.decodeIfPresent([String].self, forKey: .antiCheatOnline)
         geforceNow = try? container.decodeIfPresent(String.self, forKey: .geforceNow)
     }
 }
@@ -84,6 +87,8 @@ struct AntiCheatBlock: Hashable {
     let antiCheat: [String]
     /// Its GeForce Now game id, when it can be streamed there instead.
     let geforceNow: String?
+    /// The anti-cheat only stops online play, so this blocks only games that are online only.
+    var onlineOnly = false
 
     /// GeForce Now's deep link to the game's page, where it can be played
     /// (NVIDIA GeForce NOW SDK, doc/GfnSdk-Deep-Linking.md).
@@ -139,8 +144,13 @@ actor ProfileStore {
     func antiCheatBlocks() -> [Int: AntiCheatBlock] {
         loadLocalIfNeeded()
         return (profiles ?? [:]).compactMapValues { profile in
-            guard let antiCheat = profile.antiCheat, !antiCheat.isEmpty else { return nil }
-            return AntiCheatBlock(antiCheat: antiCheat, geforceNow: profile.geforceNow)
+            if let antiCheat = profile.antiCheat, !antiCheat.isEmpty {
+                return AntiCheatBlock(antiCheat: antiCheat, geforceNow: profile.geforceNow)
+            }
+            if let antiCheat = profile.antiCheatOnline, !antiCheat.isEmpty {
+                return AntiCheatBlock(antiCheat: antiCheat, geforceNow: profile.geforceNow, onlineOnly: true)
+            }
+            return nil
         }
     }
 

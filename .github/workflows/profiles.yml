@@ -64,6 +64,7 @@ jobs:
               assert game.get("metalFX") in (None, True, False), (app_id, game.get("metalFX"))
               assert game.get("frameLimit") is None or isinstance(game["frameLimit"], int), (app_id, game.get("frameLimit"))
               assert game.get("antiCheat") is None or isinstance(game["antiCheat"], list), (app_id, game.get("antiCheat"))
+              assert game.get("antiCheatOnline") is None or isinstance(game["antiCheatOnline"], list), (app_id, game.get("antiCheatOnline"))
               assert game.get("geforceNow") is None or isinstance(game["geforceNow"], str), (app_id, game.get("geforceNow"))
           blocked = sum(1 for game in doc["games"].values() if game.get("antiCheat"))
           assert blocked > 50, "suspiciously few anti-cheat games"

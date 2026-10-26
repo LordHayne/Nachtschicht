@@ -41,7 +41,7 @@ let store = ComponentStore(root: work.appendingPathComponent("store"), remoteMan
 
 // The real manifest decodes and lists the engine.
 let manifest = try await store.manifest()
-check(manifest.component("wine-staging") != nil, "bundled manifest decodes (\(manifest.components.count) components)")
+check(manifest.component("wine") != nil, "bundled manifest decodes (\(manifest.components.count) components)")
 
 // Archive: downloaded, verified, unpacked.
 let engine = try component("engine", .engine, archive)

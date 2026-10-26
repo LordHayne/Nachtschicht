@@ -59,6 +59,8 @@ struct LibraryView: View {
                     .padding(.horizontal, Theme.gutter)
                     .padding(.bottom, 22)
             }
+
+            ToastHost()
         }
         .animation(.easeOut(duration: 0.28), value: model.selected?.id)
         .animation(.easeOut(duration: 0.22), value: model.showingLibrary)
@@ -837,11 +839,15 @@ struct CoverCard: View {
 private struct HintBar: View {
     @EnvironmentObject private var model: LibraryModel
     @ObservedObject private var focus = PadFocus.shared
+    @ObservedObject private var toasts = Toasts.shared
 
     var body: some View {
         HStack(spacing: 22) {
             Spacer()
             let pad = model.padSymbols
+            if let action = toasts.current?.action, focus.focused != Toasts.padID {
+                Hint(symbol: model.controllerConnected ? pad.stick : "command", text: model.controllerConnected ? action.label : "↩ " + action.label)
+            }
             if model.controllerConnected && focus.focused != nil {
                 Hint(symbol: pad.confirm, text: L10n.t("Select"))
                 Hint(symbol: pad.stick, text: L10n.t("Move"))

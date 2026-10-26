@@ -32,6 +32,11 @@
    "graphics": "dxvk",
    "note": "Tested 2026-10-26 on M5: plays with DXVK at 60-120 FPS (the Vulkan layer's count). Steam may first ask about controller firmware; Nightforge shows that window."
   },
+  "1623730": {
+   "name": "Palworld",
+   "graphics": "dxmt",
+   "note": "Tested 2026-10-26 on M5: steady 60 FPS (frame limit) with DXMT and -dx11. With DXVK only the HUD showed over a black world. Steam asks for the EULA once."
+  },
   "3907790": {
    "name": "OxyRail",
    "graphics": "dxmt",

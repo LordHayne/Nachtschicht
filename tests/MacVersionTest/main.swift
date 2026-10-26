@@ -394,6 +394,30 @@ struct MacVersionTest {
         connection(signIn + [replaced[0]])
         check(!Engine.signedIn(steamRoot: steam), "the sign-out line itself still says Logged On")
 
+        // MARK: Steam turning commands away while it starts
+        let consoleLog = steam.appendingPathComponent("logs/console_log.txt")
+        try? ([
+            "[2026-10-26 11:40:00] Client version: 1792618285",
+            "[2026-10-26 11:41:00] System startup time: 30.0 seconds",
+            "[2026-10-26 12:00:48] Client version: 1792618285",
+            "[2026-10-26 12:00:48] ComputeStartupMode: forcing desktopui via -silent",
+        ].joined(separator: "\r\n") + "\r\n").write(to: consoleLog, atomically: true, encoding: .utf8)
+        check(!Engine.startupFinished(steamRoot: steam), "a Steam that's still starting isn't ready")
+        var macWatcher = LaunchWatcher(steamRoot: steam, appID: 275850)
+        if let handle = try? FileHandle(forWritingTo: consoleLog) {
+            _ = try? handle.seekToEnd()
+            let lines = [
+                "[2026-10-26 12:00:55] ExecuteSteamURL: \"steam://open/steam://run/275850\"",
+                "[2026-10-26 12:00:55] src/steamUI/steamurlcontroller.cpp (132) : Assertion Failed: CSteamURLController::ExecuteSteamURL run : not allowed yet",
+                "[2026-10-26 12:00:56] System startup time: 8.69 seconds",
+            ]
+            handle.write(Data((lines.joined(separator: "\r\n") + "\r\n").utf8))
+            try? handle.close()
+        }
+        _ = macWatcher.poll()
+        check(macWatcher.rejectedCommands == 1 && !macWatcher.steamReceivedLaunch, "the turned-away run command is seen")
+        check(Engine.startupFinished(steamRoot: steam), "then Steam has finished starting")
+
         // tests/MacVersionTest/run.sh --progress 275850: what Nightforge reads from the real Steam for Mac.
         if let flag = CommandLine.arguments.firstIndex(of: "--progress"), let appID = Int(CommandLine.arguments[flag + 1]) {
             print("  progress of \(appID): \(MacSteamProgress.fraction(appID: appID).map { String(format: "%.1f %%", $0 * 100) } ?? "not downloading")")

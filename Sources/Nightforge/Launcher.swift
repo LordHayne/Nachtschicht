@@ -219,6 +219,8 @@ struct LaunchWatcher {
     private var offset: UInt64
     /// Steam logged the "-applaunch" request, i.e. it's alive and took it.
     private(set) var steamReceivedLaunch = false
+    /// steam:// commands Steam turned away because it hadn't finished starting ("not allowed yet").
+    private(set) var rejectedCommands = 0
     /// Steam was already waiting on a question for this game before the launch (e.g. an earlier
     /// attempt); the new request just queues behind it.
     private var openQuestion = false
@@ -257,7 +259,11 @@ struct LaunchWatcher {
             if line.contains("ExecCommandLine"), line.hasSuffix("-applaunch \(appID)\"") || line.contains("-applaunch \(appID) ") {
                 steamReceivedLaunch = true
             }
+            if line.contains("ExecuteSteamURL"), line.contains("not allowed yet") {
+                rejectedCommands += 1
+            }
             guard mentionsApp(line) else { continue }
+            if line.contains("GameAction") { steamReceivedLaunch = true }
             if line.contains("Game process added") || line.contains("changed task to Completed") {
                 event = .running
             } else if line.contains("waiting for user response") {

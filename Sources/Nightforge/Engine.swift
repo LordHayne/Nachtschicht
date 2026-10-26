@@ -1006,6 +1006,19 @@ enum Engine {
         currentSession(steamRoot: steamRoot).contains("Session Replaced") && !signedIn(steamRoot: steamRoot)
     }
 
+    /// Steam has finished starting ("System startup time" in console_log since its "Client
+    /// version" line). Until then it turns steam:// commands away.
+    static func startupFinished(steamRoot: URL) -> Bool {
+        let log = steamRoot.appendingPathComponent("logs/console_log.txt")
+        guard let handle = try? FileHandle(forReadingFrom: log) else { return false }
+        defer { try? handle.close() }
+        let size = (try? handle.seekToEnd()) ?? 0
+        try? handle.seek(toOffset: size > 65_536 ? size - 65_536 : 0)
+        let tail = String(decoding: (try? handle.readToEnd()) ?? Data(), as: UTF8.self)
+        let start = tail.range(of: "Client version:", options: .backwards)?.upperBound ?? tail.startIndex
+        return tail[start...].contains("System startup time:")
+    }
+
     /// connection_log since the running Steam started.
     private static func currentSession(steamRoot: URL) -> Substring {
         let log = steamRoot.appendingPathComponent("logs/connection_log.txt")

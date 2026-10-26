@@ -159,6 +159,13 @@ final class LibraryModel: ObservableObject {
     /// Mac versions on Steam for Mac.
     private func anyRunning(_ platform: Platform) -> Bool { runningGame(platform) != nil }
 
+    /// Steam for Mac is busy for a Mac version: one is running or starting. The Wine Steam stays
+    /// out of the way then – signing in, it would sign Steam for Mac out (one sign-in per account),
+    /// and the game's saves would no longer reach Steam Cloud.
+    private var macSteamBusy: Bool {
+        anyRunning(.mac) || allGames.contains { $0.id == launchingID && $0.platform == .mac }
+    }
+
     private func runningGame(_ platform: Platform) -> Game? {
         let ids = Set(running.keys)
         return allGames.first { ids.contains($0.id) && $0.platform == platform }
@@ -240,7 +247,7 @@ final class LibraryModel: ObservableObject {
         let previous = steamStartup
         steamStartup = Task {
             await previous?.value
-            guard let wine = await Engine.installedWine(), !anyRunning(.mac) else { return }
+            guard let wine = await Engine.installedWine(), !macSteamBusy else { return }
             Engine.applyGameEnvironment(wine: wine)
             try? await Engine.ensureSteamRunning(wine, busy: !running.isEmpty)
         }
@@ -260,7 +267,7 @@ final class LibraryModel: ObservableObject {
             // Let the running-game check see the processes before deciding on a restart.
             try? await Task.sleep(for: .seconds(4))
             // Signing in would sign out the Steam for Mac a running Mac game uses; Play starts it later.
-            guard !anyRunning(.mac) else { return }
+            guard !macSteamBusy else { return }
             try? await Engine.ensureSteamRunning(wine, busy: !running.isEmpty)
             Task { await self.watchSteamStart(wine) }
         }
@@ -513,6 +520,12 @@ final class LibraryModel: ObservableObject {
                 launchNeedsConfirmation = false
                 launchStatus = nil
             }
+            // A Wine Steam that is still starting would sign in after Steam for Mac and sign it out.
+            if Engine.isSteamRunning, !Engine.steamSignedIn, !Engine.sessionReplaced(),
+               let wine = await Engine.installedWine() {
+                launchStatus = L10n.t("Starting Steam for Mac …")
+                try? await Engine.stopSteam(wine)
+            }
             if !MacSteam.isRunning {
                 launchStatus = L10n.t("Starting Steam for Mac …")
                 MacSteam.start()
@@ -523,9 +536,9 @@ final class LibraryModel: ObservableObject {
                 await MacSteam.quit()
                 MacSteam.start()
             }
-            // A command sent while Steam is still starting can get lost; wait for its sign-in.
+            // Steam turns commands away until it has signed in and finished starting.
             var waited = 0
-            while !MacSteam.signedIn && waited < 90 {
+            while !(MacSteam.signedIn && MacSteam.startupFinished) && waited < 90 {
                 if waited == 25 {
                     launchStatus = L10n.t("Sign in in the Steam window")
                     MacSteam.show()
@@ -539,8 +552,9 @@ final class LibraryModel: ObservableObject {
                 : "//" + (arguments.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "")
             await takeSavesAlong(game, to: .mac)
             let watcher = LaunchWatcher(steamRoot: MacSteam.root, appID: game.appID)
-            MacSteam.open("run/\(game.appID)" + extra)
-            let start = await waitForMacStart(game, watcher: watcher)
+            let run = { MacSteam.open("run/\(game.appID)" + extra) }
+            run()
+            let start = await waitForMacStart(game, watcher: watcher, send: run)
             switch start {
             case .failed:
                 if !fallBackToWindows(game) { errorMessage = L10n.t("Steam couldn't start %@.", game.name) }
@@ -613,12 +627,16 @@ final class LibraryModel: ObservableObject {
     /// Follows the start of a Mac game until its process is there, or Steam's log says it runs.
     /// Steam's questions (licence, first-time setup) wait in its window as long as the player
     /// needs; no sign of life ends after 2 min.
-    private func waitForMacStart(_ game: Game, watcher: LaunchWatcher) async -> MacStart {
+    /// `send` asks Steam again: it turns the command away while it's still starting, and now and
+    /// then takes it without a word.
+    private func waitForMacStart(_ game: Game, watcher: LaunchWatcher, send: () -> Void) async -> MacStart {
         var watcher = watcher
         let folders = Self.processFolders([game])
         var quietSeconds = 0
         var seconds = 0
         var askingSince: Int?
+        var handledRejections = 0
+        var resent = 0
         while quietSeconds < 120 && seconds < 900 {
             try? await Task.sleep(for: .seconds(1))
             seconds += 1
@@ -626,7 +644,20 @@ final class LibraryModel: ObservableObject {
                 launchNeedsConfirmation = false
                 return .processSeen
             }
-            switch watcher.poll() {
+            let event = watcher.poll()
+            if watcher.rejectedCommands > handledRejections && resent < 5 {
+                handledRejections = watcher.rejectedCommands
+                resent += 1
+                try? await Task.sleep(for: .seconds(2))
+                send()
+                quietSeconds = 0
+                continue
+            }
+            if !watcher.steamReceivedLaunch && seconds % 15 == 0 && resent < 5 {
+                resent += 1
+                send()
+            }
+            switch event {
             case .running?:
                 // Give the process a few seconds to show up before trusting the log alone.
                 for _ in 0..<5 {

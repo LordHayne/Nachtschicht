@@ -51,6 +51,9 @@ enum MacSteam {
     /// The Steam running now has signed in.
     static var signedIn: Bool { Engine.signedIn(steamRoot: root) }
 
+    /// Started up far enough to take steam:// commands.
+    static var startupFinished: Bool { Engine.startupFinished(steamRoot: root) }
+
     /// Signed out because the Wine Steam signed in with the same account (Engine.sessionReplaced).
     static var sessionReplaced: Bool { Engine.sessionReplaced(steamRoot: root) }
 
@@ -131,11 +134,14 @@ enum MacSteam {
             return
         }
         if !isRunning { startedByNightforge = true }
+        if visible { markShown() }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = visible
         configuration.hides = !visible
         configuration.arguments = visible ? [] : ["-silent"]
         NSWorkspace.shared.openApplication(at: app, configuration: configuration)
+        // Steam.app only hands over to the client in Steam's folder, which opens its own window.
+        if !visible { Task { @MainActor in await keepHidden(for: 45) } }
     }
 
     /// Steam's main window in front, e.g. for a question it asks before starting a game.
@@ -145,16 +151,35 @@ enum MacSteam {
         open("open/main", activate: true)
     }
 
+    /// When Nightforge last brought Steam's window up on purpose; keepHidden leaves it then.
+    private static let shownLock = NSLock()
+    private static var shownAt = Date.distantPast
+
+    private static func markShown() {
+        shownLock.lock()
+        shownAt = Date()
+        shownLock.unlock()
+    }
+
+    private static func shown(since date: Date) -> Bool {
+        shownLock.lock()
+        defer { shownLock.unlock() }
+        return shownAt >= date
+    }
+
     /// Back to the background after the player has dealt with it.
     static func hide() {
         for app in running { app.hide() }
     }
 
-    /// Steam opens its library window a few seconds after signing in, and that window doesn't know
-    /// the games Nightforge plays through Wine. Keeps it out of sight for a while.
+    /// Steam opens its window when it starts, after signing in and when it starts a game – and that
+    /// window doesn't even know the games Nightforge plays through Wine. Keeps it out of sight for a
+    /// while, unless Nightforge shows it on purpose meanwhile (a question, the sign-in).
     @MainActor
     static func keepHidden(for seconds: Int) async {
+        let started = Date()
         for _ in 0..<seconds {
+            if shown(since: started) { return }
             for app in running where !app.isHidden { app.hide() }
             try? await Task.sleep(for: .seconds(1))
         }
@@ -164,9 +189,11 @@ enum MacSteam {
     static func open(_ command: String, activate: Bool = false) {
         guard let app, let url = URL(string: "steam://" + command) else { return }
         if !isRunning { startedByNightforge = true }
+        if activate { markShown() }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = activate
         NSWorkspace.shared.open([url], withApplicationAt: app, configuration: configuration)
+        if !activate { Task { @MainActor in await keepHidden(for: 30) } }
     }
 
     /// Asks Steam to quit (it saves its state and cloud files) and ends it the hard way after 20 s.

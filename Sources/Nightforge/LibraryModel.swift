@@ -440,7 +440,7 @@ final class LibraryModel: ObservableObject {
         case .installed where game.antiCheatBlock != nil: break
         case .notInstalled where game.isVROnly || game.antiCheatBlock != nil: break
         case .notInstalled: download(game)
-        case .downloading: break
+        case .downloading: if game.downloadNeedsSpace != nil { resumeDownload(game) }
         case .inStore: openStorePage(game)
         }
     }
@@ -565,6 +565,40 @@ final class LibraryModel: ObservableObject {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    /// A download Steam stopped for lack of disk space: once there's room, unpause it in Steam's
+    /// manifest and restart that Steam, which then carries on – by itself it never tries again.
+    func resumeDownload(_ game: Game) {
+        guard let needed = game.downloadNeedsSpace else { return }
+        let free = Self.freeSpace(at: game.installDir.deletingLastPathComponent())
+        guard free >= needed else {
+            errorMessage = L10n.t("There's still not enough space: Steam needs %@ for %@, your Mac has %@ free.",
+                                  Format.bytes(needed), game.name, Format.bytes(free))
+            return
+        }
+        let steamapps = game.installDir.deletingLastPathComponent().deletingLastPathComponent()
+        Engine.unpauseDownload(appID: game.appID, steamapps: steamapps)
+        Task {
+            if game.platform == .mac {
+                guard !anyRunning(.mac) else { return }  // it carries on at Steam for Mac's next start
+                await MacSteam.quit()
+                MacSteam.start()
+            } else if let wine = await Engine.installedWine() {
+                if running.isEmpty && launchingID == nil {
+                    try? await Engine.restartSteamInBackground(wine)
+                } else {
+                    restartSteamWhenIdle = true
+                }
+            }
+            reload(quiet: true)
+        }
+    }
+
+    /// Space left for downloads on the volume holding `folder`.
+    nonisolated static func freeSpace(at folder: URL) -> Int64 {
+        let values = try? folder.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        return values?.volumeAvailableCapacityForImportantUsage ?? 0
     }
 
     // MARK: - Mac versions

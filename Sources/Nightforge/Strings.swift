@@ -254,6 +254,9 @@ enum L10n {
         "Download": "Herunterladen",
         "up to %@": "bis zu %@",
         "Downloading … %ld %%": "Lädt … %ld %%",
+        "Continue Download": "Weiter laden",
+        "Not enough space: Steam needs %@ to download this game, your Mac has %@ free. Make some room, then continue.": "Zu wenig Speicherplatz: Steam braucht %@ für den Download, dein Mac hat %@ frei. Mach etwas Platz und lade dann weiter.",
+        "There's still not enough space: Steam needs %@ for %@, your Mac has %@ free.": "Noch immer zu wenig Platz: Steam braucht %@ für %@, dein Mac hat %@ frei.",
         "Preparing download …": "Download wird vorbereitet …",
 
         "Confirm in the Steam window": "Bestätige im Steam-Fenster",

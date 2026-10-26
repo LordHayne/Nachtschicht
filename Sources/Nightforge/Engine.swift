@@ -1304,6 +1304,19 @@ enum Engine {
         }.value
     }
 
+    /// Takes the "paused" mark (StateFlags 512) and the failure off a download in Steam's manifest,
+    /// so Steam carries on with it at its next start.
+    static func unpauseDownload(appID: Int, steamapps: URL) {
+        let manifest = steamapps.appendingPathComponent("appmanifest_\(appID).acf")
+        guard var text = try? String(contentsOf: manifest, encoding: .utf8) else { return }
+        let flags = #/"StateFlags"(\s+)"(\d+)"/#
+        if let match = text.firstMatch(of: flags), let value = Int(match.2) {
+            text.replaceSubrange(match.range, with: "\"StateFlags\"\(match.1)\"\(value & ~512)\"")
+        }
+        text.replace(#/"UpdateResult"(\s+)"\d+"/#) { "\"UpdateResult\"\($0.1)\"0\"" }
+        try? text.write(to: manifest, atomically: true, encoding: .utf8)
+    }
+
     /// Asks Steam to download a game without any Steam window: an appmanifest marked "update
     /// required" makes Steam fetch the game on its next start. Call `restartSteamInBackground` after.
     static func requestDownload(appID: Int, name: String, installDir: String,

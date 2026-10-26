@@ -51,6 +51,9 @@ enum MacSteam {
     /// The Steam running now has signed in.
     static var signedIn: Bool { Engine.signedIn(steamRoot: root) }
 
+    /// Signed out because the Wine Steam signed in with the same account (Engine.sessionReplaced).
+    static var sessionReplaced: Bool { Engine.sessionReplaced(steamRoot: root) }
+
     static var running: [NSRunningApplication] { NSRunningApplication.runningApplications(withBundleIdentifier: bundleID) }
 
     /// The Steam client's process. NSRunningApplication doesn't always say (its pid can read -1),
@@ -193,7 +196,9 @@ enum MacSteam {
         }
         try Engine.requestDownload(appID: appID, name: name, installDir: installDir, steamapps: steamapps)
         guard isRunning else { return start() }
-        if let launched = running.compactMap(\.launchDate).min(), let written = written(), launched > written { return }
+        if !sessionReplaced, let launched = running.compactMap(\.launchDate).min(), let written = written(), launched > written {
+            return
+        }
         await quit()
         start()
     }

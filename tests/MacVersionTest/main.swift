@@ -304,6 +304,32 @@ struct MacVersionTest {
             check(sum == expected, "logged rates add up: \(sum)")
         }
 
+        // MARK: One sign-in per account
+        let connectionLog = steam.appendingPathComponent("logs/connection_log.txt")
+        try? fm.createDirectory(at: connectionLog.deletingLastPathComponent(), withIntermediateDirectories: true)
+        func connection(_ lines: [String]) {
+            try? (lines.joined(separator: "\r\n") + "\r\n").write(to: connectionLog, atomically: true, encoding: .utf8)
+        }
+        let signIn = [
+            "[2026-10-26 10:29:43] Client version: 1792618285",
+            "[2026-10-26 11:10:00] [Logging On, 4, 63] [U:1:158043902] RecvMsgClientLogOnResponse() : [U:1:158043902] 'OK'",
+            "[2026-10-26 11:10:00] [Logged On, 4, 63] [U:1:158043902] RecvMsgClientLogOnResponse() : processing complete",
+            "[2026-10-26 11:10:00] CClientJobGetClientUpdateHosts: received update from server",
+        ]
+        connection(signIn)
+        check(Engine.signedIn(steamRoot: steam) && !Engine.sessionReplaced(steamRoot: steam), "signed in")
+        let replaced = [
+            "[2026-10-26 11:16:46] [Logged On, 4, 63] [U:1:158043902] RecvMsgClientLoggedOff('Session Replaced')",
+            "[2026-10-26 11:16:47] [Logged Off, 4, 0] [U:1:158043902] ConnectionDisconnected('Disconnected By Remote Host') : 'Session Replaced'",
+            "[2026-10-26 11:16:47] [Logged Off, 4, 0] [U:1:158043902] ConnectionDisconnected() not auto reconnecting due to Session Replaced",
+        ]
+        connection(signIn + replaced)
+        check(!Engine.signedIn(steamRoot: steam) && Engine.sessionReplaced(steamRoot: steam), "signed out by the other Steam")
+        connection(signIn + replaced + ["[2026-10-26 11:50:00] Client version: 1792618285"] + Array(signIn.dropFirst()))
+        check(Engine.signedIn(steamRoot: steam) && !Engine.sessionReplaced(steamRoot: steam), "a fresh start signs in again")
+        connection(signIn + [replaced[0]])
+        check(!Engine.signedIn(steamRoot: steam), "the sign-out line itself still says Logged On")
+
         // tests/MacVersionTest/run.sh --progress 275850: what Nightforge reads from the real Steam for Mac.
         if let flag = CommandLine.arguments.firstIndex(of: "--progress"), let appID = Int(CommandLine.arguments[flag + 1]) {
             print("  progress of \(appID): \(MacSteamProgress.fraction(appID: appID).map { String(format: "%.1f %%", $0 * 100) } ?? "not downloading")")

@@ -173,6 +173,9 @@ enum L10n {
         "Use the Windows Version": "Windows-Version verwenden",
         "Set Up Steam for Mac": "Steam für Mac einrichten",
         "Starting Steam for Mac …": "Steam für Mac startet …",
+        "Signing in to Steam …": "Anmeldung bei Steam …",
+        "%@ is still running and needs Steam. Steam can be signed in only once at a time, so quit the game first.":
+            "%@ läuft noch und braucht Steam. Steam kann immer nur einmal angemeldet sein – beende das Spiel zuerst.",
         "Sign in in the Steam window": "Melde dich im Steam-Fenster an",
         "Steam for Mac could not be downloaded. Check your internet connection.":
             "Steam für Mac konnte nicht geladen werden. Prüfe deine Internetverbindung.",

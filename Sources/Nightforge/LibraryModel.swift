@@ -157,9 +157,19 @@ final class LibraryModel: ObservableObject {
 
     /// A game of this platform is running – Windows games depend on Nightforge's Wine Steam,
     /// Mac versions on Steam for Mac.
-    private func anyRunning(_ platform: Platform) -> Bool {
+    private func anyRunning(_ platform: Platform) -> Bool { runningGame(platform) != nil }
+
+    private func runningGame(_ platform: Platform) -> Game? {
         let ids = Set(running.keys)
-        return allGames.contains { ids.contains($0.id) && $0.platform == platform }
+        return allGames.first { ids.contains($0.id) && $0.platform == platform }
+    }
+
+    /// Steam can be signed in on one client at a time, so starting the other Steam would sign out
+    /// the one a running game uses. Says so and returns false while such a game runs.
+    private func otherSteamFree(for platform: Platform) -> Bool {
+        guard let busy = runningGame(platform == .mac ? .windows : .mac) else { return true }
+        errorMessage = L10n.t("%@ is still running and needs Steam. Steam can be signed in only once at a time, so quit the game first.", busy.name)
+        return false
     }
 
     /// Brings the running game's window to the front.
@@ -188,13 +198,14 @@ final class LibraryModel: ObservableObject {
         }
     }
 
-    /// Steam for Mac starts in the background with Nightforge once a game uses its Mac version (or
-    /// is fetching it), so downloads go on and Play is quick.
+    /// Steam for Mac starts in the background with Nightforge while it has a Mac version to
+    /// download. Not otherwise: it would sign the Wine Steam out (one sign-in per account), which
+    /// most games need; Play starts it when a Mac version is played.
     private func afterScan() {
-        let usesMacSteam = allGames.contains { game in
-            (game.platform == .mac && game.install != .notInstalled) || Self.isDownloading(game.macPending)
+        let macDownload = allGames.contains { game in
+            (game.platform == .mac && Self.isDownloading(game.install)) || Self.isDownloading(game.macPending)
         }
-        if !macSteamPrewarmed, usesMacSteam, MacSteam.isReady {
+        if !macSteamPrewarmed, macDownload, MacSteam.isReady, !anyRunning(.windows) {
             macSteamPrewarmed = true
             if !MacSteam.isRunning { MacSteam.start() }
         }
@@ -226,7 +237,7 @@ final class LibraryModel: ObservableObject {
         let previous = steamStartup
         steamStartup = Task {
             await previous?.value
-            guard let wine = await Engine.installedWine() else { return }
+            guard let wine = await Engine.installedWine(), !anyRunning(.mac) else { return }
             Engine.applyGameEnvironment(wine: wine)
             try? await Engine.ensureSteamRunning(wine, busy: !running.isEmpty)
         }
@@ -245,6 +256,8 @@ final class LibraryModel: ObservableObject {
             guard let wine = try? await Engine.ensureEngine() else { return }
             // Let the running-game check see the processes before deciding on a restart.
             try? await Task.sleep(for: .seconds(4))
+            // Signing in would sign out the Steam for Mac a running Mac game uses; Play starts it later.
+            guard !anyRunning(.mac) else { return }
             try? await Engine.ensureSteamRunning(wine, busy: !running.isEmpty)
             Task { await self.watchSteamStart(wine) }
         }
@@ -452,6 +465,7 @@ final class LibraryModel: ObservableObject {
 
     private func downloadMac(_ game: Game) {
         guard !needsMacSteam(game, then: .download) else { return }
+        guard MacSteam.signedIn || otherSteamFree(for: .mac) else { return }
         Task {
             do {
                 try await MacSteam.download(appID: game.appID, name: game.name, installDir: game.installDirName,
@@ -484,6 +498,7 @@ final class LibraryModel: ObservableObject {
     /// Starts a Mac version through Steam for Mac and follows it until the game runs.
     private func launchMac(_ game: Game) {
         guard !needsMacSteam(game, then: .play) else { return }
+        guard MacSteam.signedIn || otherSteamFree(for: .mac) else { return }
         launchingID = game.id
         launchNeedsConfirmation = false
         launchStatus = nil
@@ -497,6 +512,12 @@ final class LibraryModel: ObservableObject {
             }
             if !MacSteam.isRunning {
                 launchStatus = L10n.t("Starting Steam for Mac …")
+                MacSteam.start()
+            } else if MacSteam.sessionReplaced {
+                // The Wine Steam signed in since; signing in again needs a fresh start. Without it
+                // the game would start without its cloud saves.
+                launchStatus = L10n.t("Signing in to Steam …")
+                await MacSteam.quit()
                 MacSteam.start()
             }
             // A command sent while Steam is still starting can get lost; wait for its sign-in.
@@ -669,6 +690,7 @@ final class LibraryModel: ObservableObject {
             launchMac(game)
             return
         }
+        if game.bottle.isBuiltIn && !Engine.steamSignedIn && !otherSteamFree(for: .windows) { return }
         launchingID = game.id
         launchNeedsConfirmation = false
         launchStatus = nil
@@ -680,6 +702,13 @@ final class LibraryModel: ObservableObject {
                 launchStatus = nil
             }
             if game.bottle.isBuiltIn { await steamStartup?.value }
+            // Steam for Mac signed in since and signed this Steam out: sign it in again, or the
+            // game starts without its cloud saves.
+            if game.bottle.isBuiltIn, Engine.sessionReplaced(), let wine = await Engine.installedWine() {
+                launchStatus = L10n.t("Signing in to Steam …")
+                _ = await restartStuckSteam(wine)
+                launchStatus = nil
+            }
             let runner = game.bottle.isBuiltIn ? await Engine.installedWine()?.path : Prefs.runnerPath
             // Known fixes for this game (profiles/profiles.json) and what its files reveal.
             let profile = game.bottle.isBuiltIn ? await ProfileStore.shared.profile(for: game.appID) : nil

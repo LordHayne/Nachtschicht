@@ -984,22 +984,38 @@ enum Engine {
             at: logs, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
         let newest = files.compactMap { try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate }.max()
         guard let newest, Date().timeIntervalSince(newest) >= seconds else { return false }
-        return !steamSignedIn
+        // Signed out by Steam for Mac signing in isn't hanging: it waits to be needed again.
+        return !steamSignedIn && !sessionReplaced()
     }
 
-    /// Whether the Steam started last has signed in: connection_log tags its lines with the
-    /// connection state, and "Client version" opens each start.
+    /// Whether the Steam started last is signed in: connection_log tags each line with the
+    /// connection state it was written in, and "Client version" opens each start. The newest
+    /// line counts – a Steam that signed in and was signed out again ends in "[Logged Off …]".
     static var steamSignedIn: Bool { signedIn(steamRoot: steamRoot) }
 
     static func signedIn(steamRoot: URL) -> Bool {
+        let session = currentSession(steamRoot: steamRoot)
+        guard let last = session.split(whereSeparator: \.isNewline).last(where: { $0.contains("] [") }) else { return false }
+        return last.contains("] [Logged On") && !last.contains("LoggedOff")
+    }
+
+    /// A Steam account can be signed in on one Steam client at a time: when the other one (Wine
+    /// or Steam for Mac) signs in, Steam signs this one out ("Session Replaced"), and it doesn't
+    /// sign in again by itself. Restarting it does.
+    static func sessionReplaced(steamRoot: URL = steamRoot) -> Bool {
+        currentSession(steamRoot: steamRoot).contains("Session Replaced") && !signedIn(steamRoot: steamRoot)
+    }
+
+    /// connection_log since the running Steam started.
+    private static func currentSession(steamRoot: URL) -> Substring {
         let log = steamRoot.appendingPathComponent("logs/connection_log.txt")
-        guard let handle = try? FileHandle(forReadingFrom: log) else { return false }
+        guard let handle = try? FileHandle(forReadingFrom: log) else { return "" }
         defer { try? handle.close() }
         let size = (try? handle.seekToEnd()) ?? 0
         try? handle.seek(toOffset: size > 65_536 ? size - 65_536 : 0)
         let tail = String(decoding: (try? handle.readToEnd()) ?? Data(), as: UTF8.self)
         let start = tail.range(of: "Client version:", options: .backwards)?.upperBound ?? tail.startIndex
-        return tail[start...].contains("[Logged On")
+        return tail[start...]
     }
 
     /// Opens Steam's main window. Questions Steam asks before a launch (licence agreement, which

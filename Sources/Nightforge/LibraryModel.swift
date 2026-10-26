@@ -47,6 +47,8 @@ final class LibraryModel: ObservableObject {
     @Published var pendingLeftoverRemoval: Game?
     /// Steam for Mac being set up for a game whose Mac version is wanted.
     @Published var macSetup: MacSteamSetup?
+    /// A game about to open in GeForce Now for the first time: what that means is said once.
+    @Published var pendingCloudGame: Game?
     private var macSteamPrewarmed = false
     @Published private(set) var uninstallingID: String?
     /// Games whose Windows process is running right now, with that process's pid.
@@ -406,6 +408,10 @@ final class LibraryModel: ObservableObject {
             switchToGame(game)
             return
         }
+        if game.playsInCloud {
+            playInCloud(game)
+            return
+        }
         switch game.install {
         case .installed: launchSelected()
         case .notInstalled where game.isVROnly || game.antiCheatBlock != nil: break
@@ -413,6 +419,24 @@ final class LibraryModel: ObservableObject {
         case .downloading: break
         case .inStore: openStorePage(game)
         }
+    }
+
+    /// Anti-cheat games GeForce Now streams open there, with the copy the player owns on Steam.
+    /// The first time Nightforge says what that involves (NVIDIA account, free hour) before going.
+    func playInCloud(_ game: Game) {
+        guard let url = game.antiCheatBlock?.geforceNowURL else { return }
+        if UserDefaults.standard.bool(forKey: Prefs.Keys.geforceNowExplained) {
+            NSWorkspace.shared.open(url)
+        } else {
+            pendingCloudGame = game
+        }
+    }
+
+    func confirmCloud() {
+        guard let url = pendingCloudGame?.antiCheatBlock?.geforceNowURL else { return }
+        pendingCloudGame = nil
+        UserDefaults.standard.set(true, forKey: Prefs.Keys.geforceNowExplained)
+        NSWorkspace.shared.open(url)
     }
 
     /// Buying happens on Steam's own store page in the browser; Nightforge never sees payment data.

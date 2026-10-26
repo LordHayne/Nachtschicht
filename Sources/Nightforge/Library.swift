@@ -67,6 +67,10 @@ struct Game: Identifiable, Hashable {
 
     var id: String { listID ?? "\(bottle.name)#\(appID)" }
     var isInstalled: Bool { install == .installed }
+    /// Anti-cheat stops it on a Mac, but GeForce Now streams it: Play goes there instead.
+    var playsInCloud: Bool {
+        antiCheatBlock?.geforceNowURL != nil && (install == .notInstalled || install == .installed)
+    }
 }
 
 extension Game {

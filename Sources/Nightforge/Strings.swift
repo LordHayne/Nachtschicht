@@ -254,6 +254,9 @@ enum L10n {
         "Download": "Herunterladen",
         "up to %@": "bis zu %@",
         "Downloading … %ld %%": "Lädt … %ld %%",
+        "Continue Download": "Weiter laden",
+        "Not enough space: Steam needs %@ to download this game, your Mac has %@ free. Make some room, then continue.": "Zu wenig Speicherplatz: Steam braucht %@ für den Download, dein Mac hat %@ frei. Mach etwas Platz und lade dann weiter.",
+        "There's still not enough space: Steam needs %@ for %@, your Mac has %@ free.": "Noch immer zu wenig Platz: Steam braucht %@ für %@, dein Mac hat %@ frei.",
         "Preparing download …": "Download wird vorbereitet …",
 
         "Confirm in the Steam window": "Bestätige im Steam-Fenster",
@@ -268,11 +271,12 @@ enum L10n {
         "Nightforge plays it on GeForce Now, NVIDIA's cloud gaming, with your Steam copy (own NVIDIA account; free sessions last an hour).":
             "Nightforge spielt es über GeForce Now, NVIDIAs Cloud-Gaming, mit deinem Steam-Spiel (eigenes NVIDIA-Konto; kostenlos je eine Stunde).",
         "Play on GeForce Now": "Über GeForce Now spielen",
+        "Plays on": "Läuft über",
         "Plays on GeForce Now – its anti-cheat doesn't run on a Mac": "Läuft über GeForce Now – sein Anti-Cheat läuft nicht auf dem Mac",
         "Play %@ on GeForce Now?": "%@ über GeForce Now spielen?",
         "Continue to GeForce Now": "Weiter zu GeForce Now",
-        "Its anti-cheat doesn't run on a Mac, so it runs on NVIDIA's servers and streams to your Mac – with the copy you own on Steam. The first time, sign in to GeForce Now with an NVIDIA account and link Steam there. Free play lasts an hour at a time, with ads and a queue; GeForce Now's paid plans lift that.":
-            "Sein Anti-Cheat läuft nicht auf dem Mac, deshalb läuft das Spiel auf NVIDIAs Servern und wird auf deinen Mac gestreamt – mit deinem Steam-Spiel. Beim ersten Mal meldest du dich bei GeForce Now mit einem NVIDIA-Konto an und verknüpfst dort Steam. Kostenlos geht es je eine Stunde, mit Werbung und Warteschlange; die Bezahl-Tarife von GeForce Now heben das auf.",
+        "Its anti-cheat doesn't run on a Mac, so it runs on NVIDIA's servers and streams to your Mac – with the copy you own on Steam. The first time, sign in to GeForce Now with an NVIDIA account and link Steam there. Free play lasts an hour at a time, with ads and a queue; GeForce Now's paid plans lift that. GeForce Now forgets the game while you sign in: afterwards, press Play on GeForce Now here once more.":
+            "Sein Anti-Cheat läuft nicht auf dem Mac, deshalb läuft das Spiel auf NVIDIAs Servern und wird auf deinen Mac gestreamt – mit deinem Steam-Spiel. Beim ersten Mal meldest du dich bei GeForce Now mit einem NVIDIA-Konto an und verknüpfst dort Steam. Kostenlos geht es je eine Stunde, mit Werbung und Warteschlange; die Bezahl-Tarife von GeForce Now heben das auf. Beim Anmelden vergisst GeForce Now das Spiel: Klick danach hier noch einmal auf „Über GeForce Now spielen“.",
         "Anti-cheat stops this game on a Mac": "Anti-Cheat verhindert dieses Spiel auf dem Mac",
         "Needs a VR headset – this game can't be played on a Mac.": "Braucht eine VR-Brille – dieses Spiel läuft nicht auf dem Mac.",
 

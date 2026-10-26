@@ -20,6 +20,8 @@ struct CatalogApp: Hashable {
     /// Steam has a Windows version (nearly always; a few games are Mac or Linux only).
     var windows = true
     var controller = ControllerSupport.none
+    /// Steam lists a single-player mode (or says nothing about it); false: online only.
+    var singlePlayer = true
 }
 
 /// What the Steam store says about playing a game with a controller.
@@ -229,6 +231,10 @@ enum SteamCatalog {
                                       macNative: oslist.contains("macos"),
                                       windows: oslist.isEmpty || oslist.contains("windows"))
                 game.controller = controllerSupport(common)
+                // Store category 2 is "Single-player"; a game with categories but not that one is online only.
+                if let categories = common["category"]?.object, !categories.isEmpty {
+                    game.singlePlayer = categories["category_2"] != nil
+                }
                 if game.macNative {
                     (game.mac64, game.macAppleSilicon) = macBuild(common: common, depots: depots,
                                                                   launch: info["config"]?.object?["launch"]?.object)

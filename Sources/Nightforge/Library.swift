@@ -32,6 +32,9 @@ struct Game: Identifiable, Hashable {
     var install: InstallState = .installed
     /// Needs a VR headset, which the Mac can't run.
     var isVROnly = false
+    /// Steam stopped its download for lack of disk space: the space it needs for it (download and
+    /// unpacking). Steam leaves such a download paused for good, so it waits for the player.
+    var downloadNeedsSpace: Int64?
     /// Name of the folder under steamapps/common (needed to ask Steam for a download).
     var installDirName = ""
     /// Steam also sells a macOS version (which may or may not run on current Macs).
@@ -48,6 +51,8 @@ struct Game: Identifiable, Hashable {
     var controller = ControllerSupport.none
     /// Its anti-cheat stops it on a Mac (Windows versions only).
     var antiCheatBlock: AntiCheatBlock?
+    /// Steam lists no single-player mode: there's nothing to play without going online.
+    var onlineOnly = false
     /// The version Nightforge runs: Windows through Wine, or Mac through Steam for Mac.
     var platform = Platform.windows
     /// Steam has both versions and Nightforge can run either, so the options offer the choice.
@@ -56,6 +61,8 @@ struct Game: Identifiable, Hashable {
     var versionReason: VersionChoice.Reason?
     /// Mac version in use while the Windows one is still installed in Nightforge's own Steam: its size.
     var windowsLeftover: Int64?
+    /// … and where that Windows version lies.
+    var windowsLeftoverDir: URL?
     /// The Mac version Nightforge switches to once it's on the Mac, while the installed Windows
     /// version is still the one played: not downloaded yet, or downloading.
     var macPending: InstallState?
@@ -78,6 +85,7 @@ extension Game {
     mutating func adoptCatalogFacts(_ app: CatalogApp) {
         isVROnly = app.vrOnly
         controller = app.controller
+        onlineOnly = !app.singlePlayer
         macNative = app.macNative
         mac64 = app.mac64
         macAppleSilicon = app.macAppleSilicon
@@ -284,6 +292,7 @@ enum LibraryScanner {
         games.map { game in
             var game = game
             guard game.platform == .windows, game.install != .inStore, let block = blocks[game.appID],
+                  !block.onlineOnly || game.onlineOnly,
                   SteamCatalog.antiCheatOffArguments(appID: game.appID, steamRoot: game.steamRoot).isEmpty
             else { return game }
             game.antiCheatBlock = block
@@ -319,7 +328,10 @@ enum LibraryScanner {
         entry.versionReason = game.versionReason
         entry.listID = game.id
         entry.macPending = nil
-        if game.isInstalled && game.bottle.isBuiltIn { entry.windowsLeftover = game.sizeOnDisk }
+        if game.isInstalled && game.bottle.isBuiltIn {
+            entry.windowsLeftover = game.sizeOnDisk
+            entry.windowsLeftoverDir = game.installDir
+        }
         return entry
     }
 
@@ -384,6 +396,10 @@ enum LibraryScanner {
         )
         game.install = install
         game.installDirName = installDirName
+        // UpdateResult 12: Steam's "not enough disk space".
+        if flags & 4 == 0, state["updateresult"]?.string == "12" {
+            game.downloadNeedsSpace = Int64(max(toDownload, toStage))
+        }
         return game
     }
 

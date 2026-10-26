@@ -35,9 +35,9 @@ struct LaunchHealthTest {
         FileManager.default.createFile(atPath: url.path, contents: Data(bytes))
     }
 
-    static func ids(_ analysis: GameAnalysis, _ profileJSON: String? = nil) -> [String] {
+    static func ids(_ analysis: GameAnalysis, _ profileJSON: String? = nil, d3dMetal: Bool = false) -> [String] {
         let profile = profileJSON.flatMap { try? JSONDecoder().decode(GameProfile.self, from: Data($0.utf8)) }
-        return LaunchHealth.attempts(for: analysis, profile: profile).map(\.id)
+        return LaunchHealth.attempts(for: analysis, profile: profile, d3dMetal: d3dMetal).map(\.id)
     }
 
     static func main() {
@@ -52,6 +52,21 @@ struct LaunchHealthTest {
         check(ids(GameAnalysis(apis: [.vulkan])) == ["dxmt"], "Vulkan has one way")
         check(ids(GameAnalysis(apis: [.d3d12])) == ["dxmt"] && GameAnalysis(apis: [.d3d12]).onlyD3D12, "DirectX 12 only")
         check(ids(GameAnalysis()) == ["dxmt", "dxvk"], "nothing detected: the DirectX 11 ladder")
+
+        // With D3DMetal in the engine, DirectX 12 has a way to run; DirectX 11 keeps DXMT first.
+        check(ids(GameAnalysis(apis: [.d3d12]), d3dMetal: true) == ["d3dmetal"], "DirectX 12 only: D3DMetal")
+        check(ids(GameAnalysis(apis: [.d3d11, .d3d12], engine: .unreal), d3dMetal: true) == ["dxmt -dx11", "dxvk -dx11", "d3dmetal"],
+              "Unreal: DirectX 11 on DXMT first, DirectX 12 on D3DMetal last")
+        check(ids(GameAnalysis(apis: [.d3d11, .d3d12]), d3dMetal: true) == ["dxmt", "dxvk", "d3dmetal"],
+              "unknown engine with DirectX 12: D3DMetal after the DirectX 11 ladder")
+        check(ids(GameAnalysis(apis: [.d3d11]), d3dMetal: true) == ["dxmt", "dxvk"], "DirectX 11 only: unchanged")
+        check(ids(GameAnalysis(apis: [.d3d11, .d3d12], engine: .unreal), #"{"graphics": "d3dmetal"}"#, d3dMetal: true)
+              == ["d3dmetal", "dxmt -dx11", "dxvk -dx11"], "a profile that measured DirectX 12 better starts there, without -dx11")
+        check(ids(GameAnalysis(apis: [.d3d11, .d3d12], engine: .unreal), #"{"graphics": "d3dmetal"}"#, d3dMetal: false).first == "dxmt -dx11",
+              "…but not on an engine without D3DMetal")
+        check(ids(GameAnalysis(apis: [.d3d9]), d3dMetal: true) == ["dxvk", "wined3d"], "DirectX 9: unchanged")
+        check(ids(GameAnalysis(apis: [.d3d12]), #"{"graphics": "dxvk"}"#, d3dMetal: true) == ["d3dmetal"],
+              "a DirectX 11 layer in a profile doesn't apply to a DirectX 12 game")
 
         // MARK: State
         let app = 990_001
@@ -202,6 +217,9 @@ struct LaunchHealthTest {
               "frame rates: full minutes of the game's own programs, DXMT without .exe")
         check(FramePacing.candidates(refreshRate: 120, upTo: 60) == [60, 40, 30], "120 Hz: 60, 40, 30")
         check(FramePacing.candidates(refreshRate: 60, upTo: 60) == [60, 30], "60 Hz: 60, 30")
+        check(FramePacing.Context(refreshRate: 120, upscaling: true, graphics: .dxmt)
+              != FramePacing.Context(refreshRate: 120, upscaling: true, graphics: .d3dmetal),
+              "a limit learned on one layer doesn't carry over to another")
         let context = FramePacing.Context(refreshRate: 120, upscaling: true)
         var pacing = FramePacing.State(context: context, ranWith: 60)
         check(FramePacing.next(pacing, rates: [59.8, 60], standard: 60) == pacing, "two minutes say nothing")
@@ -222,6 +240,29 @@ struct LaunchHealthTest {
         check(steady.limit == 30, "far below 40 → 30")
 
         // MARK: Installed games
+        // Registry keys from the online fixes: a game's own settings and drive letters, nothing that
+        // reaches every program in the prefix, and no key that could start lines of its own.
+        for key in [#"HKEY_CURRENT_USER\Software\Sierra On-Line\Gabriel Knight 3"#,
+                    #"HKEY_LOCAL_MACHINE\Software\Wow6432Node\Ubisoft\Launcher"#,
+                    #"HKEY_LOCAL_MACHINE\System\MountedDevices"#] {
+            check(Engine.isAllowedRegistryKey(key), "registry key \(key) allowed")
+        }
+        for key in [#"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run"#,
+                    #"HKEY_LOCAL_MACHINE\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\RunOnce"#,
+                    #"HKEY_CURRENT_USER\Software\Classes\exefile\shell"#, #"HKEY_CURRENT_USER\Software\Wine\Drivers"#,
+                    #"HKEY_CLASSES_ROOT\exefile"#, #"HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services"#,
+                    "HKEY_CURRENT_USER\\Software\\Game]\n[HKEY_CURRENT_USER\\Software\\Microsoft", #"HKEY_CURRENT_USER\Software\"#] {
+            check(!Engine.isAllowedRegistryKey(key), "registry key \(key.debugDescription) refused")
+        }
+
+        // Winetricks verbs from the online fixes: install verbs pass, commands and options don't.
+        for verb in ["vcrun2019", "d3dcompiler_47", "xact_x64"] {
+            check(Engine.isSafeWinetricksVerb(verb), "winetricks verb \(verb) allowed")
+        }
+        for verb in ["annihilate", "list", "--self-update", "-q", "../x.verb", "a b", "VCRUN", ""] {
+            check(!Engine.isSafeWinetricksVerb(verb), "winetricks verb \(verb) refused")
+        }
+
         if CommandLine.arguments.count > 1 {
             let root = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
             let common = root.appendingPathComponent("steamapps/common")

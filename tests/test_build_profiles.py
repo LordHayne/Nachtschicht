@@ -43,6 +43,32 @@ class TranslateTests(unittest.TestCase):
         self.assertEqual(profile["registry"], [{"key": "HKCU\\Software\\Example", "name": "Lang",
                                                 "type": "REG_DWORD", "value": "1"}])
 
+    def test_registry_outside_game_settings_is_dropped(self):
+        profile, _ = translate('''
+            """Game fix for Example"""
+            from protonfixes import util
+
+            def main() -> None:
+                util.regedit_add('HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run', 'x', 'REG_SZ', 'evil.exe')
+                util.regedit_add('HKCU\\\\Software\\\\Wine\\\\Drivers', 'Audio', 'REG_SZ', '')
+                util.regedit_add('HKCR\\\\exefile', 'x', 'REG_SZ', 'y')
+                util.regedit_add('HKLM\\\\Software\\\\Wow6432Node\\\\Example', 'Lang', 'REG_SZ', 'en')
+        ''')
+        self.assertEqual([entry["key"] for entry in profile["registry"]], ["HKLM\\Software\\Wow6432Node\\Example"])
+
+    def test_winetricks_commands_and_options_are_dropped(self):
+        profile, _ = translate('''
+            """Game fix for Example"""
+            from protonfixes import util
+
+            def main() -> None:
+                util.protontricks('annihilate')
+                util.protontricks('--self-update')
+                util.protontricks('../evil.verb')
+                util.protontricks('d3dcompiler_47')
+        ''')
+        self.assertEqual(profile["winetricks"], ["d3dcompiler_47"])
+
     def test_conditional_code_is_left_out_and_marked(self):
         profile, partial = translate('''
             from protonfixes import util
@@ -75,15 +101,17 @@ class AntiCheatTests(unittest.TestCase):
             {"name": "Only VAC", "status": "Denied", "anticheats": ["VAC"], "storeIds": {"steam": "1"}},
             {"name": "Fortnite", "status": "Denied", "anticheats": ["Easy Anti-Cheat"], "storeIds": {}},
         ])
-        self.assertEqual(blocks, {"578080": {"name": "PUBG", "antiCheat": ["BattlEye"]}})
+        self.assertEqual(blocks, {
+            "578080": {"name": "PUBG", "antiCheat": ["BattlEye"]},
+            "1245620": {"name": "Elden Ring", "antiCheatOnline": ["Easy Anti-Cheat"]},
+        })
 
-    def test_geforce_now_ids_come_from_available_steam_games(self):
+    def test_geforce_now_ids_come_from_steam_variants(self):
         ids = build_profiles.geforce_now_ids([
-            {"id": 7, "steamUrl": "https://store.steampowered.com/app/252490", "store": "Steam", "status": "AVAILABLE"},
-            {"id": 8, "steamUrl": "", "store": "Epic", "status": "AVAILABLE"},
-            {"id": 9, "steamUrl": "https://store.steampowered.com/app/1", "store": "Steam", "status": "MAINTENANCE"},
+            {"id": "d176-uuid", "variants": [{"appStore": "EPIC", "storeId": "06bd"}, {"appStore": "STEAM", "storeId": "1085660"}]},
+            {"id": "cb2b-uuid", "variants": [{"appStore": "EA_APP", "storeId": "Origin.OFR.50.0002694"}]},
         ])
-        self.assertEqual(ids, {"252490": 7})
+        self.assertEqual(ids, {"1085660": "d176-uuid"})
 
 
 if __name__ == "__main__":

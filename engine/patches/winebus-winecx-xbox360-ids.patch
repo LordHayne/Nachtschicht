@@ -1,0 +1,21 @@
+--- a/dlls/winebus.sys/bus_sdl.c
++++ b/dlls/winebus.sys/bus_sdl.c
+@@ -974,6 +974,18 @@
+         desc.version = 0;
+     }
+ 
++    /* Nightforge: a pad SDL maps as a game controller reaches games as what that mapping is,
++     * an Xbox 360 controller. With its own IDs (a DualSense's 054c:0ce6, say) engines that know
++     * the real pad (Unity's Input System) read it in that pad's own report format, which this
++     * XInput-shaped device doesn't have, and the pad stays dead in them. */
++    if (controller)
++    {
++        desc.vid = 0x045e;
++        desc.pid = 0x028e;
++        desc.version = 0x0114;
++        product = "Controller (XBOX 360 For Windows)";
++    }
++
+     if (pSDL_JoystickGetSerial && (sdl_serial = pSDL_JoystickGetSerial(joystick)))
+         ntdll_umbstowcs(sdl_serial, strlen(sdl_serial) + 1, desc.serialnumber, ARRAY_SIZE(desc.serialnumber));
+ 

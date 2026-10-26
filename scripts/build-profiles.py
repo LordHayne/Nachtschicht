@@ -8,12 +8,14 @@ Sources, merged per Steam app ID:
     are translated; anything else is left out and the game is marked "partial".
   * AreWeAntiCheatYet (MIT, https://github.com/AreWeAntiCheatYet/AreWeAntiCheatYet), optional:
     games whose anti-cheat stops them even under Proton. On a Mac they don't start at all, so
-    Nightforge says so before a download ("antiCheat").
-  * NVIDIA's public GeForce Now game list, optional: which of those games can be streamed
-    instead ("geforceNow", its GeForce Now id).
+    Nightforge says so before a download ("antiCheat"). Games it runs under Proton only through
+    the anti-cheat's own Linux build lose their online play on a Mac ("antiCheatOnline"); the app
+    blocks those that have nothing else (no single player on Steam).
+  * The GeForce Now catalog (scripts/fetch-geforce-now.py), optional: which of those games can be
+    streamed instead ("geforceNow", the game id its deep links take).
   * profiles/mac.json: Nightforge's own profiles, tested on Macs. They win over upstream.
 
-Usage: build-profiles.py <umu-protonfixes checkout> [--anticheat games.json] [--geforcenow list.json]
+Usage: build-profiles.py <umu-protonfixes checkout> [--anticheat games.json] [--geforcenow catalog.json]
                          [--out profiles/profiles.json]
 """
 
@@ -52,9 +54,11 @@ IGNORED_CALLS = {
 # Arguments that switch on anti-cheat runtimes Proton ships and macOS can't run.
 IGNORED_ARGUMENTS = {"-battleye", "-eac_launcher"}
 
-# AreWeAntiCheatYet statuses for games that don't run even under Proton; ones that run there
-# ("Supported", "Running") often still work on a Mac offline or with Steam's no-anti-cheat option.
+# AreWeAntiCheatYet statuses for games that don't run even under Proton.
 BLOCKING_STATUSES = {"Broken", "Denied"}
+# Runs under Proton because the anti-cheat ships a Linux build, which a Mac can't use: online play
+# is gone, single player often still works. ("Running" games run under Wine without that help.)
+ONLINE_BLOCKING_STATUSES = {"Supported"}
 
 # Anti-cheat that runs fine under Wine; it doesn't block a game.
 HARMLESS_ANTICHEATS = {"VAC"}
@@ -63,9 +67,41 @@ HARMLESS_ANTICHEATS = {"VAC"}
 # controllers for every game.
 IGNORED_REGISTRY_PREFIXES = ("hklm\\system\\currentcontrolset\\services\\winebus",)
 
+# Where a profile may write at all: a game's own settings under Software, and drive letters. Never
+# autostart entries, file associations, policies or Wine's own settings (Engine.isAllowedRegistryKey).
+REGISTRY_ROOTS = {"hkcu": "hkey_current_user", "hklm": "hkey_local_machine"}
+REGISTRY_BLOCKED_VENDORS = {"microsoft", "classes", "policies", "wine", "wow6432node"}
+
+
+def registry_key_allowed(key) -> bool:
+    if not isinstance(key, str) or any(ord(c) < 0x20 or c in "[]" for c in key):
+        return False
+    lower = key.lower()
+    short, _, rest = lower.partition("\\")
+    lower = REGISTRY_ROOTS.get(short, short) + "\\" + rest
+    drives = "hkey_local_machine\\system\\mounteddevices"
+    if lower == drives or lower.startswith(drives + "\\"):
+        return True
+    for root in ("hkey_current_user\\software\\", "hkey_local_machine\\software\\"):
+        if lower.startswith(root):
+            rest = lower[len(root):]
+            if rest.startswith("wow6432node\\"):
+                rest = rest[len("wow6432node\\"):]
+            vendor = rest.split("\\", 1)[0]
+            return vendor != "" and vendor not in REGISTRY_BLOCKED_VENDORS
+    return False
+
 # Settings-style winetricks arguments ("sound=alsa", "hidewineexports=enable") are Linux/Proton
 # knobs; Steam runtime verbs that make no sense outside Proton are dropped as well.
 IGNORED_VERBS = {"ubisoftconnect"}
+# Only plain install verbs reach the app, never an option or a winetricks command
+# (`annihilate` deletes the whole prefix). Engine.isSafeWinetricksVerb checks the same.
+WINETRICKS_COMMANDS = {"annihilate", "apps", "benchmarks", "dlls", "fonts", "games", "settings", "list", "help", "version"}
+SAFE_VERB = re.compile(r"[a-z0-9_]{1,64}")
+
+
+def safe_verb(verb) -> bool:
+    return isinstance(verb, str) and SAFE_VERB.fullmatch(verb) is not None and verb not in WINETRICKS_COMMANDS
 
 
 def literal(node):
@@ -111,7 +147,7 @@ def translate(path: pathlib.Path):
             verb = args[0]
             if verb in WINDOWS_VERSIONS:
                 profile["windowsVersion"] = verb
-            elif "=" in verb or verb in IGNORED_VERBS:
+            elif verb in IGNORED_VERBS or not safe_verb(verb):
                 continue
             else:
                 profile.setdefault("winetricks", [])
@@ -138,6 +174,8 @@ def translate(path: pathlib.Path):
                 continue
             if str(bound["folder"]).lower().startswith(IGNORED_REGISTRY_PREFIXES):
                 continue
+            if not registry_key_allowed(bound["folder"]):
+                continue
             entry = {"key": str(bound["folder"])}
             for source, target in (("name", "name"), ("typ", "type"), ("value", "value")):
                 if bound.get(source) is not None:
@@ -152,23 +190,29 @@ def translate(path: pathlib.Path):
 
 
 def anticheat_blocks(games):
-    """Steam app ID → anti-cheat names, for the AreWeAntiCheatYet games that can't run."""
+    """Steam app ID → {"name", and "antiCheat" or "antiCheatOnline": anti-cheat names}, for the
+    AreWeAntiCheatYet games that can't run on a Mac, or not online."""
     blocks = {}
     for game in games:
         app_id = str((game.get("storeIds") or {}).get("steam") or "")
         names = [n for n in game.get("anticheats") or [] if n not in HARMLESS_ANTICHEATS]
-        if app_id.isdigit() and game.get("status") in BLOCKING_STATUSES and names:
+        if not (app_id.isdigit() and names):
+            continue
+        if game.get("status") in BLOCKING_STATUSES:
             blocks[app_id] = {"name": game.get("name"), "antiCheat": names}
+        elif game.get("status") in ONLINE_BLOCKING_STATUSES:
+            blocks[app_id] = {"name": game.get("name"), "antiCheatOnline": names}
     return blocks
 
 
 def geforce_now_ids(games):
-    """Steam app ID → GeForce Now id, for the games GeForce Now streams from Steam."""
+    """Steam app ID → GeForce Now game id, for the games GeForce Now streams from Steam."""
     ids = {}
     for game in games:
-        match = re.search(r"/app/(\d+)", game.get("steamUrl") or "")
-        if match and game.get("store") == "Steam" and game.get("status") == "AVAILABLE" and game.get("id"):
-            ids.setdefault(match.group(1), game["id"])
+        for variant in game.get("variants") or []:
+            store_id = str(variant.get("storeId") or "")
+            if variant.get("appStore") == "STEAM" and store_id.isdigit() and game.get("id"):
+                ids.setdefault(store_id, game["id"])
     return ids
 
 
@@ -184,7 +228,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("protonfixes", type=pathlib.Path)
     parser.add_argument("--anticheat", type=pathlib.Path, help="AreWeAntiCheatYet games.json")
-    parser.add_argument("--geforcenow", type=pathlib.Path, help="GeForce Now supported-public-game-list JSON")
+    parser.add_argument("--geforcenow", type=pathlib.Path, help="GeForce Now catalog from fetch-geforce-now.py")
     parser.add_argument("--mac", type=pathlib.Path, default=ROOT / "profiles" / "mac.json")
     parser.add_argument("--out", type=pathlib.Path, default=ROOT / "profiles" / "profiles.json")
     options = parser.parse_args()
@@ -218,10 +262,12 @@ def main() -> int:
         cloud = {}
         if options.geforcenow:
             cloud = geforce_now_ids(json.loads(options.geforcenow.read_text(encoding="utf-8")))
-            sources["geforce-now"] = {"url": "https://www.nvidia.com/en-us/geforce-now/games/"}
+            sources["geforce-now"] = {"url": "https://play.geforcenow.com"}
         for app_id, block in anticheat_blocks(json.loads(options.anticheat.read_text(encoding="utf-8"))).items():
             profile = games.setdefault(app_id, {"name": block["name"], "source": "anticheat"})
-            profile["antiCheat"] = block["antiCheat"]
+            for field in ("antiCheat", "antiCheatOnline"):
+                if field in block:
+                    profile[field] = block[field]
             if app_id in cloud:
                 profile["geforceNow"] = cloud[app_id]
             blocked += 1

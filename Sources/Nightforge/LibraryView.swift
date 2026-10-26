@@ -113,7 +113,7 @@ struct LibraryView: View {
                 Button(L10n.t("Cancel"), role: .cancel) {}
             },
             message: { _ in
-                Text(L10n.t("Its anti-cheat doesn't run on a Mac, so it runs on NVIDIA's servers and streams to your Mac – with the copy you own on Steam. The first time, sign in to GeForce Now with an NVIDIA account and link Steam there. Free play lasts an hour at a time, with ads and a queue; GeForce Now's paid plans lift that."))
+                Text(L10n.t("Its anti-cheat doesn't run on a Mac, so it runs on NVIDIA's servers and streams to your Mac – with the copy you own on Steam. The first time, sign in to GeForce Now with an NVIDIA account and link Steam there. Free play lasts an hour at a time, with ads and a queue; GeForce Now's paid plans lift that. GeForce Now forgets the game while you sign in: afterwards, press Play on GeForce Now here once more."))
             }
         )
         .alert(
@@ -403,6 +403,8 @@ private struct GameDetail: View {
                     }
                 case .installed:
                     Stat(label: L10n.t("Size"), value: Format.bytes(game.sizeOnDisk))
+                case .notInstalled where game.playsInCloud:
+                    Stat(label: L10n.t("Plays on"), value: "GeForce Now")
                 case .notInstalled:
                     Stat(label: L10n.t("Download"), value: game.sizeOnDisk > 0
                          ? L10n.t("up to %@", Format.bytes(game.sizeOnDisk)) : "–")
@@ -444,6 +446,15 @@ private struct GameDetail: View {
                 }
             }
             VersionNotes(game: game)
+            if let needed = game.downloadNeedsSpace {
+                Label(L10n.t("Not enough space: Steam needs %@ to download this game, your Mac has %@ free. Make some room, then continue.",
+                             Format.bytes(needed), Format.bytes(LibraryModel.freeSpace(at: game.installDir.deletingLastPathComponent()))),
+                      systemImage: "externaldrive.badge.exclamationmark")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: 620, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack(spacing: 14) {
                 PlayButton(install: game.install, isLaunching: model.launchingID == game.id,
@@ -451,7 +462,8 @@ private struct GameDetail: View {
                            isRunning: model.isRunning(game),
                            needsConfirmation: model.launchNeedsConfirmation,
                            status: model.launchStatus,
-                           unavailable: unavailable, cloud: game.playsInCloud) {
+                           unavailable: unavailable, cloud: game.playsInCloud,
+                           noSpace: game.downloadNeedsSpace != nil) {
                     model.primaryAction()
                 }
                 .padFocus("play", cornerRadius: 34, activate: { model.primaryAction() })
@@ -478,10 +490,10 @@ private struct GameDetail: View {
         }
     }
 
-    /// Not downloaded and nothing a Mac can run: the button says why instead.
+    /// Nothing a Mac can run (VR only, anti-cheat): the button says why instead.
     private var unavailable: PlayButton.Unavailable? {
-        guard game.install == .notInstalled else { return nil }
-        if game.isVROnly { return .init(title: L10n.t("VR only"), symbol: "visionpro") }
+        guard game.install == .notInstalled || game.install == .installed, !model.isRunning(game) else { return nil }
+        if game.isVROnly && game.install == .notInstalled { return .init(title: L10n.t("VR only"), symbol: "visionpro") }
         if game.antiCheatBlock != nil && !game.playsInCloud {
             return .init(title: L10n.t("Doesn't run on a Mac"), symbol: "shield.slash")
         }
@@ -536,16 +548,18 @@ private struct PlayButton: View {
     var needsConfirmation = false
     /// What the launch is busy with, when it's more than waiting for Steam.
     var status: String?
-    /// Not downloaded and nothing a Mac can run (VR only, anti-cheat): what the button says instead.
+    /// Nothing a Mac can run (VR only, anti-cheat): what the button says instead.
     var unavailable: Unavailable?
     /// Streams from GeForce Now instead (anti-cheat games it carries).
     var cloud = false
+    /// Steam stopped the download for lack of disk space: the button carries on with it.
+    var noSpace = false
     let action: () -> Void
     @State private var hovering = false
 
     private var busy: Bool {
         if isLaunching || unavailable != nil || isUninstalling { return true }
-        if case .downloading = install { return true }
+        if case .downloading = install, !noSpace { return true }
         return false
     }
 
@@ -556,6 +570,7 @@ private struct PlayButton: View {
         if isRunning { return L10n.t("Running – switch to game") }
         if let unavailable { return unavailable.title }
         if cloud { return L10n.t("Play on GeForce Now") }
+        if noSpace { return L10n.t("Continue Download") }
         switch install {
         case .installed: return L10n.t("Play")
         case .notInstalled: return L10n.t("Download")
@@ -576,6 +591,9 @@ private struct PlayButton: View {
                 } else if cloud {
                     Image(systemName: "cloud.fill")
                         .font(.system(size: 15, weight: .bold))
+                } else if noSpace {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 15, weight: .bold))
                 } else if busy {
                     ProgressView()
                         .controlSize(.small)
@@ -594,7 +612,7 @@ private struct PlayButton: View {
             .background(
                 ZStack(alignment: .leading) {
                     Capsule().fill(Theme.sodium.opacity(busy ? 0.55 : 1))
-                    if case .downloading(let fraction?) = install {
+                    if case .downloading(let fraction?) = install, !noSpace {
                         GeometryReader { geo in
                             Capsule().fill(Theme.sodium).frame(width: max(52, geo.size.width * fraction))
                         }
@@ -686,7 +704,7 @@ struct GameContextMenu: ViewModifier {
             switch game.install {
             case _ where game.playsInCloud:
                 Button(L10n.t("Play on GeForce Now")) { select(); model.primaryAction() }
-            case .installed:
+            case .installed where game.antiCheatBlock == nil || model.isRunning(game):
                 Button(model.isRunning(game) ? L10n.t("Switch to Game") : L10n.t("Play")) { select(); model.primaryAction() }
             case .notInstalled where !game.isVROnly && game.antiCheatBlock == nil:
                 Button(L10n.t("Download")) { select(); model.primaryAction() }
@@ -1058,7 +1076,7 @@ private struct GameInsightNotes: View {
                let healed = LaunchHealth.note(game.appID, insight.attempts) {
                 note(healed, systemImage: "wand.and.stars")
             }
-            if insight.analysis.onlyD3D12 {
+            if insight.analysis.onlyD3D12, !insight.attempts.contains(where: { $0.graphics == .d3dmetal }) {
                 note(L10n.t("This game uses DirectX 12 only, which runs on a Mac in part at best."), systemImage: "exclamationmark.triangle")
             }
             if let launcher = insight.analysis.launcher {

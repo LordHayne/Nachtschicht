@@ -41,10 +41,10 @@ jobs:
       - name: Fetch umu-protonfixes
         run: git clone --depth 1 https://github.com/Open-Wine-Components/umu-protonfixes.git "$RUNNER_TEMP/umu-protonfixes"
 
-      - name: Fetch anti-cheat and GeForce Now lists
+      - name: Fetch anti-cheat list and GeForce Now catalog
         run: |
           curl -fsSL --retry 3 -o "$RUNNER_TEMP/anticheat.json" https://raw.githubusercontent.com/AreWeAntiCheatYet/AreWeAntiCheatYet/HEAD/games.json
-          curl -fsSL --retry 3 -o "$RUNNER_TEMP/geforcenow.json" https://static.nvidiagrid.net/supported-public-game-list/locales/gfnpc-en-US.json
+          python3 -I scripts/fetch-geforce-now.py "$RUNNER_TEMP/geforcenow.json"
 
       - name: Build profiles
         run: |
@@ -54,20 +54,32 @@ jobs:
       - name: Validate
         run: |
           python3 -I - <<'PY'
-          import json
+          import importlib.util, json, re
+          spec = importlib.util.spec_from_file_location("build_profiles", "scripts/build-profiles.py")
+          build_profiles = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(build_profiles)
           doc = json.load(open("profiles/profiles.json"))
+          commands = {"annihilate", "apps", "benchmarks", "dlls", "fonts", "games", "settings", "list", "help", "version"}
           assert doc["formatVersion"] == 1
           assert len(doc["games"]) > 50, "suspiciously few games"
           for app_id, game in doc["games"].items():
               assert app_id.isdigit(), app_id
-              assert game.get("graphics") in (None, "dxmt", "dxvk"), (app_id, game.get("graphics"))
+              assert game.get("graphics") in (None, "dxmt", "dxvk", "wined3d", "d3dmetal"), (app_id, game.get("graphics"))
               assert game.get("metalFX") in (None, True, False), (app_id, game.get("metalFX"))
               assert game.get("frameLimit") is None or isinstance(game["frameLimit"], int), (app_id, game.get("frameLimit"))
               assert game.get("antiCheat") is None or isinstance(game["antiCheat"], list), (app_id, game.get("antiCheat"))
-              assert game.get("geforceNow") is None or isinstance(game["geforceNow"], int), (app_id, game.get("geforceNow"))
+              assert game.get("antiCheatOnline") is None or isinstance(game["antiCheatOnline"], list), (app_id, game.get("antiCheatOnline"))
+              assert game.get("geforceNow") is None or isinstance(game["geforceNow"], str), (app_id, game.get("geforceNow"))
+              for entry in game.get("registry") or []:
+                  assert build_profiles.registry_key_allowed(entry["key"]), (app_id, entry["key"])
+                  assert all("\n" not in str(v) and "\r" not in str(v) for v in entry.values()), (app_id, entry)
+              for verb in game.get("winetricks") or []:
+                  assert re.fullmatch(r"[a-z0-9_]{1,64}", verb) and verb not in commands, (app_id, verb)
           blocked = sum(1 for game in doc["games"].values() if game.get("antiCheat"))
           assert blocked > 50, "suspiciously few anti-cheat games"
-          print("ok:", len(doc["games"]), "games,", blocked, "blocked by anti-cheat")
+          cloud = sum(1 for game in doc["games"].values() if game.get("geforceNow"))
+          assert cloud > 10, "suspiciously few GeForce Now games"
+          print("ok:", len(doc["games"]), "games,", blocked, "blocked by anti-cheat,", cloud, "on GeForce Now")
           PY
 
       # GitHub switches off scheduled workflows in public repos after 60 days without activity.

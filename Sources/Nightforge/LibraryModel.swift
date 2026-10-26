@@ -295,7 +295,7 @@ final class LibraryModel: ObservableObject {
         let macDownload = allGames.contains { game in
             (game.platform == .mac && Self.isDownloading(game.install)) || Self.isDownloading(game.macPending)
         }
-        if !macSteamPrewarmed, macDownload, MacSteam.isReady, !anyRunning(.windows) {
+        if !macSteamPrewarmed, macDownload, MacSteam.isReady, !anyRunning(.windows), launchingID == nil {
             macSteamPrewarmed = true
             if !MacSteam.isRunning { MacSteam.start() }
         }
@@ -306,6 +306,8 @@ final class LibraryModel: ObservableObject {
     /// any more ("Failed to get list of download sources"). With downloads waiting in both, the
     /// signed-in one finishes first, then the other is signed in – not while a game runs or starts.
     private var lastSignInSwitch = Date.distantPast
+    /// How far the Mac downloads had got when Steam for Mac last got its turn.
+    private var lastMacTurnProgress: Double?
 
     private func takeTurnsDownloading() {
         guard launchingID == nil, running.isEmpty, Date().timeIntervalSince(lastSignInSwitch) > 120 else { return }
@@ -313,8 +315,15 @@ final class LibraryModel: ObservableObject {
             (game.platform == .mac && Self.isDownloading(game.install)) || Self.isDownloading(game.macPending)
         }
         let windowsDownload = allGames.contains { $0.platform == .windows && $0.bottle.isBuiltIn && Self.isDownloading($0.install) }
-        if macDownload, MacSteam.isReady, !MacSteam.signedIn, !(windowsDownload && Engine.steamSignedIn) {
+        // A Mac download that got nowhere in its last turn (Steam for Mac finds no download
+        // servers, say) doesn't get another: Steam for Mac would come up and sign the Wine Steam out
+        // every few minutes for nothing. Any progress lets it take turns again.
+        let macProgress = allGames.filter { Self.isDownloading($0.macPending) || ($0.platform == .mac && Self.isDownloading($0.install)) }
+            .map { MacSteamProgress.fraction(appID: $0.appID) ?? 0 }.reduce(0, +)
+        let macStalled = lastMacTurnProgress.map { macProgress <= $0 } ?? false
+        if macDownload, MacSteam.isReady, !MacSteam.signedIn, !(windowsDownload && Engine.steamSignedIn), !macStalled {
             lastSignInSwitch = Date()
+            lastMacTurnProgress = macProgress
             Task {
                 if MacSteam.isRunning { await MacSteam.quit() }
                 MacSteam.start()
@@ -373,7 +382,11 @@ final class LibraryModel: ObservableObject {
             // Let the running-game check see the processes before deciding on a restart – or on
             // replacing the engine's files, which ends the Wine session a game would run in.
             while !runningScanned { try? await Task.sleep(for: .milliseconds(100)) }
-            guard let wine = try? await Engine.ensureEngine(gameRunning: !running.isEmpty) else { return }
+            // A new engine that can't be fetched now (offline, broken download): Steam starts with
+            // the one already installed, and the new one is tried again at the next start.
+            var ensured = try? await Engine.ensureEngine(gameRunning: !running.isEmpty)
+            if ensured == nil { ensured = await Engine.installedWine() }
+            guard let wine = ensured else { return }
             // Signing in would sign out the Steam for Mac a running Mac game uses; Play starts it later.
             guard !macSteamBusy else { return }
             try? await Engine.ensureSteamRunning(wine, busy: !running.isEmpty)
@@ -432,9 +445,10 @@ final class LibraryModel: ObservableObject {
         }
         switch game.install {
         case .installed: launchSelected()
+        case .installed where game.antiCheatBlock != nil: break
         case .notInstalled where game.isVROnly || game.antiCheatBlock != nil: break
         case .notInstalled: download(game)
-        case .downloading: break
+        case .downloading: if game.downloadNeedsSpace != nil { resumeDownload(game) }
         case .inStore: openStorePage(game)
         }
     }
@@ -513,7 +527,8 @@ final class LibraryModel: ObservableObject {
         game.controller = hit.controller ?? .none
         game.storePrice = hit.price
         game.metascore = hit.metascore
-        if hit.macNative != true { game.antiCheatBlock = antiCheatBlocks[hit.appID] }
+        // Store hits don't say whether there's single player, so only blocks that always hold.
+        if hit.macNative != true, let block = antiCheatBlocks[hit.appID], !block.onlineOnly { game.antiCheatBlock = block }
         return game
     }
 
@@ -558,6 +573,40 @@ final class LibraryModel: ObservableObject {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    /// A download Steam stopped for lack of disk space: once there's room, unpause it in Steam's
+    /// manifest and restart that Steam, which then carries on – by itself it never tries again.
+    func resumeDownload(_ game: Game) {
+        guard let needed = game.downloadNeedsSpace else { return }
+        let free = Self.freeSpace(at: game.installDir.deletingLastPathComponent())
+        guard free >= needed else {
+            errorMessage = L10n.t("There's still not enough space: Steam needs %@ for %@, your Mac has %@ free.",
+                                  Format.bytes(needed), game.name, Format.bytes(free))
+            return
+        }
+        let steamapps = game.installDir.deletingLastPathComponent().deletingLastPathComponent()
+        Engine.unpauseDownload(appID: game.appID, steamapps: steamapps)
+        Task {
+            if game.platform == .mac {
+                guard !anyRunning(.mac) else { return }  // it carries on at Steam for Mac's next start
+                await MacSteam.quit()
+                MacSteam.start()
+            } else if let wine = await Engine.installedWine() {
+                if running.isEmpty && launchingID == nil {
+                    try? await Engine.restartSteamInBackground(wine)
+                } else {
+                    restartSteamWhenIdle = true
+                }
+            }
+            reload(quiet: true)
+        }
+    }
+
+    /// Space left for downloads on the volume holding `folder`.
+    nonisolated static func freeSpace(at folder: URL) -> Int64 {
+        let values = try? folder.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        return values?.volumeAvailableCapacityForImportantUsage ?? 0
     }
 
     // MARK: - Mac versions
@@ -939,6 +988,18 @@ final class LibraryModel: ObservableObject {
                 _ = await restartStuckSteam(wine)
                 launchStatus = nil
             }
+            // A Steam that is still signing in starts the game offline ("Steam is currently in
+            // Offline Mode"): wait for it, and start it afresh if it doesn't get there.
+            if game.bottle.isBuiltIn, Engine.isSteamSignedIn, !Engine.steamSignedIn, let wine = await Engine.installedWine() {
+                launchStatus = L10n.t("Signing in to Steam …")
+                var waited = 0
+                while !Engine.steamSignedIn, waited < 45 {
+                    try? await Task.sleep(for: .seconds(1))
+                    waited += 1
+                }
+                if !Engine.steamSignedIn { _ = await restartStuckSteam(wine) }
+                launchStatus = nil
+            }
             if game.bottle.isBuiltIn { await takeSavesAlong(game, to: .windows) }
             let runner = game.bottle.isBuiltIn ? await Engine.installedWine()?.path : Prefs.runnerPath
             // Known fixes for this game (profiles/profiles.json) and what its files reveal.
@@ -977,12 +1038,23 @@ final class LibraryModel: ObservableObject {
                     if watchFirstSeconds { LaunchHealth.recordStart(game.appID, attempts) }
                 }
                 let logMark = GameLog.mark()
+                let startedAt = Date()
                 LearnedFixes.setLastLaunch(game.appID, logMark: logMark)
                 let (frameLimit, learning) = FramePacing.automaticLimit(appID: game.appID, options: options,
                                                                          profile: profile, refreshRate: refreshRate)
                 if game.bottle.isBuiltIn {
                     FramePacing.recordStart(appID: game.appID, options: options, profile: profile, refreshRate: refreshRate,
                                             logMark: logMark, limit: frameLimit, learning: learning)
+                }
+                // Settings a game only takes from the environment come with the Steam that starts it.
+                let layer = options.graphics == .automatic ? (profile?.graphics ?? Engine.defaultGraphics) : options.graphics
+                if game.bottle.isBuiltIn,
+                   Engine.prepareLaunchEnvironment(avx: LearnedFixes.avx(game.appID, profile: profile), d3dMetal: layer == .d3dmetal,
+                                                   frameLimit: frameLimit, upscaling: options.effectiveUpscaling(profile: profile)),
+                   Engine.isSteamRunning, !anyRunning(.windows), let runner {
+                    launchStatus = L10n.t("Signing in to Steam …")
+                    _ = await restartStuckSteam(URL(fileURLWithPath: runner))
+                    launchStatus = nil
                 }
                 guard await start(game, runner: runner, options: options, profile: profile,
                                   arguments: arguments, frameLimit: frameLimit)
@@ -1005,6 +1077,17 @@ final class LibraryModel: ObservableObject {
                 if !needed.isEmpty {
                     // Wine said what's missing: install it and try the same way again.
                     LearnedFixes.addWinetricks(needed, for: game.appID)
+                    continue
+                }
+                if game.bottle.isBuiltIn, Engine.applyFileEdits(profile?.fileEdits ?? [], installDir: game.installDir) {
+                    // The game wrote its settings file at its first start, with a setting its
+                    // profile turns off: the same way again, with the file fixed.
+                    continue
+                }
+                if game.bottle.isBuiltIn, LearnedFixes.avx(game.appID, profile: profile),
+                   GameLog.illegalInstruction(since: logMark, installDir: game.installDir, startedAt: startedAt) {
+                    // Rosetta's AVX hint sent it down a path Rosetta can't run: the same way without it.
+                    LearnedFixes.setNoAVX(game.appID)
                     continue
                 }
                 if LaunchHealth.advance(game.appID, attempts) {
@@ -1032,6 +1115,7 @@ final class LibraryModel: ObservableObject {
                                  wine: URL, showStatus: Bool) async {
         let learned = LearnedFixes.winetricks(game.appID)
         let missing = Engine.missingWinetricks((profile?.winetricks ?? []) + learned.filter { $0 != GameLog.wineMono })
+            .filter(Engine.isSafeWinetricksVerb)
         if !missing.isEmpty {
             if showStatus { launchStatus = L10n.t("Setting up the game …") }
             await Engine.installWinetricks(missing, wine: wine)
@@ -1265,8 +1349,8 @@ final class LibraryModel: ObservableObject {
                 reload(quiet: true)
             }
             do {
-                guard let wine = await Engine.installedWine() else { return }
-                try await Engine.uninstall(appID: game.appID, installDirName: game.installDirName, wine: wine)
+                guard let wine = await Engine.installedWine(), let leftover = game.windowsLeftoverDir else { return }
+                try await Engine.uninstall(appID: game.appID, installDir: leftover, wine: wine)
             } catch {
                 errorMessage = L10n.t("%@ could not be uninstalled: %@", game.name, error.localizedDescription)
             }
@@ -1293,7 +1377,7 @@ final class LibraryModel: ObservableObject {
                     return
                 }
                 guard let wine = await Engine.installedWine() else { return }
-                try await Engine.uninstall(appID: game.appID, installDirName: game.installDirName, wine: wine)
+                try await Engine.uninstall(appID: game.appID, installDir: game.installDir, wine: wine)
             } catch {
                 errorMessage = L10n.t("%@ could not be uninstalled: %@", game.name, error.localizedDescription)
             }

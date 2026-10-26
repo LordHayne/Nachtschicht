@@ -71,6 +71,8 @@ enum GraphicsLayer: String, Codable, CaseIterable, Identifiable {
     case dxvk
     /// Wine's own Direct3D 9 on OpenGL, for older games DXVK can't run.
     case wined3d
+    /// Apple's D3DMetal (Game Porting Toolkit): Direct3D 10–12 to Metal, the way DirectX 12 runs.
+    case d3dmetal
 
     var id: String { rawValue }
 
@@ -80,6 +82,7 @@ enum GraphicsLayer: String, Codable, CaseIterable, Identifiable {
         case .dxmt: return "DXMT (Metal)"
         case .dxvk: return "DXVK (Vulkan)"
         case .wined3d: return "WineD3D (OpenGL)"
+        case .d3dmetal: return "D3DMetal (Metal)"
         }
     }
 
@@ -90,11 +93,13 @@ enum GraphicsLayer: String, Codable, CaseIterable, Identifiable {
         case .dxmt: return "DXMT"
         case .dxvk: return "DXVK"
         case .wined3d: return "WineD3D"
+        case .d3dmetal: return "D3DMetal"
         }
     }
 
     /// DXMT upscales with MetalFX itself; DXVK and games drawing with Vulkan get it from
-    /// Nightforge's Vulkan layer. WineD3D draws through OpenGL, which MetalFX can't reach.
+    /// Nightforge's Vulkan layer; D3DMetal hands a game's DLSS to MetalFX. WineD3D draws through
+    /// OpenGL, which MetalFX can't reach.
     var upscales: Bool { self != .wined3d }
 }
 
@@ -316,7 +321,7 @@ enum Launcher {
         let runner = URL(fileURLWithPath: runnerPath)
         // If Steam isn't running yet, this call starts it, so it needs the same game settings.
         var environment = game.bottle.isBuiltIn
-            ? Engine.environment(wine: runner).merging(Engine.gameEnvironment) { _, new in new }
+            ? Engine.environment(wine: runner).merging(Engine.steamEnvironment) { _, new in new }
             : ProcessInfo.processInfo.environment
         var arguments: [String] = []
 
@@ -335,6 +340,7 @@ enum Launcher {
                                     frameLimit: frameLimit,
                                     upscaling: options.effectiveUpscaling(profile: profile),
                                     vulkanSamplers: profile?.vulkanSamplers, hdr: options.hdr)
+            Engine.applyFileEdits(profile?.fileEdits ?? [], installDir: game.installDir)
             Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner)
         }
         // CrossOver bottles: the game inherits this process's environment. Nightforge's own

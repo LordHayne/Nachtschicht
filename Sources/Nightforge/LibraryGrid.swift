@@ -62,7 +62,8 @@ struct GridLayout {
 }
 
 /// The whole library at once: covers in a grid, grouped by installed / downloading / the rest.
-/// Picking a game here opens it in the big view, where its Play or Download button is.
+/// A click selects a game, a second one (or Return, A) opens its page, where its Play or Download
+/// button is.
 struct LibraryGrid: View {
     @EnvironmentObject private var model: LibraryModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -105,12 +106,13 @@ struct LibraryGrid: View {
                                 LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
                                     ForEach(section.items, id: \.game.id) { item in
                                         GridCard(game: item.game, isSelected: item.index == model.selectedIndex,
-                                                 isRunning: model.isRunning(item.game))
+                                                 isRunning: model.isRunning(item.game),
+                                                 compatibility: model.compatibility(of: item.game))
                                             .id(item.game.id)
                                             .modifier(GameContextMenu(game: item.game, index: item.index))
                                             .onTapGesture {
                                                 if item.index == model.selectedIndex {
-                                                    model.showSelectedGame()
+                                                    model.openDetail()
                                                 } else {
                                                     model.selectedIndex = item.index
                                                 }
@@ -141,15 +143,24 @@ private struct GridCard: View {
     let game: Game
     let isSelected: Bool
     var isRunning = false
+    let compatibility: Compatibility
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             CoverCard(game: game, isSelected: isSelected, isRunning: isRunning)
-            Text(game.name)
-                .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-                .foregroundStyle(isSelected ? Theme.ink : Theme.muted)
-                .lineLimit(2)
-                .frame(width: 154, alignment: .leading)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                // The level's own icon (each has a different one), named for VoiceOver and on hover.
+                Image(systemName: compatibility.level.symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(compatibility.level.color)
+                    .help(compatibility.level.label)
+                    .accessibilityLabel(compatibility.level.label)
+                Text(game.name)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                    .foregroundStyle(isSelected ? Theme.ink : Theme.muted)
+                    .lineLimit(2)
+            }
+            .frame(width: 154, alignment: .leading)
         }
         .contentShape(Rectangle())
     }

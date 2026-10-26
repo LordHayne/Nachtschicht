@@ -16,6 +16,11 @@ final class LibraryModel: ObservableObject {
     @Published var searchText = "" {
         didSet {
             guard searchText != oldValue else { return }
+            // Hits show in the library, wherever the search started.
+            if !searchText.isEmpty, route != .library {
+                rememberSelection()
+                route = .library
+            }
             applyFilter(selectBestMatch: true)
             searchStore()
         }
@@ -25,8 +30,15 @@ final class LibraryModel: ObservableObject {
     private var storeSearch: Task<Void, Never>?
     /// Bumped to move keyboard focus into the search field (⌘F).
     @Published private(set) var searchFocusRequest = 0
-    /// The full-library grid instead of the single game with its cover rail.
-    @Published var showingLibrary = false
+    /// Home, the library grid, or a game's page.
+    @Published private(set) var route = Route.home
+    /// The games on Home's rail, as indices into `games` (HomeRail).
+    @Published private(set) var homeRail: [Int] = []
+    /// On Home, the "All games" tile after the rail is selected instead of a game.
+    @Published private(set) var homeOnAllGames = false
+    /// The game each level had selected, so going back to it finds it there again.
+    private var homeGameID: String?
+    private var libraryGameID: String?
     /// Covers per row in the grid, reported by the grid so ↑/↓ can jump a row.
     var gridColumns = 1
     @Published private(set) var isScanning = false
@@ -40,6 +52,8 @@ final class LibraryModel: ObservableObject {
     /// What Nightforge knows about installed games before starting them, by app ID.
     @Published private(set) var insights: [Int: GameInsight] = [:]
     private var analyses: [Int: GameAnalysis] = [:]
+    /// The profile list at hand, for how well each game runs (Compatibility).
+    @Published private(set) var profiles: [Int: GameProfile] = [:]
     @Published var showingOptions = false
     /// Waiting for the user to confirm removing this game (or its download).
     @Published var pendingUninstall: Game?
@@ -283,6 +297,7 @@ final class LibraryModel: ObservableObject {
         let preferWindows = await ProfileStore.shared.preferWindows()
         let blocks = await ProfileStore.shared.antiCheatBlocks()
         antiCheatBlocks = blocks
+        profiles = await ProfileStore.shared.knownProfiles()
         let found = await Task.detached(priority: .userInitiated) {
             LibraryScanner.markAntiCheat(
                 LibraryScanner.merge(LibraryScanner.scan(bottlesRoot: root, extraBottles: builtIn),
@@ -964,24 +979,132 @@ final class LibraryModel: ObservableObject {
                 + storeResults.filter { !owned.contains($0.appID) }
         }
         selectedIndex = selectBestMatch && !words.isEmpty ? 0 : games.firstIndex(where: { $0.id == previous }) ?? 0
+        homeRail = words.isEmpty ? HomeRail.pick(games) : []
+        switch route {
+        case .detail(let id, let from) where !games.contains(where: { $0.id == id }):
+            route = from == .home ? .home : .library  // its game is gone (another scan, another version)
+            if route == .home { selectOnHome() }
+        case .home where !homeOnAllGames && !homeRail.contains(selectedIndex):
+            selectOnHome()
+        default:
+            break
+        }
     }
 
     func focusSearch() {
         searchFocusRequest += 1
     }
 
-    func toggleLibrary() {
-        showingLibrary.toggle()
+    // MARK: - Navigation
+
+    var showingLibrary: Bool { route == .library }
+
+    /// The game shown big: on Home nil while the "All games" tile is selected.
+    var heroGame: Game? {
+        route == .home && homeOnAllGames ? nil : selected
     }
 
-    /// From the grid: show the chosen game in the big view, where its button is.
-    func showSelectedGame() {
-        showingLibrary = false
+    /// Stands for the "All games" tile in `homeGameID`.
+    private static let allGamesTile = "\u{0}all"
+
+    private func rememberSelection() {
+        switch route {
+        case .home: homeGameID = homeOnAllGames ? Self.allGamesTile : selected?.id
+        case .library: libraryGameID = selected?.id
+        case .detail: break
+        }
+    }
+
+    /// Home's selection: the one it had, else the rail's first game, else the "All games" tile.
+    private func selectOnHome() {
+        if homeGameID == Self.allGamesTile || homeRail.isEmpty {
+            homeOnAllGames = true
+        } else if let index = homeRail.first(where: { games[$0].id == homeGameID }) ?? homeRail.first {
+            homeOnAllGames = false
+            selectedIndex = index
+        }
+    }
+
+    func goHome() {
+        guard route != .home else { return }
+        rememberSelection()
+        route = .home
+        if !searchText.isEmpty { searchText = "" }  // Home is the whole collection
+        selectOnHome()
+    }
+
+    func goLibrary() {
+        guard route != .library, !allGames.isEmpty else { return }
+        rememberSelection()
+        route = .library
+        if let id = libraryGameID, let index = games.firstIndex(where: { $0.id == id }) {
+            selectedIndex = index
+        }
+    }
+
+    /// L, ☰ and the top bar's switch: between Home and the library.
+    func toggleLibrary() {
+        route.level == .library ? goHome() : goLibrary()
+    }
+
+    /// The selected game's page. A second click on a cover comes here – it never starts or downloads.
+    func openDetail() {
+        guard let game = heroGame, !route.isDetail else { return }
+        rememberSelection()
+        route = .detail(gameID: game.id, from: route.level)
+    }
+
+    /// Esc and B: a game's page goes back where it came from, the library first drops its search
+    /// and then goes Home. False when there's nothing to go back from.
+    @discardableResult
+    func back() -> Bool {
+        switch route {
+        case .detail(_, .library):
+            route = .library
+        case .detail(_, .home):
+            route = .home
+        case .library:
+            if searchText.isEmpty { goHome() } else { searchText = "" }
+        case .home:
+            return false
+        }
+        return true
+    }
+
+    /// Return and A: Home plays the game (its last tile opens the library), the library opens the
+    /// game's page, and the page plays it.
+    func activate() {
+        switch route {
+        case .home: homeOnAllGames ? goLibrary() : primaryAction()
+        case .library: openDetail()
+        case .detail: primaryAction()
+        }
+    }
+
+    /// Home's rail by place; `homeRail.count` is the "All games" tile.
+    func selectOnHome(place: Int) {
+        if homeRail.indices.contains(place) {
+            homeOnAllGames = false
+            selectedIndex = homeRail[place]
+        } else if !allGames.isEmpty {
+            homeOnAllGames = true
+        }
+    }
+
+    /// The place of Home's selection on its rail (the tile after the games for "All games").
+    var homePlace: Int {
+        homeOnAllGames ? homeRail.count : homeRail.firstIndex(of: selectedIndex) ?? 0
+    }
+
+    /// A game picked directly (a right-click on its cover).
+    func select(_ index: Int) {
+        if route == .home { homeOnAllGames = false }
+        selectedIndex = index
     }
 
     var gridLayout: GridLayout { GridLayout(games: games, columns: gridColumns) }
 
-    /// The selection is in the grid's first row, where ↑ leaves the grid.
+    /// The selection is in the grid's first row, where ↑ leaves the grid for the top bar.
     var selectionInTopGridRow: Bool { (gridLayout.position(of: selectedIndex)?.row ?? 0) == 0 }
 
     /// ↑/↓ in the grid move a whole row, keeping the column (or the last card of a shorter row).
@@ -990,20 +1113,31 @@ final class LibraryModel: ObservableObject {
         selectedIndex = next
     }
 
-    /// ←/→: the rail goes through the list, the grid through what it shows, group by group.
+    /// ←/→: the rail goes through its games to the "All games" tile, the grid through what it
+    /// shows, group by group. A game's page stays on its game.
     func move(_ delta: Int) {
         guard !games.isEmpty else { return }
-        if showingLibrary, let next = gridLayout.index(from: selectedIndex, steps: delta) {
-            selectedIndex = next
-        } else {
-            selectedIndex = max(0, min(games.count - 1, selectedIndex + delta))
+        switch route {
+        case .home:
+            selectOnHome(place: max(0, min(homeRail.count, homePlace + delta)))
+        case .library:
+            if let next = gridLayout.index(from: selectedIndex, steps: delta) { selectedIndex = next }
+        case .detail:
+            break
         }
     }
 
     func jump(toStart: Bool) {
         guard !games.isEmpty else { return }
-        let order = showingLibrary ? gridLayout.order : Array(games.indices)
-        selectedIndex = (toStart ? order.first : order.last) ?? 0
+        switch route {
+        case .home:
+            selectOnHome(place: toStart ? 0 : homeRail.count)
+        case .library:
+            let order = gridLayout.order
+            selectedIndex = (toStart ? order.first : order.last) ?? 0
+        case .detail:
+            break
+        }
     }
 
     func launchSelected() {
@@ -1352,6 +1486,11 @@ final class LibraryModel: ObservableObject {
         let insight = GameInsight(analysis: analysis, attempts: LaunchHealth.attempts(for: analysis, profile: profile))
         if insights[game.appID] != insight { insights[game.appID] = insight }
         return insight
+    }
+
+    /// How well it runs on a Mac, from the profile list and what this Mac learned about it.
+    func compatibility(of game: Game) -> Compatibility {
+        Compatibility.of(game, profile: profiles[game.appID], analysis: insights[game.appID]?.analysis)
     }
 
     /// Opens a pre-filled problem report for the game in the browser.

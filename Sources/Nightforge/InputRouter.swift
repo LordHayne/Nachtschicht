@@ -76,21 +76,22 @@ final class InputRouter {
         case 115: model.jump(toStart: true); return true // Pos1
         case 119: model.jump(toStart: false); return true // Ende
         case 36, 76:                                     // Return / Enter
-            if model.showingLibrary { model.showSelectedGame() } else { model.primaryAction() }
+            model.activate()
             return true
         case 53:                                         // Esc
             if model.awaitingSteam { model.cancelLaunch(); return true }
-            if model.showingLibrary { model.showingLibrary = false; return true }
-            if !model.searchText.isEmpty { model.searchText = ""; return true }
-            return false
+            return model.back()
         default: break
         }
         switch chars.lowercased() {
-        case "o" where model.selected.map { $0.install != .inStore } ?? false:
+        case "o" where model.heroGame.map { $0.install != .inStore } ?? false:
             model.showingOptions = true
             return true
         case "l":
             model.toggleLibrary()
+            return true
+        case "i" where !model.route.isDetail && model.heroGame != nil:
+            model.openDetail()
             return true
         case "/":
             model.focusSearch()
@@ -120,11 +121,12 @@ final class InputRouter {
         pad.leftThumbstick.valueChangedHandler = { [weak self] _, x, y in
             MainActor.assumeIsolated { self?.steer(.stick, x: x, y: y) }
         }
+        // X: the selected game's page (A on Home plays it).
         pad.buttonX.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
             MainActor.assumeIsolated {
                 guard self?.dialog == nil else { return }
-                self?.model?.toggleLibrary()
+                self?.model?.openDetail()
             }
         }
         // A presses the highlighted control (PadFocus). Otherwise, in a dialog or sheet, A and B
@@ -162,10 +164,8 @@ final class InputRouter {
                     }
                 } else if model.awaitingSteam {
                     model.cancelLaunch()  // stop waiting for a game Steam hasn't started
-                } else if model.showingLibrary {
-                    model.showingLibrary = false
-                } else if !model.searchText.isEmpty {
-                    model.searchText = ""  // like Esc: back from a filtered list to the whole library
+                } else {
+                    model.back()  // like Esc: a level up, a search dropped first
                 }
             }
         }
@@ -173,9 +173,13 @@ final class InputRouter {
             guard pressed else { return }
             MainActor.assumeIsolated { self?.toggleOptions() }
         }
+        // ☰: between Home and the library, like L.
         pad.buttonMenu.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
-            MainActor.assumeIsolated { self?.toggleOptions() }
+            MainActor.assumeIsolated {
+                guard self?.dialog == nil else { return }
+                self?.model?.toggleLibrary()
+            }
         }
         pad.leftShoulder.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
@@ -247,11 +251,11 @@ final class InputRouter {
 
     private func primary() {
         guard let model, !model.showingOptions, model.macSetup == nil else { return }
-        if model.showingLibrary { model.showSelectedGame() } else { model.primaryAction() }
+        model.activate()
     }
 
     private func toggleOptions() {
-        guard let model, let game = model.selected, game.install != .inStore else { return }
+        guard let model, let game = model.heroGame, game.install != .inStore else { return }
         // Opens over the library only; closes its own sheet but never one behind a question.
         guard model.showingOptions ? NSApp.modalWindow == nil : dialog == nil else { return }
         model.showingOptions.toggle()
@@ -281,8 +285,9 @@ final class InputRouter {
         setHeld(step.isNone ? (source == .dpad ? stickStep : dpadStep) : step)
     }
 
-    /// Down on the start page opens the library; up from its top row goes back. Returns true when
-    /// the view changed: holding on then mustn't run on through the other view.
+    /// Down on Home opens the library; up from Home's rail or the grid's top row enters the
+    /// buttons above, and on a game's page every direction moves between its buttons. Returns
+    /// true when the view or the focus changed: holding on then mustn't run on through it.
     @discardableResult
     private func perform(_ step: Step) -> Bool {
         guard let model else { return false }
@@ -301,18 +306,16 @@ final class InputRouter {
                 }
                 return false
             }
-            if step.dy < 0, !model.showingLibrary {
+            // A game's page has no covers: the pad starts on its Play button.
+            if model.route.isDetail || (step.dy < 0 && (model.route == .home || model.selectionInTopGridRow)) {
                 focus.move(dx: 0, dy: -1, in: window)
                 return true
             }
         }
+        if model.route.isDetail { return false }
         if step.dx != 0 { model.move(step.dx) }
-        if step.dy > 0, !model.showingLibrary {
-            model.showingLibrary = true
-            return true
-        }
-        if step.dy < 0, model.showingLibrary, model.selectionInTopGridRow {
-            model.showingLibrary = false
+        if step.dy > 0, model.route == .home {
+            model.goLibrary()
             return true
         }
         if step.dy != 0 { model.moveRow(step.dy) }

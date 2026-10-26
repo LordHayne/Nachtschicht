@@ -331,6 +331,27 @@ enum L10n {
         "Gives games priority on the CPU and graphics and halves Bluetooth latency for controllers and headphones. Turn it off if a game's sound crackles.":
             "Gibt Spielen Vorrang bei CPU und Grafik und halbiert die Bluetooth-Latenz für Controller und Kopfhörer. Schalte ihn aus, wenn der Ton eines Spiels knackt.",
 
+        // Navigation
+        "Home": "Startseite",
+        "Sections": "Bereiche",
+        "Home – what you play (L)": "Startseite – was du spielst (L)",
+        "Details": "Details",
+        "Details (I)": "Details (I)",
+        "Back (Esc)": "Zurück (Esc)",
+        "Back to Home": "Zurück zur Startseite",
+        "Back to the library": "Zurück zur Bibliothek",
+        "All games": "Alle Spiele",
+        "All %ld games": "Alle %ld Spiele",
+        "Your game": "Dein Spiel",
+        "1 in your library": "1 in deiner Bibliothek",
+        "%ld in your library": "%ld in deiner Bibliothek",
+        "All games, %ld in your library": "Alle Spiele, %ld in deiner Bibliothek",
+        "Everything in your library – installed or not – in one place.":
+            "Alles aus deiner Bibliothek – installiert oder nicht – an einem Ort.",
+        "Open Library": "Bibliothek öffnen",
+        "%@ – click again for details": "%@ – noch einmal klicken für Details",
+        "Tested on %@": "Getestet auf %@",
+
         // Compatibility
         "Runs great": "Läuft super",
         "Runs with tweaks": "Läuft mit Anpassungen",

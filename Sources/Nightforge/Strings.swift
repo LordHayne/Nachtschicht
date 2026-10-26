@@ -406,6 +406,17 @@ enum L10n {
         "Frees %@ of %@": "Macht %@ von %@ frei",
         "Uninstall %ld & Download": "%ld deinstallieren & laden",
 
+        // Storage
+        "Storage": "Speicher",
+        "Games": "Spiele",
+        "Other": "Anderes",
+        "%@ free": "%@ frei",
+        "Measuring Nightforge …": "Nightforge wird gemessen …",
+        "“Nightforge” is the game engine, the Windows environment and Steam itself – everything besides the games.":
+            "„Nightforge“ ist die Spiel-Engine, die Windows-Umgebung und Steam selbst – alles außer den Spielen.",
+        "No games on this Mac yet.": "Noch keine Spiele auf diesem Mac.",
+        "Games on this Mac": "Spiele auf diesem Mac",
+
         // Library filters
         "Sort": "Sortieren",
         "Recently played": "Zuletzt gespielt",

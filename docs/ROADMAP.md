@@ -150,11 +150,11 @@
   - **Fertig wenn:** Filter kombinierbar, Zustand bleibt beim Wechsel Detail ↔ Bibliothek erhalten, alles per Controller bedienbar.
   - **Stand:** `LibraryFilters.swift` (Status All / On this Mac / Not downloaded, „Runs great“, „Controller“ = volle Unterstützung, „Mac version“; Sortierung Recently played / Name / Disk space) und `LibrarySection.make` (Suche = eine Trefferliste, beste zuerst; Hidden = nach Name; „Recently played“ gruppiert nach Installiert / Lädt / Rest; Name/Größe eine Liste; Store-Treffer zuletzt). Leiste über dem Raster (nicht mitscrollend): Titel + „n von m Spielen“, Hidden-Schalter, Sortierung; darunter Status und Filter – jedes Segment ein eigener Pad-Knopf (↑ aus der obersten Rasterzeile). Filter gelten nur in der Bibliothek (Home bleibt vollständig) und bleiben über Detailseite und Home hinweg erhalten. Leeres Ergebnis: „No games match these filters“ + „Clear filters“. Pro-Store-Filter kommt mit Phase 7 (heute nur Steam). Test `tests/LibraryFiltersTest/`.
 
-- [ ] **2.2 Einstellungen in Tabs** · `M` · Branch `claude/ux-settings-2-2` (3 von 5 Tabs)
+- [ ] **2.2 Einstellungen in Tabs** · `M` · Branches `claude/ux-settings-2-2`, `claude/ux-storage-4-3` (4 von 5 Tabs)
   - **Was:** Tabs `Stores` · `General` · `Controller` · `Storage` · `About`. Inhalte siehe 1.6, 4.3, 5.4, 2.5.
   - **Wo:** `SettingsViews.swift` (`SettingsView`).
   - **Design:** `Dialogs.tsx` → `SettingsDialog`.
-  - **Stand:** `SettingsView.swift` mit Tab-Leiste (eigene Pad-Knöpfe): **Stores** (Steam: angemeldet/Spiele, „Open Steam“; CrossOver/Whisky/eigenes Wine), **General** (wie bisher), **About** (1.6). `SettingsView(tab:)` öffnet direkt einen Tab. Offen: Tabs **Storage** (kommt mit 4.3) und **Controller** (5.4), Schalter aus 2.5/3.4/5.1 in General.
+  - **Stand:** `SettingsView.swift` mit Tab-Leiste (eigene Pad-Knöpfe): **Stores** (Steam: angemeldet/Spiele, „Open Steam“; CrossOver/Whisky/eigenes Wine), **General** (wie bisher), **About** (1.6). `SettingsView(tab:)` öffnet direkt einen Tab. **Storage** seit `claude/ux-storage-4-3` (Teil von 4.3). In General inzwischen auch 5.1 (Mitteilungen) und 2.5 (Reduce motion); 3.4 fehlt noch. Offen: Tab **Controller** (kommt mit 5.4).
 
 - [ ] **2.3 Grafik-Voreinstellungen in Klartext + Profil-Herkunft** · `M`
   - **Was:** In den Spieloptionen statt Einzelschaltern zuerst vier Voreinstellungen:
@@ -225,13 +225,14 @@
   - **Was:** Steam-Bibliotheksordner auf externen Volumes anlegen/erkennen (`libraryfolders.vdf`), Spiele dorthin installieren und zwischen Laufwerken verschieben. Ist das Laufwerk nicht angeschlossen: Spiel ausgegraut mit „Connect Samsung T7 to play“.
   - **Design:** `Detail.tsx` (Stat „On“), `Dialogs.tsx` → Tab „Storage“ (Move to …).
 
-- [ ] **4.3 Speicher-Übersicht & sauber entfernen** · `M`
+- [ ] **4.3 Speicher-Übersicht & sauber entfernen** · `M` · teilweise in `claude/ux-storage-4-3`
   - **Was:** Tab „Storage“:
     - **Balken pro Laufwerk:** Spiele / Nightforge / Rest.
     - **Installierte Spiele:** nach Größe sortiert, jeweils mit „Move to …“.
     - **Shader-Caches:** „Clear“ mit Größe.
     - **Komplett entfernen:** „Remove Nightforge completely …“ löscht Engine, Windows-Umgebung und Caches; nur lokal gespeicherte Spielstände werden vorher nach `Documents/Nightforge Saves` kopiert.
   - **Design:** `Dialogs.tsx` → Tab „Storage“.
+  - **Stand:** Tab „Storage“: Balken für das Laufwerk mit Nightforges Daten (Spiele / Nightforge ohne Spiele, im Hintergrund gemessen / Anderes / frei) und die Spiele auf dem Mac nach Größe mit „Im Finder zeigen“ und „Uninstall …“ (fragt im Hauptfenster). Offen: „Move to …“ (braucht 4.2), Shader-Caches leeren (Ordner recherchieren), „Remove Nightforge completely …“.
 
 - [ ] **4.4 Download-Warteschlange & Ruhezustand** · `M` · braucht 0.3
   - **Was:**

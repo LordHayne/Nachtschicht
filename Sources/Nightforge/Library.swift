@@ -403,7 +403,7 @@ enum LibraryScanner {
         return game
     }
 
-    private static func folderSize(_ url: URL) -> Int64 {
+    static func folderSize(_ url: URL) -> Int64 {
         let keys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .isRegularFileKey]
         guard let files = FileManager.default.enumerator(at: url, includingPropertiesForKeys: Array(keys)) else { return 0 }
         var total: Int64 = 0

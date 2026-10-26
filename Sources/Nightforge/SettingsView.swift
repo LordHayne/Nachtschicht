@@ -5,12 +5,13 @@ import SwiftUI
 /// built on. The tabs are a row of buttons, so the pad reaches them too.
 struct SettingsView: View {
     enum Tab: CaseIterable {
-        case stores, general, about
+        case stores, general, storage, about
 
         var label: String {
             switch self {
             case .stores: return L10n.t("Stores")
             case .general: return L10n.t("General")
+            case .storage: return L10n.t("Storage")
             case .about: return L10n.t("About")
             }
         }
@@ -31,6 +32,8 @@ struct SettingsView: View {
                 switch tab {
                 case .stores: StoresSettings()
                 case .general: GeneralSettings()
+                case .storage: StorageSettings()
+                        .frame(height: 560)  // the list of games scrolls
                 case .about: AboutSettings()
                         .frame(height: 560)  // the list of projects scrolls
                 }
@@ -199,6 +202,147 @@ private struct GeneralSettings: View {
             get: { Prefs.reduceMotion(system: systemReduceMotion, stored: reduceMotionSetting) },
             set: { reduceMotionSetting = $0 == systemReduceMotion ? "" : ($0 ? "on" : "off") }
         )
+    }
+}
+
+// MARK: - Storage
+
+private struct StorageSettings: View {
+    @EnvironmentObject private var model: LibraryModel
+    /// Nightforge's own folder without the games in it (engine, Windows environment, Steam, caches);
+    /// nil while it's being measured.
+    @State private var ownSize: Int64?
+
+    private struct Disk {
+        let name: String
+        let total: Int64
+        let free: Int64
+    }
+
+    private var disk: Disk? {
+        let keys: Set<URLResourceKey> = [.volumeLocalizedNameKey, .volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey]
+        guard let values = try? SpaceCheck.existingFolder(for: Engine.supportDir).resourceValues(forKeys: keys),
+              let total = values.volumeTotalCapacity else { return nil }
+        return Disk(name: values.volumeLocalizedName ?? "Macintosh HD", total: Int64(total),
+                    free: values.volumeAvailableCapacityForImportantUsage ?? 0)
+    }
+
+    /// Installed and downloading games, biggest first.
+    private var games: [Game] {
+        model.allGames.filter { $0.install != .notInstalled && $0.install != .inStore }.sorted { $0.sizeOnDisk > $1.sizeOnDisk }
+    }
+
+    var body: some View {
+        let games = self.games
+        let gamesSize = games.reduce(Int64(0)) { $0 + $1.sizeOnDisk }
+        Form {
+            if let disk {
+                Section {
+                    let own = ownSize ?? 0
+                    let other = max(0, disk.total - disk.free - gamesSize - own)
+                    StorageBar(parts: [(gamesSize, Theme.ink.opacity(0.85)), (own, Theme.ink.opacity(0.5)), (other, Theme.ink.opacity(0.22))],
+                               total: disk.total)
+                    HStack(spacing: 16) {
+                        legend(L10n.t("Games"), gamesSize, Theme.ink.opacity(0.85))
+                        if let ownSize {
+                            legend("Nightforge", ownSize, Theme.ink.opacity(0.5))
+                        } else {
+                            HStack(spacing: 6) { ProgressView().controlSize(.small); Text(L10n.t("Measuring Nightforge …")) }
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        legend(L10n.t("Other"), other, Theme.ink.opacity(0.22))
+                        Spacer()
+                        Text(L10n.t("%@ free", Format.bytes(disk.free)))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(L10n.t("“Nightforge” is the game engine, the Windows environment and Steam itself – everything besides the games."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } header: {
+                    Text(disk.name)
+                }
+            }
+
+            Section {
+                if games.isEmpty {
+                    Text(L10n.t("No games on this Mac yet.")).foregroundStyle(.secondary)
+                }
+                ForEach(games) { game in
+                    LabeledContent {
+                        HStack(spacing: 8) {
+                            Text(Format.bytes(game.sizeOnDisk)).monospacedDigit().foregroundStyle(.secondary)
+                            Button { reveal(game) } label: { Image(systemName: "folder") }
+                                .help(L10n.t("Show game folder in Finder"))
+                                .accessibilityLabel(L10n.t("Show game folder in Finder"))
+                                .padFocus("storage.reveal.\(game.id)", activate: { reveal(game) })
+                            if model.canUninstall(game) {
+                                Button(game.isInstalled ? L10n.t("Uninstall …") : L10n.t("Cancel Download")) { uninstall(game) }
+                                    .padFocus("storage.uninstall.\(game.id)", activate: { uninstall(game) })
+                            }
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(game.name).lineLimit(1)
+                            Text(game.lastPlayed.map { L10n.t("Last played %@", Format.relative($0)) } ?? L10n.t("Never played"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } header: {
+                Text(L10n.t("Games on this Mac"))
+            }
+        }
+        .task(id: model.allGames.count) {
+            let builtIn = model.allGames.filter { $0.bottle.isBuiltIn && $0.install != .notInstalled && $0.install != .inStore }
+                .reduce(Int64(0)) { $0 + $1.sizeOnDisk }
+            let folder = Engine.supportDir
+            let total = await Task.detached(priority: .utility) { LibraryScanner.folderSize(folder) }.value
+            ownSize = max(0, total - builtIn)
+        }
+    }
+
+    private func legend(_ title: String, _ bytes: Int64, _ color: Color) -> some View {
+        HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text("\(title) \(Format.bytes(bytes))").monospacedDigit()
+        }
+        .font(.caption)
+    }
+
+    private func reveal(_ game: Game) {
+        let folder = FileManager.default.fileExists(atPath: game.installDir.path) ? game.installDir : game.installDir.deletingLastPathComponent()
+        NSWorkspace.shared.activateFileViewerSelecting([folder])
+    }
+
+    /// Asks in the main window, like the game's own Uninstall button.
+    private func uninstall(_ game: Game) {
+        NSApp.windows.first { $0.title == "Nightforge" }?.makeKeyAndOrderFront(nil)
+        model.requestUninstall(game)
+    }
+}
+
+/// How a disk is used: one bar, parts left to right, the rest free.
+private struct StorageBar: View {
+    let parts: [(bytes: Int64, color: Color)]
+    let total: Int64
+
+    var body: some View {
+        GeometryReader { geo in
+            HStack(spacing: 2) {
+                ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
+                    Rectangle().fill(part.color)
+                        .frame(width: max(0, geo.size.width * CGFloat(part.bytes) / CGFloat(max(total, 1)) - 2))
+                }
+                Spacer(minLength: 0)
+            }
+            .background(Color.white.opacity(0.06))
+            .clipShape(Capsule())
+        }
+        .frame(height: 12)
+        .accessibilityHidden(true)
     }
 }
 

@@ -131,12 +131,12 @@ The app ends up in `~/Applications/Nightforge.app` and starts right away. To pub
 
 ## Licence
 
-Nightforge is free software under the [GNU General Public License v3.0](LICENSE): you may use, share and change it, and anything built from it that you pass on stays open under the same licence. The game fixes in `profiles/profiles.json` are derived from umu-protonfixes and keep their [BSD-2-Clause notice](profiles/LICENSE-umu-protonfixes). Both licence files ship inside the app.
+Nightforge is free software under the [GNU General Public License v3.0](LICENSE): you may use, share and change it, and anything built from it that you pass on stays open under the same licence. The game fixes in `profiles/profiles.json` are derived from umu-protonfixes and keep their [BSD-2-Clause notice](profiles/LICENSE-umu-protonfixes); the anti-cheat status comes from AreWeAntiCheatYet ([MIT](profiles/LICENSE-areweanticheatyet)). These licence files ship inside the app, together with [THIRD_PARTY_NOTICES.txt](Resources/THIRD_PARTY_NOTICES.txt): the Vulkan headers in the Vulkan layer, the mingw-w64 runtime in the Steam browser wrapper, and the licences of everything Nightforge downloads.
 
 D3DMetal is Apple's software, not part of Nightforge and not under the GPL. Nightforge downloads Apple's files unmodified and signed by Apple (`scripts/package-d3dmetal.sh` packs them from Apple's toolkit), with Apple's `License.rtf` beside them. Apple's licence allows passing them on for non-commercial purposes only, on Apple hardware – which is one more reason Nightforge is and stays free: no price, no ads, no donations. Apple licenses the toolkit for developing, testing and evaluating games; that's the terms Nightforge's copy comes under too.
 
 ## Credits
 
-Nightforge stands on the work of [Wine](https://www.winehq.org), [Gcenx's Wine builds and DXVK-macOS](https://github.com/Gcenx), [DXMT](https://github.com/3Shain/dxmt), [MoltenVK](https://github.com/KhronosGroup/MoltenVK), [winetricks](https://github.com/Winetricks/winetricks), [cabextract](https://www.cabextract.org.uk) and [umu-protonfixes](https://github.com/Open-Wine-Components/umu-protonfixes). Their licences apply to the components Nightforge downloads.
+Nightforge stands on the work of [Wine](https://www.winehq.org), [Gcenx's Wine builds and DXVK-macOS](https://github.com/Gcenx), [DXMT](https://github.com/3Shain/dxmt), [MoltenVK](https://github.com/KhronosGroup/MoltenVK), [winetricks](https://github.com/Winetricks/winetricks), [cabextract](https://www.cabextract.org.uk), [umu-protonfixes](https://github.com/Open-Wine-Components/umu-protonfixes) and [AreWeAntiCheatYet](https://github.com/AreWeAntiCheatYet/AreWeAntiCheatYet). Their licences apply to the components Nightforge downloads.
 
 Nightforge is not affiliated with Valve or Apple. Steam is a trademark of Valve Corporation; Mac and macOS are trademarks of Apple Inc.

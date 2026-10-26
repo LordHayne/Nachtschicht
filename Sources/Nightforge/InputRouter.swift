@@ -42,7 +42,15 @@ final class InputRouter {
             MainActor.assumeIsolated { self?.attach(controller) }
         })
         observers.append(center.addObserver(forName: .GCControllerDidDisconnect, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshConnected() }
+            MainActor.assumeIsolated {
+                self?.letGo()
+                self?.refreshConnected()
+            }
+        })
+        // In the background (a game in front) GameController delivers nothing, not even the
+        // release of a held stick – without this the selection would run on by itself.
+        observers.append(center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.letGo() }
         })
         // The pad last touched becomes current: its own button labels go into the hints.
         observers.append(center.addObserver(forName: .GCControllerDidBecomeCurrent, object: nil, queue: .main) { [weak self] _ in
@@ -113,17 +121,29 @@ final class InputRouter {
         }
         pad.buttonX.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
-            MainActor.assumeIsolated { self?.model?.toggleLibrary() }
+            MainActor.assumeIsolated {
+                guard self?.dialog == nil else { return }
+                self?.model?.toggleLibrary()
+            }
         }
+        // In a dialog or sheet A and B are its Return and Esc: confirm, or cancel and close.
         pad.buttonA.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
-            MainActor.assumeIsolated { self?.primary() }
+            MainActor.assumeIsolated {
+                if let dialog = self?.dialog { Self.press(36, "\r", in: dialog) } else { self?.primary() }
+            }
         }
         pad.buttonB.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
             MainActor.assumeIsolated {
-                guard let model = self?.model else { return }
-                if model.showingOptions { model.showingOptions = false } else { model.showingLibrary = false }
+                guard let self, let model = self.model else { return }
+                if model.showingOptions, NSApp.modalWindow == nil {
+                    model.showingOptions = false
+                } else if let dialog = self.dialog {
+                    Self.press(53, "\u{1B}", in: dialog)
+                } else {
+                    model.showingLibrary = false
+                }
             }
         }
         pad.buttonY.pressedChangedHandler = { [weak self] _, _, pressed in
@@ -136,12 +156,62 @@ final class InputRouter {
         }
         pad.leftShoulder.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
-            MainActor.assumeIsolated { self?.model?.move(-5) }
+            MainActor.assumeIsolated {
+                guard self?.dialog == nil else { return }
+                self?.model?.move(-5)
+            }
         }
         pad.rightShoulder.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
-            MainActor.assumeIsolated { self?.model?.move(5) }
+            MainActor.assumeIsolated {
+                guard self?.dialog == nil else { return }
+                self?.model?.move(5)
+            }
         }
+        // L2/R2: first and last game, like Home and End on the keyboard.
+        pad.leftTrigger.pressedChangedHandler = { [weak self] _, _, pressed in
+            guard pressed else { return }
+            MainActor.assumeIsolated {
+                guard self?.dialog == nil else { return }
+                self?.model?.jump(toStart: true)
+            }
+        }
+        pad.rightTrigger.pressedChangedHandler = { [weak self] _, _, pressed in
+            guard pressed else { return }
+            MainActor.assumeIsolated {
+                guard self?.dialog == nil else { return }
+                self?.model?.jump(toStart: false)
+            }
+        }
+    }
+
+    /// The window in front of the library when it's an alert or sheet (game options, Steam for
+    /// Mac setup, a question): controller input belongs to it, not to the library behind.
+    private var dialog: NSWindow? {
+        guard let main = NSApp.windows.first(where: { $0.title == "Nightforge" }) else { return nil }
+        if let sheet = main.attachedSheet { return sheet }
+        if let modal = NSApp.modalWindow { return modal }
+        if let key = NSApp.keyWindow, key !== main, key.isVisible { return key }
+        return nil
+    }
+
+    /// One key press (down and up) into `window`, as if typed.
+    private static func press(_ keyCode: UInt16, _ characters: String, in window: NSWindow) {
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            guard let event = NSEvent.keyEvent(
+                with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode
+            ) else { continue }
+            NSApp.postEvent(event, atStart: false)
+        }
+    }
+
+    /// Forgets every held direction and stops the repeat.
+    private func letGo() {
+        dpadStep = Step()
+        stickStep = Step()
+        setHeld(Step())
     }
 
     private func primary() {
@@ -151,6 +221,8 @@ final class InputRouter {
 
     private func toggleOptions() {
         guard let model, let game = model.selected, game.install != .inStore else { return }
+        // Opens over the library only; closes its own sheet but never one behind a question.
+        guard model.showingOptions ? NSApp.modalWindow == nil : dialog == nil else { return }
         model.showingOptions.toggle()
     }
 
@@ -202,7 +274,7 @@ final class InputRouter {
         held = step
         repeatTimer?.invalidate()
         repeatTimer = nil
-        guard !step.isNone, let model, !model.showingOptions else { return }
+        guard !step.isNone, model != nil, dialog == nil else { return }
 
         guard !perform(step) else { return }
         repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.38, repeats: false) { [weak self] _ in

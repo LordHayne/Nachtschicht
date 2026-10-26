@@ -55,10 +55,10 @@
     {
       "id": "graphics",
       "kind": "graphics",
-      "version": "11.18-dxmt0.80-9",
-      "url": "https://github.com/LordHayne/Nightforge/releases/download/graphics-11.18-dxmt0.80-9/nightforge-graphics-11.18-dxmt0.80-9.tar.gz",
-      "sha256": "cb90d6291e1d785426790e25233f2c006e038242c5aa4e78b70019581adbe439",
-      "size": 19648839,
+      "version": "11.18-dxmt0.80-13",
+      "url": "https://github.com/LordHayne/Nightforge/releases/download/graphics-11.18-dxmt0.80-13/nightforge-graphics-11.18-dxmt0.80-13.tar.gz",
+      "sha256": "cd434a33c0387d125b8e54a4bfac82824ba6e16ebaa2b432739070ab1a6133cf",
+      "size": 19673869,
       "license": "LGPL-2.1-or-later",
       "source": "https://github.com/LordHayne/Nightforge"
     },

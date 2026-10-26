@@ -23,15 +23,19 @@ enum Route: Equatable {
     }
 }
 
-/// Home's rail: only what you're likely to play next, so it stays short with hundreds of games.
-/// Everything else is one step away in the library (the rail's last tile).
+/// Home's rail, "Continue playing": only what you're likely to play next, so it stays short with
+/// hundreds of games. Everything else is one step away in the library (the rail's last tile).
 enum HomeRail {
     static let limit = 12
+    /// Played within this many days counts as "lately".
+    static let recentDays = 90
+    /// With fewer games than this to continue (a new library), other installed games fill up.
+    static let minimum = 3
 
-    /// Indices into `games`: pinned games first (by name), then downloads, then installed games,
-    /// the ones played last first (never played after them, by name). Only what's on this Mac.
-    static func pick(_ games: [Game], pinned: Set<Int> = []) -> [Int] {
-        let candidates = games.indices.filter { index in
+    /// Indices into `games`: pinned games first (by name), then downloads, then installed games
+    /// played in the last 90 days, the latest first. Only what's on this Mac.
+    static func pick(_ games: [Game], pinned: Set<Int> = [], now: Date = Date()) -> [Int] {
+        let onMac = games.indices.filter { index in
             switch games[index].install {
             case .installed, .downloading: return true
             case .notInstalled, .inStore: return false
@@ -41,20 +45,27 @@ enum HomeRail {
             if case .downloading = game.install { return true }
             return false
         }
-        func byName(_ a: Game, _ b: Game) -> Bool { a.name.localizedStandardCompare(b.name) == .orderedAscending }
-        let sorted = candidates.sorted { a, b in
-            let ga = games[a], gb = games[b]
-            let pa = pinned.contains(ga.appID), pb = pinned.contains(gb.appID)
-            if pa != pb { return pa }
-            if pa { return byName(ga, gb) }
-            if downloading(ga) != downloading(gb) { return downloading(ga) }
-            switch (ga.lastPlayed, gb.lastPlayed) {
+        let since = now.addingTimeInterval(-Double(recentDays) * 86_400)
+        func recent(_ game: Game) -> Bool { game.lastPlayed.map { $0 >= since } ?? false }
+        func byName(_ a: Int, _ b: Int) -> Bool { games[a].name.localizedStandardCompare(games[b].name) == .orderedAscending }
+        // Latest first; never played after the rest, by name.
+        func byRecency(_ a: Int, _ b: Int) -> Bool {
+            switch (games[a].lastPlayed, games[b].lastPlayed) {
             case let (x?, y?) where x != y: return x > y
             case (_?, nil): return true
             case (nil, _?): return false
-            default: return byName(ga, gb)
+            default: return byName(a, b)
             }
         }
-        return Array(sorted.prefix(limit))
+
+        let pins = onMac.filter { pinned.contains(games[$0].appID) }.sorted(by: byName)
+        let rest = onMac.filter { !pinned.contains(games[$0].appID) }
+        let downloads = rest.filter { downloading(games[$0]) }.sorted(by: byRecency)
+        let lately = rest.filter { !downloading(games[$0]) && recent(games[$0]) }.sorted(by: byRecency)
+        var rail = pins + downloads + lately
+        if rail.count < minimum {
+            rail += rest.filter { !rail.contains($0) }.sorted(by: byRecency).prefix(minimum - rail.count)
+        }
+        return Array(rail.prefix(limit))
     }
 }

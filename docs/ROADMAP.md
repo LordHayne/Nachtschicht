@@ -122,10 +122,11 @@
   - **Design:** `Dialogs.tsx` → Tab „About“.
   - **Fertig wenn:** Jede mitgelieferte Komponente steht mit Lizenz drin, automatisch aus dem Manifest.
 
-- [ ] **1.7 Home-Leiste = „Continue playing“** · `S` · braucht 0.1, 1.4
+- [x] **1.7 Home-Leiste = „Continue playing“** · `S` · braucht 0.1, 1.4 · Branch `claude/ux-continue-1-7`
   - **Was:** Angepinnte zuerst, dann installiert/ladend und in den letzten 90 Tagen gespielt, max. 12; letzte Kachel „All games · N“.
   - **Design:** `data.ts` → `continuePlaying`; `Home.tsx` → `Rail`.
   - **Fertig wenn:** Bei 100+ Spielen enthält die Leiste ≤ 13 Elemente.
+  - **Stand:** `HomeRail.pick` – Angeheftete (nach Name), dann Downloads, dann installiert und in den letzten 90 Tagen gespielt (neueste zuerst), max. 12, plus Kachel „All games“. Abweichung: Sind es weniger als 3 (neue Bibliothek), füllen andere installierte Spiele auf, damit Home nie leer ist. Überschrift „Continue playing · Pinned, then what you played lately“. Kopfzeile: Bereichsschalter schrumpft nicht mehr, die Suche wird bei schmalem Fenster schmaler. Test in `tests/NavigationTest/`.
 
 - [ ] **1.8 „Update & Play“** · `M`
   - **Warum:** „Play“ wird sonst überraschend zu einem 8-GB-Download.

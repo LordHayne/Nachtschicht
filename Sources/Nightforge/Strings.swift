@@ -352,6 +352,9 @@ enum L10n {
         "%@ – click again for details": "%@ – noch einmal klicken für Details",
         "Tested on %@": "Getestet auf %@",
 
+        "Continue playing": "Weiterspielen",
+        "Pinned, then what you played lately": "Angeheftet, dann was du zuletzt gespielt hast",
+
         // Hide & pin
         "Hidden": "Ausgeblendet",
         "Hidden games": "Ausgeblendete Spiele",

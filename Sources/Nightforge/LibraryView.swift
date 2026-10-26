@@ -374,6 +374,7 @@ private struct TopBar: View {
                 .foregroundStyle(Theme.ink)
             if !model.allGames.isEmpty {
                 SectionSwitch()
+                    .fixedSize()
                     .padding(.leading, 6)
                 if !model.searchText.isEmpty {
                     Text(countText)
@@ -395,7 +396,9 @@ private struct TopBar: View {
                             Image(systemName: "arrow.down.circle.fill")
                         }
                         Text(model.updating ? L10n.t("Updating …") : L10n.t("Update to %@", update.version))
+                            .lineLimit(1)
                     }
+                    .fixedSize()
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.night)
                     .padding(.horizontal, 14)
@@ -523,7 +526,8 @@ private struct SearchField: View {
             }
         }
         .padding(.horizontal, 12)
-        .frame(width: 230, height: 34)
+        .frame(minWidth: 120, idealWidth: 230, maxWidth: 230)
+        .frame(height: 34)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(Theme.sodium.opacity(focused ? 0.8 : 0), lineWidth: 1.5))
         .padFocus("top.search", cornerRadius: 17, activate: { focused = true })
@@ -562,7 +566,8 @@ private struct GameDetail: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: compact ? 18 : 24) {
+            VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 CompatibilityLine(compatibility: model.compatibility(of: game), detailed: !compact)
                 if model.isHidden(game) {
@@ -580,7 +585,7 @@ private struct GameDetail: View {
                     Image(nsImage: logo)
                         .resizable()
                         .scaledToFit()
-                        .frame(maxWidth: 480, maxHeight: 170, alignment: .bottomLeading)
+                        .frame(maxWidth: 480, maxHeight: compact ? 150 : 170, alignment: .bottomLeading)
                         .shadow(color: .black.opacity(0.6), radius: 20, y: 8)
                 } else {
                     Text(game.name)
@@ -592,8 +597,9 @@ private struct GameDetail: View {
                         .shadow(color: .black.opacity(0.5), radius: 16, y: 6)
                 }
             }
-            .frame(height: 170, alignment: .bottomLeading)
+            .frame(height: compact ? 150 : 170, alignment: .bottomLeading)
             .accessibilityLabel(game.name)
+            }
 
             HStack(alignment: .top, spacing: 34) {
                 if game.install != .inStore {
@@ -919,8 +925,9 @@ struct RoundIconButton: View {
 
 // MARK: - Cover rail
 
-/// Home's rail: the games you're likely to play next, then a tile to all the others. A click
-/// selects, a second one opens the game's page – it never starts or downloads anything.
+/// Home's rail, "Continue playing": pinned games, downloads and what you played lately, then a tile
+/// to all the others. A click selects, a second one opens the game's page – it never starts or
+/// downloads anything.
 private struct CoverRail: View {
     @EnvironmentObject private var model: LibraryModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -932,6 +939,23 @@ private struct CoverRail: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(L10n.t("Continue playing"))
+                    .font(Theme.display(15))
+                    .foregroundStyle(Theme.ink)
+                Text(L10n.t("Pinned, then what you played lately"))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+            }
+            .padding(.horizontal, Theme.gutter)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            rail
+        }
+    }
+
+    private var rail: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 18) {

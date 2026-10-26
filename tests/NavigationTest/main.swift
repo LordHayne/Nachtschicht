@@ -22,7 +22,7 @@ struct NavigationTest {
     }
 
     static func main() {
-        // Only what's on the Mac, downloads first, then the ones played last.
+        // Only what's on the Mac: downloads first, then games played in the last 90 days, latest first.
         let games = [
             game(0, .notInstalled, playedDaysAgo: 1),
             game(1, .installed, playedDaysAgo: 30),
@@ -31,10 +31,16 @@ struct NavigationTest {
             game(4, .downloading(0.4)),
             game(5, .installed, name: "B never played"),
             game(6, .installed, name: "A never played"),
+            game(7, .installed, playedDaysAgo: 200),
         ]
         let rail = HomeRail.pick(games)
-        check(rail == [4, 3, 1, 6, 5], "downloads, then recently played, then never played by name: \(rail)")
+        check(rail == [4, 3, 1], "downloads, then played lately; not long ago or never: \(rail)")
         check(!rail.contains(0) && !rail.contains(2), "games not on this Mac stay in the library")
+
+        // A new library with little played lately: other installed games fill up to three.
+        let fresh = [game(0, .installed, playedDaysAgo: 400), game(1, .installed, name: "B"), game(2, .installed, name: "A"),
+                     game(3, .notInstalled), game(4, .installed, playedDaysAgo: 3)]
+        check(HomeRail.pick(fresh) == [4, 0, 2], "filled up: the latest played, then never played by name: \(HomeRail.pick(fresh))")
 
         // 100+ games: the rail stays short (12 games and the "All games" tile).
         let many = (0..<140).map { game($0, $0 % 3 == 0 ? .notInstalled : .installed, playedDaysAgo: Double($0)) }
@@ -44,8 +50,8 @@ struct NavigationTest {
         check(HomeRail.pick([]).isEmpty, "no games, no rail")
 
         // Pinned games lead the rail (by name), even ones not played for long; only games on this Mac.
-        let pinned = HomeRail.pick(games, pinned: [5, 0])
-        check(pinned == [5, 4, 3, 1, 6], "pinned first, a pinned game not on the Mac stays off: \(pinned)")
+        let pinned = HomeRail.pick(games, pinned: [5, 0, 7])
+        check(pinned == [5, 7, 4, 3, 1], "pinned first (by name), even unplayed; a pinned game not on the Mac stays off: \(pinned)")
         let pinnedMany = HomeRail.pick(many, pinned: [139, 137])
         check(pinnedMany.prefix(2) == [137, 139] && pinnedMany.count == HomeRail.limit, "pins beat recent games and the limit holds: \(pinnedMany.prefix(3))")
 

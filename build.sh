@@ -26,9 +26,10 @@ cp Resources/Info.plist "$OUT/Contents/Info.plist"
 cp components/manifest.json "$OUT/Contents/Resources/manifest.json"
 # Same for the per-game fixes (scripts/build-profiles.py).
 cp profiles/profiles.json "$OUT/Contents/Resources/profiles.json"
-# Licences travel with the app: Nightforge's own (GPL-3.0) and the one for the fixes data.
+# Licences travel with the app: Nightforge's own (GPL-3.0) and the ones for the fixes data.
 cp LICENSE "$OUT/Contents/Resources/LICENSE"
 cp profiles/LICENSE-umu-protonfixes "$OUT/Contents/Resources/LICENSE-umu-protonfixes"
+cp profiles/LICENSE-areweanticheatyet "$OUT/Contents/Resources/LICENSE-areweanticheatyet"
 
 # Steam's browser needs this wrapper under Wine (see wrapper/steamwebhelper-wrapper.c).
 # Rebuilt when mingw-w64 is installed, otherwise the checked-in build is used.

@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 """Builds profiles/profiles.json: per-game fixes Nightforge applies when it starts a game.
 
-Two sources, merged per Steam app ID:
+Sources, merged per Steam app ID:
   * umu-protonfixes (BSD-2-Clause, https://github.com/Open-Wine-Components/umu-protonfixes):
     the game fixes behind Proton-GE and umu. They're small Python scripts; this reads them as
     syntax trees and never runs them. Only plain, unconditional calls with literal arguments
     are translated; anything else is left out and the game is marked "partial".
+  * AreWeAntiCheatYet (MIT, https://github.com/AreWeAntiCheatYet/AreWeAntiCheatYet), optional:
+    games whose anti-cheat stops them even under Proton. On a Mac they don't start at all, so
+    Nightforge says so before a download ("antiCheat").
+  * NVIDIA's public GeForce Now game list, optional: which of those games can be streamed
+    instead ("geforceNow", its GeForce Now id).
   * profiles/mac.json: Nightforge's own profiles, tested on Macs. They win over upstream.
 
-Usage: build-profiles.py <umu-protonfixes checkout> [--out profiles/profiles.json]
+Usage: build-profiles.py <umu-protonfixes checkout> [--anticheat games.json] [--geforcenow list.json]
+                         [--out profiles/profiles.json]
 """
 
 import argparse
@@ -16,6 +22,7 @@ import ast
 import datetime
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -44,6 +51,13 @@ IGNORED_CALLS = {
 
 # Arguments that switch on anti-cheat runtimes Proton ships and macOS can't run.
 IGNORED_ARGUMENTS = {"-battleye", "-eac_launcher"}
+
+# AreWeAntiCheatYet statuses for games that don't run even under Proton; ones that run there
+# ("Supported", "Running") often still work on a Mac offline or with Steam's no-anti-cheat option.
+BLOCKING_STATUSES = {"Broken", "Denied"}
+
+# Anti-cheat that runs fine under Wine; it doesn't block a game.
+HARMLESS_ANTICHEATS = {"VAC"}
 
 # Registry keys for Wine's Linux controller driver; under one shared prefix they'd change
 # controllers for every game.
@@ -137,6 +151,27 @@ def translate(path: pathlib.Path):
     return profile, partial
 
 
+def anticheat_blocks(games):
+    """Steam app ID → anti-cheat names, for the AreWeAntiCheatYet games that can't run."""
+    blocks = {}
+    for game in games:
+        app_id = str((game.get("storeIds") or {}).get("steam") or "")
+        names = [n for n in game.get("anticheats") or [] if n not in HARMLESS_ANTICHEATS]
+        if app_id.isdigit() and game.get("status") in BLOCKING_STATUSES and names:
+            blocks[app_id] = {"name": game.get("name"), "antiCheat": names}
+    return blocks
+
+
+def geforce_now_ids(games):
+    """Steam app ID → GeForce Now id, for the games GeForce Now streams from Steam."""
+    ids = {}
+    for game in games:
+        match = re.search(r"/app/(\d+)", game.get("steamUrl") or "")
+        if match and game.get("store") == "Steam" and game.get("status") == "AVAILABLE" and game.get("id"):
+            ids.setdefault(match.group(1), game["id"])
+    return ids
+
+
 def git_commit(path: pathlib.Path) -> str:
     try:
         return subprocess.run(["git", "-C", str(path), "rev-parse", "HEAD"],
@@ -148,6 +183,8 @@ def git_commit(path: pathlib.Path) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("protonfixes", type=pathlib.Path)
+    parser.add_argument("--anticheat", type=pathlib.Path, help="AreWeAntiCheatYet games.json")
+    parser.add_argument("--geforcenow", type=pathlib.Path, help="GeForce Now supported-public-game-list JSON")
     parser.add_argument("--mac", type=pathlib.Path, default=ROOT / "profiles" / "mac.json")
     parser.add_argument("--out", type=pathlib.Path, default=ROOT / "profiles" / "profiles.json")
     options = parser.parse_args()
@@ -169,21 +206,37 @@ def main() -> int:
         profile["source"] = "umu"
         games[path.stem] = profile
 
+    sources = {
+        "umu-protonfixes": {
+            "url": "https://github.com/Open-Wine-Components/umu-protonfixes",
+            "commit": git_commit(options.protonfixes),
+            "license": "BSD-2-Clause",
+        },
+    }
+    blocked = 0
+    if options.anticheat:
+        cloud = {}
+        if options.geforcenow:
+            cloud = geforce_now_ids(json.loads(options.geforcenow.read_text(encoding="utf-8")))
+            sources["geforce-now"] = {"url": "https://www.nvidia.com/en-us/geforce-now/games/"}
+        for app_id, block in anticheat_blocks(json.loads(options.anticheat.read_text(encoding="utf-8"))).items():
+            profile = games.setdefault(app_id, {"name": block["name"], "source": "anticheat"})
+            profile["antiCheat"] = block["antiCheat"]
+            if app_id in cloud:
+                profile["geforceNow"] = cloud[app_id]
+            blocked += 1
+        sources["areweanticheatyet"] = {"url": "https://areweanticheatyet.com", "license": "MIT"}
+
     mac = json.loads(options.mac.read_text(encoding="utf-8"))
     for app_id, own in mac.get("games", {}).items():
         base = {} if own.get("ignoreUpstream") else games.get(app_id, {})
         merged = {**base, **{k: v for k, v in own.items() if k != "ignoreUpstream"}}
-        merged["source"] = "mac" if not base else "umu+mac"
+        merged["source"] = "mac" if not base else base["source"] + "+mac"
         games[app_id] = merged
 
     document = {
         "formatVersion": FORMAT_VERSION,
-        "sources": {
-            "umu-protonfixes": {
-                "url": "https://github.com/Open-Wine-Components/umu-protonfixes",
-                "commit": git_commit(options.protonfixes),
-                "license": "BSD-2-Clause",
-            },
+        "sources": sources | {
             "mac": {"url": "https://github.com/LordHayne/Nightforge/blob/main/profiles/mac.json"},
         },
         "games": dict(sorted(games.items(), key=lambda item: int(item[0]))),
@@ -199,7 +252,7 @@ def main() -> int:
     options.out.parent.mkdir(parents=True, exist_ok=True)
     options.out.write_text(json.dumps(document, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"{len(games)} games ({stats['translated']} fully, {stats['partial']} partly translated, "
-          f"{stats['empty']} Linux-only skipped, {len(mac.get('games', {}))} Mac profiles) → {options.out}")
+          f"{stats['empty']} Linux-only skipped, {blocked} blocked by anti-cheat, {len(mac.get('games', {}))} Mac profiles) → {options.out}")
     return 0
 
 

@@ -44,7 +44,7 @@ jobs:
           curl -fsSL "https://github.com/Gcenx/macOS_Wine_builds/releases/download/$GCENX_WINE/wine-devel-$GCENX_WINE-osx64.tar.xz" \
             | tar -xJ -C gcenx
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: nightforge
 

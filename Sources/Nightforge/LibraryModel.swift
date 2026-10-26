@@ -105,10 +105,11 @@ final class LibraryModel: ObservableObject {
     private func watchRunningGames() {
         Task {
             while !Task.isCancelled {
+                let loaded = libraryLoaded
                 let folders = Self.processFolders(allGames)
                 let found = await Task.detached(priority: .utility) { Self.runningGames(folders) }.value
                 if found != running { running = found }
-                runningScanned = true
+                if loaded { runningScanned = true }  // only a look with the games known counts
                 watchForGameEnd(found)
                 if restartSteamWhenIdle && found.isEmpty && launchingID == nil {
                     restartSteamWhenIdle = false
@@ -191,8 +192,10 @@ final class LibraryModel: ObservableObject {
         return result
     }
 
-    /// The running-game check has looked at the processes at least once.
+    /// The running-game check has looked at the processes at least once, knowing the library.
     private var runningScanned = false
+    /// The first library scan has finished.
+    private var libraryLoaded = false
 
     func isRunning(_ game: Game) -> Bool { running[game.id] != nil }
 
@@ -244,6 +247,7 @@ final class LibraryModel: ObservableObject {
         }.value
         let wasDownloading = Set(allGames.filter { Self.isDownloading($0.install) }.map(\.id))
         allGames = found
+        libraryLoaded = true
         for game in found where game.isInstalled && wasDownloading.contains(game.id) { prepare(game) }
         applyFilter()
         isScanning = false
@@ -307,9 +311,10 @@ final class LibraryModel: ObservableObject {
         guard SetupModel.isComplete, steamStartup == nil else { return }
         Task { await ProfileStore.shared.refresh() }
         steamStartup = Task {
-            guard let wine = try? await Engine.ensureEngine() else { return }
-            // Let the running-game check see the processes before deciding on a restart.
+            // Let the running-game check see the processes before deciding on a restart – or on
+            // replacing the engine's files, which ends the Wine session a game would run in.
             while !runningScanned { try? await Task.sleep(for: .milliseconds(100)) }
+            guard let wine = try? await Engine.ensureEngine(gameRunning: !running.isEmpty) else { return }
             // Signing in would sign out the Steam for Mac a running Mac game uses; Play starts it later.
             guard !macSteamBusy else { return }
             try? await Engine.ensureSteamRunning(wine, busy: !running.isEmpty)

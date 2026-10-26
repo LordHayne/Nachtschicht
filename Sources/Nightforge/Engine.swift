@@ -144,6 +144,11 @@ enum Engine {
             && ours.contains { $0.command.hasSuffix("/wineserver") || $0.command.contains("/wineserver ") }
     }
 
+    /// A Windows game runs in Nightforge's Wine session (its process shows the game folder's path).
+    static var windowsGameRunning: Bool {
+        ownProcesses().contains { $0.command.lowercased().contains(#"\steamapps\common\"#) }
+    }
+
     /// Processes started from Nightforge's engine (executable inside its folder), with the command
     /// line ps shows – Wine rewrites that to the Windows program.
     static func ownProcesses(under folder: URL = supportDir) -> [(pid: pid_t, command: String)] {
@@ -256,7 +261,9 @@ enum Engine {
 
     /// Makes sure the engine and graphics layer from the current component list are installed –
     /// e.g. after the list moved to a newer engine. Returns the wine binary to use.
-    static func ensureEngine() async throws -> URL {
+    /// `gameRunning`: a game of Nightforge's own Steam runs, so its Wine session must not end –
+    /// a new graphics package (which can bring a new wineserver) waits for the next start then.
+    static func ensureEngine(gameRunning: Bool = false) async throws -> URL {
         let store = ComponentStore.shared
         let manifest = try await store.manifest()
         guard let engine = manifest.component(engineID), let graphics = graphicsComponent(in: manifest) else {
@@ -289,7 +296,7 @@ enum Engine {
             .appendingPathComponent("lib/wine", isDirectory: true), name: "graphics")
         let moltenVK = manifest.component(moltenVKID)
         let graphicsWanted = "\(graphics.id) \(graphics.version) engine-match \(matchesEngine) moltenvk \(moltenVK?.version ?? "engine")"
-        if readStamp(graphicsStamp) != graphicsWanted {
+        if readStamp(graphicsStamp) != graphicsWanted, !gameRunning, !windowsGameRunning {
             try installGraphics(graphicsDir, into: wine, matchesEngine: matchesEngine)
             var moltenVKDir: URL?
             if let moltenVK { moltenVKDir = try await store.install(moltenVK) }
@@ -394,7 +401,8 @@ enum Engine {
           osascript -e 'tell application id "com.valvesoftware.steam" to quit' >/dev/null 2>&1
         fi
         [ -n "$WINE" ] || exit 0
-        export WINEPREFIX="$PREFIX" WINEDEBUG=-all
+        # WINEMSYNC like every other Wine process of the session (Engine.environment).
+        export WINEPREFIX="$PREFIX" WINEDEBUG=-all WINEMSYNC=1
         if steam_running; then
           "$WINE" 'C:\Program Files (x86)\Steam\steam.exe' -shutdown >/dev/null 2>&1
           for i in $(seq 1 20); do steam_running || break; sleep 1; done
@@ -444,6 +452,42 @@ enum Engine {
                 try? fm.removeItem(at: destination)
                 try fm.copyItem(at: file, to: destination)
             }
+        }
+        try installMsync(top.appendingPathComponent("msync", isDirectory: true), into: wine, matchesEngine: matchesEngine)
+    }
+
+    /// msync: Wine's synchronization (events, mutexes, semaphores every game thread waits on) on
+    /// Mach semaphores instead of round trips to the wineserver, which otherwise burns CPU time a
+    /// game would rather have (engine/patches/wine-11.18-msync.patch). The package's ntdll.so and
+    /// wineserver replace the engine's, which stay as *.engine and come back for a package without
+    /// them or for another engine version. The two only work together, so a Wine session started
+    /// with the old pair ends before the swap. Switched on by WINEMSYNC (see `environment`).
+    private static func installMsync(_ msyncDir: URL, into wine: URL, matchesEngine: Bool) throws {
+        let fm = FileManager.default
+        let root = wine.deletingLastPathComponent().deletingLastPathComponent()
+        let pairs = [
+            (msyncDir.appendingPathComponent("x86_64-unix/ntdll.so"), root.appendingPathComponent("lib/wine/x86_64-unix/ntdll.so")),
+            (msyncDir.appendingPathComponent("bin/wineserver"), wine.deletingLastPathComponent().appendingPathComponent("wineserver")),
+        ]
+        let available = matchesEngine && pairs.allSatisfy { fm.fileExists(atPath: $0.0.path) }
+        let sources = pairs.map { pair -> URL in
+            let original = pair.1.appendingPathExtension("engine")
+            return available ? pair.0 : original
+        }
+        let changes = zip(sources, pairs).contains { source, pair in
+            fm.fileExists(atPath: source.path) && !fm.contentsEqual(atPath: source.path, andPath: pair.1.path)
+        }
+        guard changes else { return }
+        if !ownProcesses().isEmpty { stopAll(wine) }  // with the old wineserver, before it's replaced
+        for (source, pair) in zip(sources, pairs) {
+            let original = pair.1.appendingPathExtension("engine")
+            if available, !fm.fileExists(atPath: original.path) { try fm.copyItem(at: pair.1, to: original) }
+            guard fm.fileExists(atPath: source.path) else { continue }
+            let staged = pair.1.appendingPathExtension("new")
+            try? fm.removeItem(at: staged)
+            try fm.copyItem(at: source, to: staged)
+            try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: staged.path)
+            _ = try fm.replaceItemAt(pair.1, withItemAt: staged)
         }
     }
 
@@ -877,6 +921,9 @@ enum Engine {
             env["DYLD_INSERT_LIBRARIES"] = hider.path
         }
         env["WINEPREFIX"] = prefix.path
+        // msync (installMsync); every Wine process of the session, wineserver included, has to agree,
+        // so it's in the environment all of them start with. Engines without it ignore it.
+        env["WINEMSYNC"] = "1"
         env["WINEDEBUG"] = "-all"
         // Gecko/Mono installers would otherwise pop up dialogs during setup.
         env["WINEDLLOVERRIDES"] = "mscoree,mshtml="

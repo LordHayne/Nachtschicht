@@ -1543,6 +1543,15 @@ final class LibraryModel: ObservableObject {
         while quietSeconds < 120 && totalSeconds < 900 {
             try? await Task.sleep(for: .seconds(1))
             if Task.isCancelled { return false }
+            // Steam updates the game first ("Update & Play"): that's no silence, however long it takes.
+            if let update = await Task.detached(priority: .utility, operation: { LibraryScanner.updateState(of: game) }).value,
+               update.isRunning {
+                launchPhase = .updating(update.fraction)
+                quietSeconds = 0
+                continue
+            } else if case .updating? = launchPhase {
+                launchPhase = nil
+            }
             totalSeconds += 1
             switch watcher.poll() {
             case .running?:

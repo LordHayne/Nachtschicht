@@ -468,6 +468,14 @@ enum L10n {
         "You said it didn't run well.": "Du hast gesagt, es lief nicht gut.",
         "You said: %@.": "Du hast gesagt: %@.",
 
+        // Update & Play
+        "Update & Play · %@": "Aktualisieren & spielen · %@",
+        "Update & Play": "Aktualisieren & spielen",
+        "Updating … %ld %%": "Aktualisiert … %ld %%",
+        "Steam updates the game first – it starts by itself when the update is done.": "Steam aktualisiert das Spiel zuerst – es startet von selbst, sobald das Update fertig ist.",
+        "An update is waiting – Steam downloads it before the game starts": "Ein Update wartet – Steam lädt es, bevor das Spiel startet",
+        "Installed, update waiting": "Installiert, Update wartet",
+
         // Cloud saves
         "Your save is in the Steam Cloud. You can close your Mac.": "Dein Spielstand ist in der Steam Cloud. Du kannst den Mac zuklappen.",
         "Steam syncs your save in the background.": "Steam gleicht deinen Spielstand im Hintergrund ab.",

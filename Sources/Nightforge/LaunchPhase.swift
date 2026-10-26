@@ -12,6 +12,8 @@ enum LaunchPhase: Equatable {
     case restartingSteam
     /// It ended at once: the next way, by its name.
     case retrying(String)
+    /// Steam updates the game before it starts it: how far, when known.
+    case updating(Double?)
 
     var title: String {
         switch self {
@@ -23,6 +25,8 @@ enum LaunchPhase: Equatable {
         case .settingUpDotNet: return L10n.t("Setting up .NET for the game …")
         case .restartingSteam: return L10n.t("Restarting Steam …")
         case .retrying(let way): return L10n.t("Starting again with %@ …", way)
+        case .updating(let fraction?): return L10n.t("Updating … %ld %%", Int(fraction * 100))
+        case .updating(nil): return L10n.t("Updating …")
         }
     }
 
@@ -36,6 +40,7 @@ enum LaunchPhase: Equatable {
         case .settingUpDotNet: return L10n.t("Installing .NET, which this game needs. Only the first time.")
         case .restartingSteam: return L10n.t("Steam got stuck while starting – a fresh start fixes that.")
         case .retrying: return L10n.t("It closed right away – Nightforge starts it the next way and remembers what works.")
+        case .updating: return L10n.t("Steam updates the game first – it starts by itself when the update is done.")
         }
     }
 

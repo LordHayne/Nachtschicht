@@ -832,7 +832,8 @@ private struct GameDetail: View {
                            needsConfirmation: model.launchNeedsConfirmation,
                            status: model.launchPhase?.title,
                            unavailable: unavailable, cloud: game.playsInCloud,
-                           noSpace: game.downloadNeedsSpace != nil) {
+                           noSpace: game.downloadNeedsSpace != nil,
+                           update: game.pendingUpdate) {
                     model.primaryAction()
                 }
                 .padFocus("play", cornerRadius: 34, activate: { model.primaryAction() })
@@ -992,6 +993,8 @@ private struct PlayButton: View {
     var cloud = false
     /// Steam stopped the download for lack of disk space: the button carries on with it.
     var noSpace = false
+    /// An update Steam downloads first: its size, 0 when not known yet.
+    var update: Int64?
     let action: () -> Void
     @State private var hovering = false
 
@@ -1010,6 +1013,8 @@ private struct PlayButton: View {
         if cloud { return L10n.t("Play on GeForce Now") }
         if noSpace { return L10n.t("Continue Download") }
         switch install {
+        case .installed where update != nil:
+            return update! > 0 ? L10n.t("Update & Play · %@", Format.bytes(update!)) : L10n.t("Update & Play")
         case .installed: return L10n.t("Play")
         case .notInstalled: return L10n.t("Download")
         case .downloading(let fraction?): return L10n.t("Downloading … %ld %%", Int(fraction * 100))
@@ -1036,6 +1041,9 @@ private struct PlayButton: View {
                     ProgressView()
                         .controlSize(.small)
                         .environment(\.colorScheme, .light)
+                } else if install == .installed && update != nil {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 15, weight: .bold))
                 } else {
                     Image(systemName: install == .notInstalled ? "arrow.down" : install == .inStore ? "cart" : "play.fill")
                         .font(.system(size: 15, weight: .bold))
@@ -1350,7 +1358,7 @@ struct CoverCard: View {
     private var spokenDescription: String {
         var parts = [game.name]
         switch game.install {
-        case .installed: parts.append(L10n.t("Installed"))
+        case .installed: parts.append(game.pendingUpdate != nil ? L10n.t("Installed, update waiting") : L10n.t("Installed"))
         case .downloading: parts.append(L10n.t("Downloading"))
         case .notInstalled: parts.append(L10n.t("In your library"))
         case .inStore: parts.append(L10n.t("In the Steam Store"))
@@ -1364,6 +1372,16 @@ struct CoverCard: View {
 
     @ViewBuilder private var installBadge: some View {
         switch game.install {
+        case .installed where game.pendingUpdate != nil:
+            HStack {
+                Spacer()
+                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Theme.ink, Theme.night.opacity(0.7))
+                    .padding(8)
+                    .help(L10n.t("An update is waiting – Steam downloads it before the game starts"))
+            }
+            .frame(maxHeight: .infinity, alignment: .bottom)
         case .installed:
             EmptyView()
         case .notInstalled, .inStore:

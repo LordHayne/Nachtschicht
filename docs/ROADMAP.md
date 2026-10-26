@@ -131,12 +131,13 @@
   - **Fertig wenn:** Bei 100+ Spielen enthält die Leiste ≤ 13 Elemente.
   - **Stand:** `HomeRail.pick` – Angeheftete (nach Name), dann Downloads, dann installiert und in den letzten 90 Tagen gespielt (neueste zuerst), max. 12, plus Kachel „All games“. Abweichung: Sind es weniger als 3 (neue Bibliothek), füllen andere installierte Spiele auf, damit Home nie leer ist. Überschrift „Continue playing · Pinned, then what you played lately“. Kopfzeile: Bereichsschalter schrumpft nicht mehr, die Suche wird bei schmalem Fenster schmaler. Test in `tests/NavigationTest/`.
 
-- [ ] **1.8 „Update & Play“** · `M`
+- [x] **1.8 „Update & Play“** · `M` · Branch `claude/ux-update-play-1-8` (ungetestet mit echtem Update)
   - **Warum:** „Play“ wird sonst überraschend zu einem 8-GB-Download.
   - **Was:** Steht ein Pflicht-Update an, zeigt der Button vorher „Update & Play · 1.2 GB“; nach dem Update startet das Spiel von selbst. Update-Abzeichen auf dem Cover.
   - **Wo:** `Library.swift` (appmanifest – `StateFlags`/`UpdateResult`/`BytesToDownload` prüfen und verifizieren), `LibraryModel.primaryAction`.
   - **Design:** `Parts.tsx` (`Update & Play`), `NachtschichtLibrary.tsx` (`playAfterUpdate`).
   - **Fertig wenn:** Update-Größe ist vor dem Klick sichtbar; nach Ende des Updates startet das Spiel ohne weiteren Klick.
+  - **Stand** (`claude/ux-update-play-1-8`): `UpdateState` (Library.swift) liest aus dem appmanifest: Update wartet = StateFlags-Bit 2 oder TargetBuildID ≠ buildid; Größe = BytesToDownload − BytesDownloaded (0 = Steam kennt sie noch nicht); läuft = Bits 256/1024/Downloading/Staging/Committing. Play-Knopf „Update & Play · 1,2 GB“ (ohne Größe, solange unbekannt), Abzeichen auf dem Cover, VoiceOver „Installed, update waiting“. Beim Start liest Nightforge jede Sekunde das Manifest: Solange Steam aktualisiert, zeigt der Knopf „Updating … 42 %“ mit Erklärzeile, und das zählt nicht als „Steam antwortet nicht“ – Steam startet das Spiel danach selbst (Steams eigenes Verhalten bei einer Startanfrage). Test `tests/UpdateStateTest/` (mit den echten Werten von diesem Mac). **Noch nicht mit einem echten Update ausprobiert** – gerade wartet bei keinem Spiel eins.
 
 ---
 

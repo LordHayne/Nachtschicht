@@ -1,12 +1,5 @@
 msync: Wine's in-process synchronization on Mach semaphores (macOS), for Wine 11.18.
 
-From CodeWeavers' CrossOver sources (LGPL-2.1-or-later), which carry msync rebased onto Wine 11.0
-(mirror: https://github.com/marzent/winecx, branch ff-wine-11.0; extracted as a patch by
-https://github.com/koels-net/mcsoda). Original msync: https://github.com/marzent/wine-msync.
-Ported to upstream Wine 11.18 by Nightforge: hooks moved to 11.18's code, the semaphore index
-travels in a new msync_idx field of get_inproc_sync_fd (protocol 963) and, for the alert, in
-get_inproc_alert_fd's handle; generated protocol files included. On only with WINEMSYNC=1.
-
 diff --git a/dlls/ntdll/Makefile.in b/dlls/ntdll/Makefile.in
 index 9a15bc3..bf10929 100644
 --- a/dlls/ntdll/Makefile.in
@@ -1412,7 +1405,7 @@ index 0dd5395..ba05306 100644
  	named_pipe.c \
  	object.c \
 diff --git a/server/inproc_sync.c b/server/inproc_sync.c
-index 522d9a4..7119084 100644
+index 522d9a4..ca81da6 100644
 --- a/server/inproc_sync.c
 +++ b/server/inproc_sync.c
 @@ -32,6 +32,7 @@
@@ -1423,7 +1416,7 @@ index 522d9a4..7119084 100644
  
  #ifdef HAVE_LINUX_NTSYNC_H
  # include <linux/ntsync.h>
-@@ -223,6 +224,193 @@ static int get_obj_inproc_sync( struct object *obj, int *type )
+@@ -223,6 +224,177 @@ static int get_obj_inproc_sync( struct object *obj, int *type )
      return fd;
  }
  
@@ -1452,27 +1445,11 @@ index 522d9a4..7119084 100644
 +
 +static const struct object_ops inproc_sync_ops =
 +{
-+    sizeof(struct inproc_sync), /* size */
-+    &no_type,                   /* type */
-+    inproc_sync_dump,           /* dump */
-+    no_add_queue,               /* add_queue */
-+    NULL,                       /* remove_queue */
-+    NULL,                       /* signaled */
-+    NULL,                       /* satisfied */
-+    inproc_sync_signal,         /* signal */
-+    no_get_fd,                  /* get_fd */
-+    default_get_sync,           /* get_sync */
-+    default_map_access,         /* map_access */
-+    default_get_sd,             /* get_sd */
-+    default_set_sd,             /* set_sd */
-+    default_get_full_name,      /* get_full_name */
-+    no_lookup_name,             /* lookup_name */
-+    directory_link_name,        /* link_name */
-+    default_unlink_name,        /* unlink_name */
-+    no_open_file,               /* open_file */
-+    no_kernel_obj_list,         /* get_kernel_obj_list */
-+    no_close_handle,            /* close_handle */
-+    inproc_sync_destroy,        /* destroy */
++    .size    = sizeof(struct inproc_sync),
++    .type    = &no_type,
++    .dump    = inproc_sync_dump,
++    .signal  = inproc_sync_signal,
++    .destroy = inproc_sync_destroy,
 +};
 +
 +int get_inproc_sync_fd( struct inproc_sync *sync )
@@ -1617,7 +1594,7 @@ index 522d9a4..7119084 100644
  #else /* NTSYNC_IOC_EVENT_READ */
  
  int get_inproc_device_fd(void)
-@@ -284,6 +472,7 @@ DECL_HANDLER(get_inproc_sync_fd)
+@@ -284,6 +456,7 @@ DECL_HANDLER(get_inproc_sync_fd)
      reply->access = get_handle_access( current->process, req->handle );
  
      if ((fd = get_obj_inproc_sync( obj, &reply->type )) < 0) set_error( STATUS_NOT_IMPLEMENTED );

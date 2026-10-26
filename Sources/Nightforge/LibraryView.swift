@@ -1060,7 +1060,7 @@ private struct GameInsightNotes: View {
                let healed = LaunchHealth.note(game.appID, insight.attempts) {
                 note(healed, systemImage: "wand.and.stars")
             }
-            if insight.analysis.onlyD3D12 {
+            if insight.analysis.onlyD3D12, !insight.attempts.contains(where: { $0.graphics == .d3dmetal }) {
                 note(L10n.t("This game uses DirectX 12 only, which runs on a Mac in part at best."), systemImage: "exclamationmark.triangle")
             }
             if let launcher = insight.analysis.launcher {

@@ -4591,6 +4591,20 @@
     "Easy Anti-Cheat"
    ]
   },
+  "3132990": {
+   "name": "Black Myth: Wukong Benchmark Tool",
+   "graphics": "d3dmetal",
+   "avx": false,
+   "fileEdits": [
+    {
+     "path": "b1/Saved/Config/Windows/GameUserSettings.ini",
+     "find": "(\"InsertFrame\", \"1\")",
+     "replace": "(\"InsertFrame\", \"0\")"
+    }
+   ],
+   "note": "Tested 2026-10-26 on M5 with D3DMetal 4.0b3 on winecx 4.7.3. DirectX 12 through D3DMetal: 70 FPS average, 56 in the slowest fifth (Niedrig, 1512x982, FSR), clean picture. DirectX 11 (-dx11) through DXMT: ~45 FPS with heavy texture noise. Crashes on an illegal instruction ~30 s in with ROSETTA_ADVERTISE_AVX=1, and at start with frame generation (InsertFrame), which it switches on by itself at its first start.",
+   "source": "mac"
+  },
   "3218230": {
    "name": "ArcheAge Chronicles",
    "source": "anticheat",

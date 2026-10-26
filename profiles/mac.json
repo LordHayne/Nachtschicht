@@ -1,5 +1,5 @@
 {
- "about": "Nightforge's own per-game profiles, tested on Macs. They take precedence over umu-protonfixes. Fields: graphics (dxmt|dxvk), arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX (false = keep MetalFX off), frameLimit (automatic FPS limit), vulkanSamplers (samplers per shader stage reported to Vulkan games), preferWindows (true = Automatic keeps the Windows version although Steam has a 64-bit Mac one), saves (save folders for games without Steam Cloud rules, carried over when the game changes between its Windows and Mac version), antiCheat / antiCheatOnline ([] = runs on a Mac despite what AreWeAntiCheatYet says), ignoreUpstream, note.",
+ "about": "Nightforge's own per-game profiles, tested on Macs. They take precedence over umu-protonfixes. Fields: graphics (dxmt|dxvk|d3dmetal), arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX (false = keep MetalFX off), frameLimit (automatic FPS limit), vulkanSamplers (samplers per shader stage reported to Vulkan games), preferWindows (true = Automatic keeps the Windows version although Steam has a 64-bit Mac one), saves (save folders for games without Steam Cloud rules, carried over when the game changes between its Windows and Mac version), antiCheat / antiCheatOnline ([] = runs on a Mac despite what AreWeAntiCheatYet says), avx (false = start without Rosetta's AVX hint, for games that crash on it), fileEdits ([{path, find, replace}] in the game's own settings files, relative to its folder, before each start), ignoreUpstream, note.",
  "games": {
   "550": {
    "name": "Left 4 Dead 2",
@@ -36,6 +36,19 @@
    "name": "Palworld",
    "graphics": "dxmt",
    "note": "Tested 2026-10-26 on M5: steady 60 FPS (frame limit) with DXMT and -dx11. With DXVK only the HUD showed over a black world. Steam asks for the EULA once."
+  },
+  "3132990": {
+   "name": "Black Myth: Wukong Benchmark Tool",
+   "graphics": "d3dmetal",
+   "avx": false,
+   "fileEdits": [
+    {
+     "path": "b1/Saved/Config/Windows/GameUserSettings.ini",
+     "find": "(\"InsertFrame\", \"1\")",
+     "replace": "(\"InsertFrame\", \"0\")"
+    }
+   ],
+   "note": "Tested 2026-10-26 on M5 with D3DMetal 4.0b3 on winecx 4.7.3. DirectX 12 through D3DMetal: 70 FPS average, 56 in the slowest fifth (Niedrig, 1512x982, FSR), clean picture. DirectX 11 (-dx11) through DXMT: ~45 FPS with heavy texture noise. Crashes on an illegal instruction ~30 s in with ROSETTA_ADVERTISE_AVX=1, and at start with frame generation (InsertFrame), which it switches on by itself at its first start."
   },
   "3907790": {
    "name": "OxyRail",

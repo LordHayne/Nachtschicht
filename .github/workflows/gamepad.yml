@@ -1,0 +1,122 @@
+name: Build gamepad package (winecx)
+
+# winecx's runtime builds winebus.so without SDL, so a DualSense or DualShock 4 never reaches
+# Windows games (macOS keeps them in a report mode the plain IOHID bus can't read). This builds
+# winebus.so from the same winecx source with SDL's bus compiled in, and packs it with the SDL2
+# library the Gcenx engine ships (the one that drives these pads on Wine 11.18). Published as one
+# release asset that components/manifest.json points to ('gamepad').
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/gamepad.yml"
+      - "engine/patches/winebus-winecx-*.patch"
+
+permissions:
+  contents: write
+
+env:
+  # The winecx commit dappermint/winecx-gptk built runtime-v4.7.3 from (its release notes).
+  WINECX_COMMIT: e0aa380780b73e20fabcfe78fd42713b94929a53
+  RUNTIME: "4.7.3"
+  # SDL2 comes from this Gcenx engine (libSDL2-2.0.0.dylib, SDL 2.32, x86_64).
+  GCENX_WINE: "11.18"
+  SDL_HEADERS_TAG: release-2.32.8
+
+jobs:
+  winebus:
+    runs-on: macos-15
+    steps:
+      - name: Tools and sources
+        run: |
+          brew install bison flex pkg-config mingw-w64 || true
+          mkdir winecx && cd winecx
+          git init -q
+          git remote add origin https://github.com/dappermint/winecx.git
+          git fetch -q --depth 1 origin "$WINECX_COMMIT"
+          git checkout -q FETCH_HEAD
+          cd ..
+          git clone -q --depth 1 --branch "$SDL_HEADERS_TAG" https://github.com/libsdl-org/SDL.git sdl
+          mkdir -p gcenx
+          curl -fsSL "https://github.com/Gcenx/macOS_Wine_builds/releases/download/$GCENX_WINE/wine-devel-$GCENX_WINE-osx64.tar.xz" \
+            | tar -xJ -C gcenx
+
+      - uses: actions/checkout@v4
+        with:
+          path: nightforge
+
+      - name: Nightforge's winebus patches
+        run: |
+          # engine/patches/winebus-winecx-xbox360-ids.patch: SDL-mapped pads reach games as an
+          # Xbox 360 controller, so Unity doesn't read a DualSense in its own report format.
+          for patch in nightforge/engine/patches/winebus-winecx-*.patch; do
+            echo "Applying $patch"
+            git -C winecx apply --verbose "$GITHUB_WORKSPACE/$patch"
+          done
+          grep -q "0x028e" winecx/dlls/winebus.sys/bus_sdl.c
+
+      - name: Configure (x86_64, SDL bus)
+        run: |
+          export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+          mkdir build && cd build
+          ../winecx/configure --host=x86_64-apple-darwin --enable-win64 --disable-tests \
+            --without-freetype --without-x --without-gstreamer --without-cups --without-sane \
+            --without-krb5 --without-gssapi --without-usb --without-pcap --without-netapi --without-gnutls \
+            CC="clang -arch x86_64" CXX="clang++ -arch x86_64" \
+            SDL2_CFLAGS="-I$GITHUB_WORKSPACE/sdl/include" \
+            CFLAGS="-O2 -Wno-error -mmacosx-version-min=11.0" \
+            LDFLAGS="-mmacosx-version-min=11.0"
+          # configure can't link the x86_64 test against the runner's SDL; winebus only dlopens it
+          # by name at runtime, so the name is all it needs (the Gcenx engine's).
+          if grep -q "SONAME_LIBSDL2" include/config.h; then
+            sed -i '' 's|^.*SONAME_LIBSDL2.*$|#define SONAME_LIBSDL2 "libSDL2-2.0.0.dylib"|' include/config.h
+          else
+            echo '#define SONAME_LIBSDL2 "libSDL2-2.0.0.dylib"' >> include/config.h
+          fi
+          grep -n "SONAME_LIBSDL2" include/config.h
+          # configure clears SDL2_CFLAGS when that link test fails; winebus's SDL bus needs the headers.
+          if grep -q "^SDL2_CFLAGS" Makefile; then
+            sed -i '' "s|^SDL2_CFLAGS *=.*|SDL2_CFLAGS = -I$GITHUB_WORKSPACE/sdl/include|" Makefile
+          else
+            echo "SDL2_CFLAGS = -I$GITHUB_WORKSPACE/sdl/include" >> Makefile
+          fi
+          grep -n "^SDL2_CFLAGS" Makefile
+
+      - name: Build winebus.so
+        working-directory: build
+        run: |
+          export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+          make -j"$(sysctl -n hw.logicalcpu)" dlls/winebus.sys/winebus.so
+          so=dlls/winebus.sys/winebus.so
+          strings "$so" | grep -q "libSDL2-2.0.0.dylib" || { echo "winebus.so without SDL"; exit 1; }
+          strings "$so" | grep -q "Controller (XBOX 360 For Windows)" || { echo "winebus.so without the Xbox 360 IDs"; exit 1; }
+          nm "$so" | grep -q "sdl_bus_init" || { echo "no SDL bus"; exit 1; }
+          # The SDL library sits in the engine's lib/, two levels up from lib/wine/x86_64-unix.
+          install_name_tool -add_rpath @loader_path/../../ "$so"
+          codesign -fs - "$so"
+          otool -L "$so"
+          otool -l "$so" | grep -A2 LC_RPATH
+
+      - name: Assemble
+        run: |
+          version="$RUNTIME-$GITHUB_RUN_NUMBER"
+          root="nightforge-gamepad-winecx-$version"
+          mkdir -p "$root/x86_64-unix" "$root/lib"
+          cp build/dlls/winebus.sys/winebus.so "$root/x86_64-unix/"
+          cp "gcenx/Wine Devel.app/Contents/Resources/wine/lib/libSDL2-2.0.0.dylib" "$root/lib/"
+          cp sdl/LICENSE.txt "$root/LICENSE-SDL2.txt"
+          printf 'winebus.so: Wine (LGPL-2.1-or-later), built from https://github.com/dappermint/winecx at %s with the SDL bus.\nlibSDL2-2.0.0.dylib: SDL2 (zlib), from the Gcenx Wine %s build.\n' \
+            "$WINECX_COMMIT" "$GCENX_WINE" > "$root/README.txt"
+          tar -czf "$root.tar.gz" "$root"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "ASSET=$root.tar.gz" >> "$GITHUB_ENV"
+          shasum -a 256 "$root.tar.gz"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "gamepad-winecx$VERSION" "$ASSET" --repo "$GITHUB_REPOSITORY" --latest=false \
+            --target "$GITHUB_SHA" --title "Gamepad (winecx $VERSION)" \
+            --notes "winebus.so for winecx $RUNTIME with the SDL bus (DualSense, DualShock 4 and others as XInput pads), plus SDL2 from the Gcenx engine. Licences: Wine LGPL-2.1-or-later, SDL2 zlib. Source: https://github.com/dappermint/winecx ($WINECX_COMMIT)."

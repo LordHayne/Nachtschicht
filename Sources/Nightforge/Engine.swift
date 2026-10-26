@@ -705,7 +705,7 @@ enum Engine {
     /// there; a game that takes DXVK for DirectX 11 gets its DLLs next to its program (`placeDXVK`).
     static func installDXVK(_ dxvkDir: URL, wine: URL, d3d9Only: Bool = false) throws {
         defer {
-            let values = direct3DLibraries.map { "\"\($0)\"=\"native,builtin\"" }.joined(separator: "\n")
+            let values = direct3DLibraries.map { "\"\($0)\"=\"\(defaultLoadOrder($0, d3dMetalEngine: d3d9Only))\"" }.joined(separator: "\n")
             importRegistry("[HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides]\n\(values)", wine: wine)
         }
         let fm = FileManager.default
@@ -722,6 +722,14 @@ enum Engine {
                 try fm.copyItem(at: file, to: destination)
             }
         }
+    }
+
+    /// What every program without a per-game choice takes – Steam's browser above all. Gcenx's
+    /// engine: DXVK's natives. winecx: DirectX 10/11 from the builtins (D3DMetal, or Wine's own);
+    /// DXMT's natives in system32 are for the games that choose them (`layerOverrides`), and Steam's
+    /// browser crashes on them over and over.
+    static func defaultLoadOrder(_ dll: String, d3dMetalEngine: Bool) -> String {
+        d3dMetalEngine && dll != "d3d9" ? "builtin" : "native,builtin"
     }
 
     private static func dxvkTop(_ dir: URL) -> URL {

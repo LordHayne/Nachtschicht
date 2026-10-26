@@ -51,6 +51,10 @@ struct EngineLayoutTest {
         let metal = Engine.layerOverrides(.d3dmetal, d3dMetalEngine: true)
         check(["dxgi", "d3d11", "d3d12", "d3d12core"].allSatisfy { metal[$0] == "builtin" }, "D3DMetal takes the builtins")
         check(Engine.layerOverrides(.wined3d, d3dMetalEngine: true) == ["d3d9": "builtin"], "WineD3D unchanged")
+        check(Engine.defaultLoadOrder("dxgi", d3dMetalEngine: true) == "builtin"
+              && Engine.defaultLoadOrder("d3d9", d3dMetalEngine: true) == "native,builtin",
+              "winecx: programs without a choice (Steam's browser) don't get DXMT")
+        check(Engine.defaultLoadOrder("dxgi", d3dMetalEngine: false) == "native,builtin", "Gcenx: DXVK stays the default")
         check(GraphicsLayer.d3dmetal.upscales, "D3DMetal upscales with MetalFX (a game's DLSS)")
 
         // MARK: Builtin marker
@@ -106,6 +110,10 @@ struct EngineLayoutTest {
         check(!fm.fileExists(atPath: game.appendingPathComponent("d3d11.dll").path)
               && !fm.fileExists(atPath: game.appendingPathComponent("Old/d3d11.dll").path), "another layer takes DXVK away again")
         check((try? Data(contentsOf: game.appendingPathComponent("Old/dxgi.dll"))) == dll("the game's own"), "…but not the game's own DLL")
+
+        writeExe(game.appendingPathComponent("b1/Binaries/Win64/b1-Win64-Shipping.exe"), bits64: true)
+        check(Engine.executables(in: game).contains("b1-Win64-Shipping.exe"), "Unreal's program four levels down is found")
+        try? fm.removeItem(at: game.appendingPathComponent("b1"))
 
         // MARK: Engine trees
         let winecx = work.appendingPathComponent("winecx/4.7.3", isDirectory: true)

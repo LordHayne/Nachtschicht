@@ -98,9 +98,9 @@ enum GraphicsLayer: String, Codable, CaseIterable, Identifiable {
     }
 
     /// DXMT upscales with MetalFX itself; DXVK and games drawing with Vulkan get it from
-    /// Nightforge's Vulkan layer. WineD3D draws through OpenGL, which MetalFX can't reach, and
-    /// D3DMetal brings its own (a game's DLSS setting goes to MetalFX there).
-    var upscales: Bool { self != .wined3d && self != .d3dmetal }
+    /// Nightforge's Vulkan layer; D3DMetal hands a game's DLSS to MetalFX. WineD3D draws through
+    /// OpenGL, which MetalFX can't reach.
+    var upscales: Bool { self != .wined3d }
 }
 
 /// Automatic follows the global "Sharp & smooth" setting; on and off override it for one game.
@@ -341,7 +341,8 @@ enum Launcher {
                                     upscaling: options.effectiveUpscaling(profile: profile),
                                     vulkanSamplers: profile?.vulkanSamplers, hdr: options.hdr)
             Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner,
-                                     avx: LearnedFixes.avx(game.appID, profile: profile))
+                                     avx: LearnedFixes.avx(game.appID, profile: profile), frameLimit: frameLimit,
+                                     upscaling: options.effectiveUpscaling(profile: profile))
         }
         // CrossOver bottles: the game inherits this process's environment. Nightforge's own
         // games get the HUD from the background Steam instead (Prefs.performanceHUD).

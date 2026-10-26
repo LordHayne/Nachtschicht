@@ -588,15 +588,18 @@ enum Engine {
         let frontEnds = ((try? fm.contentsOfDirectory(at: payload.appendingPathComponent("wine/x86_64-windows"),
                                                       includingPropertiesForKeys: nil)) ?? [])
             .filter { $0.pathExtension == "dll" && (bridged.isEmpty || bridged.contains($0.deletingPathExtension().lastPathComponent)) }
-        for dll in frontEnds {
-            let target = windows.appendingPathComponent(dll.lastPathComponent)
+        // DLSS → MetalFX: Apple's readme has nvngx-on-metalfx installed under NVIDIA's name, nvngx.
+        let names = frontEnds.map { ($0, $0.lastPathComponent) }
+            + frontEnds.filter { $0.lastPathComponent == "nvngx-on-metalfx.dll" }.map { ($0, "nvngx.dll") }
+        for (dll, name) in names {
+            let target = windows.appendingPathComponent(name)
             let original = target.appendingPathExtension("wine")
             if fm.fileExists(atPath: target.path), !fm.fileExists(atPath: original.path), !fm.contentsEqual(atPath: dll.path, andPath: target.path) {
                 try fm.copyItem(at: target, to: original)
             }
             try? fm.removeItem(at: target)
             try fm.copyItem(at: dll, to: target)
-            let bridge = unix.appendingPathComponent(dll.deletingPathExtension().lastPathComponent + ".so")
+            let bridge = unix.appendingPathComponent((name as NSString).deletingPathExtension + ".so")
             if fm.fileExists(atPath: bridge.path) || (try? fm.destinationOfSymbolicLink(atPath: bridge.path)) != nil {
                 try fm.removeItem(at: bridge)
             }
@@ -894,14 +897,25 @@ enum Engine {
     /// `avx`: Rosetta tells the game it may use AVX/AVX2 (`ROSETTA_ADVERTISE_AVX`). Most newer games
     /// need that; a few crash on it (LaunchHealth learns which). Steam builds each game's
     /// environment from HKCU\Environment, so it's set there right before the start.
-    static func applyGameSettings(_ choice: GraphicsLayer, profile: GameProfile?, installDir: URL, wine: URL, avx: Bool = true) {
+    /// D3DMetal takes its settings from the environment only (Apple's readme): `frameLimit` as
+    /// D3DM_MAX_FPS, `upscaling` as D3DM_ENABLE_METALFX, which hands a game's DLSS to MetalFX.
+    static func applyGameSettings(_ choice: GraphicsLayer, profile: GameProfile?, installDir: URL, wine: URL, avx: Bool = true,
+                                  frameLimit: Int = 0, upscaling: Bool = false) {
         let layer = choice == .automatic ? (profile?.graphics ?? defaultGraphics) : choice
         let d3dMetalEngine = isGPTKCapable(wine: wine)
         if d3dMetalEngine, let dxvk = installedComponentNow(dxvkID) {
             placeDXVK(layer == .dxvk, dxvkDir: dxvk, installDir: installDir)
         }
         let exes = executables(in: installDir)
-        var sections = ["[HKEY_CURRENT_USER\\Environment]\n\"ROSETTA_ADVERTISE_AVX\"=" + (avx ? "\"1\"" : "-")]
+        let metal = layer == .d3dmetal
+        let environment = [
+            ("ROSETTA_ADVERTISE_AVX", avx ? "1" : nil),
+            ("D3DM_MAX_FPS", metal && frameLimit > 0 ? String(frameLimit) : nil),
+            ("D3DM_ENABLE_METALFX", metal && upscaling ? "1" : nil),
+        ]
+        var sections = ["[HKEY_CURRENT_USER\\Environment]\n" + environment.map { name, value in
+            "\"\(name)\"=" + (value.map { "\"\($0)\"" } ?? "-")
+        }.joined(separator: "\n")]
         for exe in exes {
             let app = "HKEY_CURRENT_USER\\Software\\Wine\\AppDefaults\\\(exe)"
             var overrides = profile?.dllOverrides ?? [:]

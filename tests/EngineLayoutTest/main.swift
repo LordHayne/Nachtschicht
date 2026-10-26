@@ -51,7 +51,7 @@ struct EngineLayoutTest {
         let metal = Engine.layerOverrides(.d3dmetal, d3dMetalEngine: true)
         check(["dxgi", "d3d11", "d3d12", "d3d12core"].allSatisfy { metal[$0] == "builtin" }, "D3DMetal takes the builtins")
         check(Engine.layerOverrides(.wined3d, d3dMetalEngine: true) == ["d3d9": "builtin"], "WineD3D unchanged")
-        check(!GraphicsLayer.d3dmetal.upscales, "D3DMetal brings its own MetalFX")
+        check(GraphicsLayer.d3dmetal.upscales, "D3DMetal upscales with MetalFX (a game's DLSS)")
 
         // MARK: Builtin marker
         let marked = work.appendingPathComponent("marked.dll")
@@ -137,6 +137,12 @@ struct EngineLayoutTest {
             do {
                 try Engine.installD3DMetal(URL(fileURLWithPath: real), into: wine)
                 check(Engine.isD3DMetalDeployed(wine: wine), "Apple's D3DMetal is installed")
+                if fm.fileExists(atPath: lib.appendingPathComponent("x86_64-windows/nvngx-on-metalfx.dll").path) {
+                    check(fm.contentsEqual(atPath: lib.appendingPathComponent("x86_64-windows/nvngx.dll").path,
+                                           andPath: lib.appendingPathComponent("x86_64-windows/nvngx-on-metalfx.dll").path)
+                          && (try? fm.destinationOfSymbolicLink(atPath: lib.appendingPathComponent("x86_64-unix/nvngx.so").path)) != nil,
+                          "DLSS → MetalFX under NVIDIA's name, as Apple's readme says")
+                }
                 check((try? fm.destinationOfSymbolicLink(atPath: lib.appendingPathComponent("x86_64-unix/dxgi.so").path))
                       == "../../external/libd3dshared.dylib", "unix bridges link to libd3dshared")
                 check((try? Data(contentsOf: lib.appendingPathComponent("x86_64-windows/d3d12.dll.wine"))) == dll("wine's d3d12", builtin: true),

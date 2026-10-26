@@ -80,6 +80,14 @@ final class LibraryModel: ObservableObject {
     @Published var pendingLeftoverRemoval: Game?
     /// Steam for Mac being set up for a game whose Mac version is wanted.
     @Published var macSetup: MacSteamSetup?
+    /// How the library runs on this Mac, shown once after the first start (and from About).
+    @Published var libraryReveal: LibraryReveal?
+    private var revealAfterScan = false
+
+    func showLibraryReveal() {
+        libraryReveal = LibraryReveal(allGames.map { ($0, compatibility(of: $0).level) })
+    }
+
     /// The downloads panel under the top bar's ring (D).
     @Published var showingDownloads = false
     /// What Steam is downloading now, in the library's order.
@@ -111,7 +119,10 @@ final class LibraryModel: ObservableObject {
     private var inputStarted = false
 
     init() {
-        setup.onFinished = { [weak self] in self?.reload() }
+        setup.onFinished = { [weak self] in
+            self?.revealAfterScan = true  // the first start ends with how the library runs here
+            self?.reload()
+        }
     }
 
     /// Nothing to show and Nightforge's own Steam isn't ready yet.
@@ -365,6 +376,10 @@ final class LibraryModel: ObservableObject {
         KeepAwake.update(downloading: found.filter { Self.isDownloading($0.install) && $0.downloadNeedsSpace == nil }.map(\.name))
         if downloads.isEmpty { showingDownloads = false }
         MacIntegration.libraryLoaded()
+        if revealAfterScan, !found.isEmpty {
+            revealAfterScan = false
+            showLibraryReveal()
+        }
         if let game = finished.first {
             Toasts.shared.show(finished.count == 1 ? L10n.t("%@ is ready to play", game.name) : L10n.t("%ld games are ready to play", finished.count),
                                action: .init(label: L10n.t("Play")) { [weak self] in self?.play(game) })

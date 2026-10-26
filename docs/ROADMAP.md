@@ -273,7 +273,7 @@
 
 ## Phase 6 – Ersteinrichtung mit Aha-Moment
 
-- [ ] **6.1 Erster Start** · `M` · braucht 1.3
+- [ ] **6.1 Erster Start** · `M` · braucht 1.3 · teilweise in `claude/ux-first-start-6-1`
   - **Was:** `SetupView` erweitern:
     - **Ablauf:** Welcome → Checkliste (vorhanden) → Steam-Login mit QR-Hinweis → „Checking your library … N of M games“.
     - **Die Enthüllung:** „**87 of your 104 games run here**“ mit Balken (great / tweaks / untested / need Windows) und den Gründen.
@@ -281,6 +281,7 @@
     - **Wiederholbar:** „Show the first start again“ in About.
   - **Wo:** `SetupView.swift`, `Setup.swift`.
   - **Design:** `Overlays.tsx` → `Onboarding`.
+  - **Stand** (`claude/ux-first-start-6-1`, teilweise): **Die Enthüllung** – nach dem Abschluss der Ersteinrichtung und dem ersten Scan erscheint „22 of your 105 games run here“ (bei diesem Mac: 21 great, 1 tweaks, 62 untested, 21 no) mit einem Balken in den Kompatibilitätsfarben und je Stufe eine Zeile, was sie heißt; bei „Doesn't run“ getrennt Anti-Cheat (davon n auf GeForce Now) und VR. „Let's Play“ schließt. **Wiederholbar:** „Show the First Start Again“ in Settings › About. Test `tests/LibraryRevealTest/`. Offen: Welcome-Seite und „Checking your library … N of M“ im Ablauf selbst, QR-Hinweis, „Also add Epic Games or GOG“ (Phase 7).
 
 ---
 

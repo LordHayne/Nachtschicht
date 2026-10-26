@@ -500,6 +500,21 @@ enum L10n {
         "%ld %% of %@": "%ld %% von %@",
         "Preparing …": "Wird vorbereitet …",
 
+        // First start
+        "Your library on this Mac": "Deine Bibliothek auf diesem Mac",
+        "%ld of your 1 game runs here": "%ld von deinem 1 Spiel läuft hier",
+        "%ld of your %ld games run here": "%ld deiner %ld Spiele laufen hier",
+        "Tested by Nightforge, a Mac version, or it started fine here.": "Von Nightforge getestet, eine Mac-Version oder hier schon gut gestartet.",
+        "Nightforge applies what they need by itself, at every start.": "Nightforge wendet bei jedem Start selbst an, was sie brauchen.",
+        "Nobody has tried them on a Mac with Nightforge yet – most still run. The first start tells, and Nightforge remembers what works.":
+            "Noch niemand hat sie mit Nightforge auf dem Mac probiert – die meisten laufen trotzdem. Der erste Start zeigt es, und Nightforge merkt sich, was funktioniert.",
+        "Their anti-cheat needs Windows itself – %ld of them play on GeForce Now instead.": "Ihr Anti-Cheat braucht Windows selbst – %ld davon laufen stattdessen auf GeForce Now.",
+        "Their anti-cheat needs Windows itself.": "Ihr Anti-Cheat braucht Windows selbst.",
+        "1 needs a VR headset.": "1 braucht eine VR-Brille.",
+        "%ld need a VR headset.": "%ld brauchen eine VR-Brille.",
+        "Let's Play": "Los geht's",
+        "Show the First Start Again": "Ersten Start noch einmal zeigen",
+
         // Cloud saves
         "Your save is in the Steam Cloud. You can close your Mac.": "Dein Spielstand ist in der Steam Cloud. Du kannst den Mac zuklappen.",
         "Steam syncs your save in the background.": "Steam gleicht deinen Spielstand im Hintergrund ab.",

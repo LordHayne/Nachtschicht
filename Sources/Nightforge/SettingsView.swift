@@ -437,6 +437,8 @@ private struct StorageBar: View {
 // MARK: - About
 
 private struct AboutSettings: View {
+    @EnvironmentObject private var model: LibraryModel
+
     private struct Credit: Identifiable {
         let name: String
         let version: String?
@@ -490,6 +492,8 @@ private struct AboutSettings: View {
                 }
                 Button(L10n.t("Show Licence Files"), action: showLicences)
                     .padFocus("settings.licences", activate: showLicences)
+                Button(L10n.t("Show the First Start Again"), action: showReveal)
+                    .padFocus("settings.reveal", activate: showReveal)
             } header: {
                 Text(L10n.t("Built on"))
             }
@@ -536,6 +540,12 @@ private struct AboutSettings: View {
             case .tool: return L10n.t("Tool")
             }
         }
+    }
+
+    /// How the library runs here, as after the first start – in the main window.
+    private func showReveal() {
+        NSApp.windows.first { $0.title == "Nightforge" }?.makeKeyAndOrderFront(nil)
+        model.showLibraryReveal()
     }
 
     private func showLicences() {

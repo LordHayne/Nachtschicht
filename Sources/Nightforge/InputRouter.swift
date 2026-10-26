@@ -178,10 +178,22 @@ final class InputRouter {
         setHeld(step.isNone ? (source == .dpad ? stickStep : dpadStep) : step)
     }
 
-    private func perform(_ step: Step) {
-        guard let model else { return }
+    /// Down on the start page opens the library; up from its top row goes back. Returns true when
+    /// the view changed: holding on then mustn't run on through the other view.
+    @discardableResult
+    private func perform(_ step: Step) -> Bool {
+        guard let model else { return false }
         if step.dx != 0 { model.move(step.dx) }
+        if step.dy > 0, !model.showingLibrary {
+            model.showingLibrary = true
+            return true
+        }
+        if step.dy < 0, model.showingLibrary, model.selectedIndex < max(model.gridColumns, 1) {
+            model.showingLibrary = false
+            return true
+        }
         if step.dy != 0 { model.moveRow(step.dy) }
+        return false
     }
 
     /// First step immediately, then a short pause, then fast repeat while held.
@@ -192,7 +204,7 @@ final class InputRouter {
         repeatTimer = nil
         guard !step.isNone, let model, !model.showingOptions else { return }
 
-        perform(step)
+        guard !perform(step) else { return }
         repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.38, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.startFastRepeat() }
         }
@@ -203,7 +215,10 @@ final class InputRouter {
         repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.11, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, !self.held.isNone else { return }
-                self.perform(self.held)
+                if self.perform(self.held) {
+                    self.repeatTimer?.invalidate()
+                    self.repeatTimer = nil
+                }
             }
         }
     }

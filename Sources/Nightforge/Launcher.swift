@@ -340,6 +340,7 @@ enum Launcher {
                                     frameLimit: frameLimit,
                                     upscaling: options.effectiveUpscaling(profile: profile),
                                     vulkanSamplers: profile?.vulkanSamplers, hdr: options.hdr)
+            Engine.applyFileEdits(profile?.fileEdits ?? [], installDir: game.installDir)
             Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner,
                                      avx: LearnedFixes.avx(game.appID, profile: profile), frameLimit: frameLimit,
                                      upscaling: options.effectiveUpscaling(profile: profile))

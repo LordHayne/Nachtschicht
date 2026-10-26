@@ -183,6 +183,24 @@ struct EngineLayoutTest {
         check(!LearnedFixes.avx(app, profile: nil), "a learned crash turns it off")
         UserDefaults.standard.removeObject(forKey: "learned.noAVX.\(app)")
 
+        // MARK: Settings files
+        let settings = game.appendingPathComponent("b1/Saved/Config/Windows/GameUserSettings.ini")
+        let edits = (try? JSONDecoder().decode(GameProfile.self, from: Data(#"""
+            {"fileEdits": [{"path": "b1/Saved/Config/Windows/GameUserSettings.ini",
+                            "find": "(\"InsertFrame\", \"1\")", "replace": "(\"InsertFrame\", \"0\")"},
+                           {"path": "../../escape.txt", "find": "a", "replace": "b"}]}
+            """#.utf8)))?.fileEdits ?? []
+        check(edits.count == 2, "a profile's file edits are read")
+        check(!Engine.applyFileEdits(edits, installDir: game), "no settings file yet: nothing to change")
+        write(Data(#"UISettingData=(("Dlss", "1"),("InsertFrame", "1"),("Rtx", "0"))"#.utf8), settings)
+        let escape = game.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("escape.txt")
+        write(Data("a".utf8), escape)
+        check(Engine.applyFileEdits(edits, installDir: game), "the game's settings file is changed")
+        check((try? String(contentsOf: settings, encoding: .utf8)) == #"UISettingData=(("Dlss", "1"),("InsertFrame", "0"),("Rtx", "0"))"#,
+              "frame generation goes off, everything else stays")
+        check((try? String(contentsOf: escape, encoding: .utf8)) == "a", "nothing outside the game folder is touched")
+        check(!Engine.applyFileEdits(edits, installDir: game), "a second time there's nothing left to change")
+
         print(failures == 0 ? "✓ all checks passed" : "\(failures) check(s) failed")
         exit(failures == 0 ? 0 : 1)
     }

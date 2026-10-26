@@ -34,6 +34,15 @@ struct GameProfile: Decodable, Equatable {
     var geforceNow: Int?
     /// false: the game crashes when Rosetta advertises AVX/AVX2, so it starts without.
     var avx: Bool?
+    /// Changes to the game's own settings files before it starts, for settings that crash it on a
+    /// Mac: in `path` (relative to the game folder) `find` becomes `replace`.
+    var fileEdits: [FileEdit]?
+
+    struct FileEdit: Decodable, Equatable {
+        let path: String
+        let find: String
+        let replace: String
+    }
 
     struct RegistryEntry: Decodable, Equatable {
         let key: String
@@ -44,7 +53,7 @@ struct GameProfile: Decodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case name, graphics, arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX, frameLimit
-        case vulkanSamplers, preferWindows, saves, antiCheat, geforceNow, avx
+        case vulkanSamplers, preferWindows, saves, antiCheat, geforceNow, avx, fileEdits
     }
 
     /// {"root": "WinAppDataRoaming", "path": "7DaysToDie/Saves", "pattern": "*", "recursive": true, "mac": "MacAppSupport"}
@@ -78,6 +87,7 @@ struct GameProfile: Decodable, Equatable {
         antiCheat = try? container.decodeIfPresent([String].self, forKey: .antiCheat)
         geforceNow = try? container.decodeIfPresent(Int.self, forKey: .geforceNow)
         avx = try? container.decodeIfPresent(Bool.self, forKey: .avx)
+        fileEdits = try? container.decodeIfPresent([FileEdit].self, forKey: .fileEdits)
     }
 }
 

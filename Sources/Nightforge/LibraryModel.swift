@@ -1002,6 +1002,11 @@ final class LibraryModel: ObservableObject {
                     LearnedFixes.addWinetricks(needed, for: game.appID)
                     continue
                 }
+                if game.bottle.isBuiltIn, Engine.applyFileEdits(profile?.fileEdits ?? [], installDir: game.installDir) {
+                    // The game wrote its settings file at its first start, with a setting its
+                    // profile turns off: the same way again, with the file fixed.
+                    continue
+                }
                 if game.bottle.isBuiltIn, LearnedFixes.avx(game.appID, profile: profile),
                    GameLog.illegalInstruction(since: logMark, installDir: game.installDir, startedAt: startedAt) {
                     // Rosetta's AVX hint sent it down a path Rosetta can't run: the same way without it.

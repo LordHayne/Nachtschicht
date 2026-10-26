@@ -1296,6 +1296,25 @@ enum Engine {
         }
     }
 
+    /// A profile's changes to the game's own settings files (GameProfile.fileEdits). A file the game
+    /// writes at its first start isn't there before it; true when anything changed, so a start
+    /// that crashed on such a setting can be tried again right away.
+    @discardableResult
+    static func applyFileEdits(_ edits: [GameProfile.FileEdit], installDir: URL) -> Bool {
+        var changed = false
+        let root = installDir.standardizedFileURL.path
+        for edit in edits {
+            let file = installDir.appendingPathComponent(edit.path).standardizedFileURL
+            guard file.path.hasPrefix(root + "/"), !edit.find.isEmpty,
+                  let text = try? String(contentsOf: file, encoding: .utf8), text.contains(edit.find)
+            else { continue }
+            if (try? text.replacingOccurrences(of: edit.find, with: edit.replace).write(to: file, atomically: true, encoding: .utf8)) != nil {
+                changed = true
+            }
+        }
+        return changed
+    }
+
     private static func writeConfig(_ file: URL, lines: [String], keepWhenEmpty: Bool = true) {
         let marker = "# Written by Nightforge"
         let existing = (try? String(contentsOf: file, encoding: .utf8)) ?? ""

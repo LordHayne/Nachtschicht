@@ -182,20 +182,23 @@ final class LibraryModel: ObservableObject {
     func reload(quiet: Bool = false) {
         guard !isScanning else { return }
         isScanning = !quiet
+        Task { await rescan() }
+    }
+
+    /// Scans the library and shows what it found.
+    private func rescan() async {
         let root = Prefs.bottlesRoot
         let builtIn = Engine.isSteamInstalled ? [Engine.bottle] : []
-        Task {
-            let preferWindows = await ProfileStore.shared.preferWindows()
-            let found = await Task.detached(priority: .userInitiated) {
-                LibraryScanner.merge(LibraryScanner.scan(bottlesRoot: root, extraBottles: builtIn),
-                                     mac: LibraryScanner.scanMac(), preferWindows: preferWindows)
-            }.value
-            allGames = found
-            applyFilter()
-            isScanning = false
-            watchDownloads()
-            afterScan()
-        }
+        let preferWindows = await ProfileStore.shared.preferWindows()
+        let found = await Task.detached(priority: .userInitiated) {
+            LibraryScanner.merge(LibraryScanner.scan(bottlesRoot: root, extraBottles: builtIn),
+                                 mac: LibraryScanner.scanMac(), preferWindows: preferWindows)
+        }.value
+        allGames = found
+        applyFilter()
+        isScanning = false
+        watchDownloads()
+        afterScan()
     }
 
     /// Steam for Mac starts in the background with Nightforge while it has a Mac version to
@@ -538,20 +541,24 @@ final class LibraryModel: ObservableObject {
             let watcher = LaunchWatcher(steamRoot: MacSteam.root, appID: game.appID)
             MacSteam.open("run/\(game.appID)" + extra)
             let start = await waitForMacStart(game, watcher: watcher)
-            guard start.started else { return }
+            switch start {
+            case .failed:
+                if !fallBackToWindows(game) { errorMessage = L10n.t("Steam couldn't start %@.", game.name) }
+                return
+            case .noSignOfLife:
+                return
+            case .processSeen, .steamSaysRunning:
+                break
+            }
             launchingID = nil
             await bringToFront(game)
 
             // The first start of a Mac version: does it run past its first seconds? Only judged
             // when its process was seen at all – Steam may know better where a game runs from.
-            if start.processSeen && !MacHealth.confirmed(game.appID) {
+            if start == .processSeen && !MacHealth.confirmed(game.appID) {
                 if await survivesFirstSeconds(game) {
                     MacHealth.confirm(game.appID)
-                } else if game.switchable && GameOptionsStore.load(game.appID).version == .automatic {
-                    MacHealth.fail(game.appID)
-                    NSApp.activate()
-                    errorMessage = L10n.t("The Mac version of %@ ended right after starting, so Nightforge uses the Windows version from now on. You can switch back in the game's options.", game.name)
-                    reload(quiet: true)
+                } else if fallBackToWindows(game) {
                     return
                 }
             }
@@ -580,10 +587,33 @@ final class LibraryModel: ObservableObject {
         }.value
     }
 
+    /// A Mac version that didn't start: "Automatic" moves the game to the best alternative, its
+    /// Windows version, and goes on with it at once – starts it when it's installed, else
+    /// downloads it. The game's note says so; its options can switch back.
+    private func fallBackToWindows(_ game: Game) -> Bool {
+        guard game.switchable, GameOptionsStore.load(game.appID).version == .automatic else { return false }
+        MacHealth.fail(game.appID)
+        NSApp.activate()
+        Task {
+            await rescan()  // after the Mac launch has wound down: one launch at a time
+            guard let windows = allGames.first(where: { $0.appID == game.appID && $0.platform == .windows }) else { return }
+            if windows.isInstalled {
+                launch(windows)
+            } else if windows.install == .notInstalled {
+                download(windows)
+            }
+        }
+        return true
+    }
+
+    private enum MacStart {
+        case processSeen, steamSaysRunning, failed, noSignOfLife
+    }
+
     /// Follows the start of a Mac game until its process is there, or Steam's log says it runs.
     /// Steam's questions (licence, first-time setup) wait in its window as long as the player
     /// needs; no sign of life ends after 2 min.
-    private func waitForMacStart(_ game: Game, watcher: LaunchWatcher) async -> (started: Bool, processSeen: Bool) {
+    private func waitForMacStart(_ game: Game, watcher: LaunchWatcher) async -> MacStart {
         var watcher = watcher
         let folders = Self.processFolders([game])
         var quietSeconds = 0
@@ -594,7 +624,7 @@ final class LibraryModel: ObservableObject {
             seconds += 1
             if await Task.detached(priority: .utility, operation: { Self.runningGames(folders) }).value[game.id] != nil {
                 launchNeedsConfirmation = false
-                return (true, true)
+                return .processSeen
             }
             switch watcher.poll() {
             case .running?:
@@ -603,11 +633,11 @@ final class LibraryModel: ObservableObject {
                     try? await Task.sleep(for: .seconds(1))
                     if await Task.detached(priority: .utility, operation: { Self.runningGames(folders) }).value[game.id] != nil {
                         launchNeedsConfirmation = false
-                        return (true, true)
+                        return .processSeen
                     }
                 }
                 launchNeedsConfirmation = false
-                return (true, false)
+                return .steamSaysRunning
             case .needsConfirmation?:
                 askingSince = askingSince ?? seconds
                 quietSeconds = 0
@@ -616,10 +646,9 @@ final class LibraryModel: ObservableObject {
                 askingSince = nil
                 quietSeconds = 0
             case .cancelled?:
-                return (false, false)
+                return .noSignOfLife
             case .failed?:
-                errorMessage = L10n.t("Steam couldn't start %@.", game.name)
-                return (false, false)
+                return .failed
             case nil:
                 if let since = askingSince {
                     // Steam logs routine steps as questions too and answers them within a second.
@@ -632,7 +661,7 @@ final class LibraryModel: ObservableObject {
                 }
             }
         }
-        return (false, false)
+        return .noSignOfLife
     }
 
     // MARK: - Search & views

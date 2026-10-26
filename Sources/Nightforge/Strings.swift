@@ -150,8 +150,6 @@ enum L10n {
             "Die Mac-Version dieses Spiels auf Steam ist zu alt für aktuelle Macs, deshalb nutzt Nightforge die Windows-Version.",
         "The Mac version didn't start, so Nightforge uses the Windows version. You can switch back in the game's options.":
             "Die Mac-Version ist nicht gestartet, deshalb nutzt Nightforge die Windows-Version. In den Optionen des Spiels kannst du zurückwechseln.",
-        "The Mac version of %@ ended right after starting, so Nightforge uses the Windows version from now on. You can switch back in the game's options.":
-            "Die Mac-Version von %@ hat sich direkt nach dem Start beendet, deshalb nutzt Nightforge ab jetzt die Windows-Version. In den Optionen des Spiels kannst du zurückwechseln.",
         "The Windows version is still installed and takes %@.": "Die Windows-Version ist noch installiert und belegt %@.",
         "Remove …": "Entfernen …",
         "Remove": "Entfernen",

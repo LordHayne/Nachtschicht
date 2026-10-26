@@ -255,10 +255,19 @@ final class LibraryModel: ObservableObject {
 
     /// `quiet` refreshes without the scanning indicator (used for download progress).
     func reload(quiet: Bool = false) {
-        guard !isScanning else { return }
-        isScanning = !quiet
+        if !quiet { isScanning = true }
+        // One scan at a time: two overlapping ones could land in the wrong order and bring back an
+        // uninstalled game or an older download state. A request during a scan gets one scan after it.
+        guard !scanInFlight else {
+            scanAgain = true
+            return
+        }
+        scanInFlight = true
         Task { await rescan() }
     }
+
+    private var scanInFlight = false
+    private var scanAgain = false
 
     /// Scans the library and shows what it found.
     private func rescan() async {
@@ -278,9 +287,15 @@ final class LibraryModel: ObservableObject {
         libraryLoaded = true
         for game in found where game.isInstalled && wasDownloading.contains(game.id) { prepare(game) }
         applyFilter()
-        isScanning = false
         watchDownloads()
         afterScan()
+        if scanAgain {
+            scanAgain = false
+            Task { await rescan() }
+        } else {
+            scanInFlight = false
+            isScanning = false
+        }
     }
 
     /// Steam for Mac starts in the background with Nightforge while it has a Mac version to
@@ -314,8 +329,10 @@ final class LibraryModel: ObservableObject {
         // A Mac download that got nowhere in its last turn (Steam for Mac finds no download
         // servers, say) doesn't get another: Steam for Mac would come up and sign the Wine Steam out
         // every few minutes for nothing. Any progress lets it take turns again.
-        let macProgress = allGames.filter { Self.isDownloading($0.macPending) || ($0.platform == .mac && Self.isDownloading($0.install)) }
-            .map { MacSteamProgress.fraction(appID: $0.appID) ?? 0 }.reduce(0, +)
+        // What the scan measured (it asks nettop off the main thread); asking again here would block the window.
+        let macProgress = allGames.compactMap { game in
+            Self.downloadFraction(game.macPending) ?? (game.platform == .mac ? Self.downloadFraction(game.install) : nil)
+        }.reduce(0, +)
         let macStalled = lastMacTurnProgress.map { macProgress <= $0 } ?? false
         if macDownload, MacSteam.isReady, !MacSteam.signedIn, !(windowsDownload && Engine.steamSignedIn), !macStalled {
             lastSignInSwitch = Date()
@@ -336,6 +353,12 @@ final class LibraryModel: ObservableObject {
     private static func isDownloading(_ state: InstallState?) -> Bool {
         if case .downloading? = state { return true }
         return false
+    }
+
+    /// How far a download has got (0 while Steam hasn't worked out its size); nil when it isn't one.
+    private static func downloadFraction(_ state: InstallState?) -> Double? {
+        if case .downloading(let fraction)? = state { return fraction ?? 0 }
+        return nil
     }
 
     private var downloadWatcher: Task<Void, Never>?
@@ -360,7 +383,7 @@ final class LibraryModel: ObservableObject {
         steamStartup = Task {
             await previous?.value
             guard let wine = await Engine.installedWine(), !macSteamBusy else { return }
-            Engine.applyGameEnvironment(wine: wine)
+            await Engine.offMain { Engine.applyGameEnvironment(wine: wine) }
             try? await Engine.ensureSteamRunning(wine, busy: !running.isEmpty)
         }
     }

@@ -262,8 +262,8 @@ enum L10n {
 
         "VR only": "Nur VR",
         "Doesn't run on a Mac": "Läuft nicht auf dem Mac",
-        "%@ stops this game on a Mac: it needs Windows itself, and getting around it would get your account banned.":
-            "%@ verhindert dieses Spiel auf dem Mac: Es braucht Windows selbst, und es zu umgehen würde deinen Account sperren lassen.",
+        "This game's anti-cheat (%@) stops it on a Mac: it needs Windows itself, and getting around it would get your account banned.":
+            "Der Anti-Cheat dieses Spiels (%@) verhindert es auf dem Mac: Er braucht Windows selbst, und ihn zu umgehen würde deinen Account sperren lassen.",
         "Playable on GeForce Now, NVIDIA's cloud gaming, with your Steam copy (own NVIDIA account; free sessions last an hour).":
             "Spielbar über GeForce Now, NVIDIAs Cloud-Gaming, mit deinem Steam-Spiel (eigenes NVIDIA-Konto; kostenlos je eine Stunde).",
         "Open in GeForce Now": "In GeForce Now öffnen",

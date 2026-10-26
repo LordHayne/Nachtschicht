@@ -474,12 +474,13 @@ private struct AntiCheatNote: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(L10n.t("%@ stops this game on a Mac: it needs Windows itself, and getting around it would get your account banned.",
+            Label(L10n.t("This game's anti-cheat (%@) stops it on a Mac: it needs Windows itself, and getting around it would get your account banned.",
                          block.antiCheat.joined(separator: ", ")),
                   systemImage: "shield.slash")
             if let url = block.geforceNowURL {
                 HStack(spacing: 10) {
-                    Text(L10n.t("Playable on GeForce Now, NVIDIA's cloud gaming, with your Steam copy (own NVIDIA account; free sessions last an hour)."))
+                    Label(L10n.t("Playable on GeForce Now, NVIDIA's cloud gaming, with your Steam copy (own NVIDIA account; free sessions last an hour)."),
+                          systemImage: "cloud")
                     Button(L10n.t("Open in GeForce Now")) { NSWorkspace.shared.open(url) }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
@@ -772,14 +773,22 @@ struct CoverCard: View {
         case .notInstalled, .inStore:
             HStack {
                 Spacer()
-                Image(systemName: game.antiCheatBlock != nil ? "shield.slash.fill"
-                      : game.install == .inStore ? "cart.circle.fill" : "arrow.down.circle.fill")
-                    .font(.system(size: game.antiCheatBlock != nil ? 15 : 20, weight: .semibold))
-                    .foregroundStyle(Theme.ink, Theme.night.opacity(0.7))
-                    .padding(game.antiCheatBlock != nil ? 6 : 0)
-                    .background(Theme.night.opacity(game.antiCheatBlock != nil ? 0.82 : 0), in: Circle())
-                    .padding(8)
-                    .help(game.antiCheatBlock != nil ? L10n.t("Anti-cheat stops this game on a Mac") : "")
+                if game.antiCheatBlock != nil {
+                    // Instead of the download sign: this one won't run here.
+                    Image(systemName: "shield.slash")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Theme.ink)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 5)
+                        .background(Theme.night.opacity(0.82), in: Capsule())
+                        .padding(7)
+                        .help(L10n.t("Anti-cheat stops this game on a Mac"))
+                } else {
+                    Image(systemName: game.install == .inStore ? "cart.circle.fill" : "arrow.down.circle.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Theme.ink, Theme.night.opacity(0.7))
+                        .padding(8)
+                }
             }
             .frame(maxHeight: .infinity, alignment: .bottom)
         case .downloading(let fraction):

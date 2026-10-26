@@ -971,6 +971,7 @@ final class LibraryModel: ObservableObject {
                     if watchFirstSeconds { LaunchHealth.recordStart(game.appID, attempts) }
                 }
                 let logMark = GameLog.mark()
+                let startedAt = Date()
                 LearnedFixes.setLastLaunch(game.appID, logMark: logMark)
                 let (frameLimit, learning) = FramePacing.automaticLimit(appID: game.appID, options: options,
                                                                          profile: profile, refreshRate: refreshRate)
@@ -999,6 +1000,12 @@ final class LibraryModel: ObservableObject {
                 if !needed.isEmpty {
                     // Wine said what's missing: install it and try the same way again.
                     LearnedFixes.addWinetricks(needed, for: game.appID)
+                    continue
+                }
+                if game.bottle.isBuiltIn, LearnedFixes.avx(game.appID, profile: profile),
+                   GameLog.illegalInstruction(since: logMark, installDir: game.installDir, startedAt: startedAt) {
+                    // Rosetta's AVX hint sent it down a path Rosetta can't run: the same way without it.
+                    LearnedFixes.setNoAVX(game.appID)
                     continue
                 }
                 if LaunchHealth.advance(game.appID, attempts) {

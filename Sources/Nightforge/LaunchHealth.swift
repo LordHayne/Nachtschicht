@@ -20,19 +20,28 @@ enum LaunchHealth {
     /// A session this short counts as "didn't start" (crash, black window closed by the game).
     static let failureWindow: TimeInterval = 30
 
-    /// The ways to try, in order.
-    static func attempts(for analysis: GameAnalysis, profile: GameProfile?) -> [LaunchAttempt] {
+    /// The ways to try, in order. `d3dMetal`: the engine carries Apple's D3DMetal, the one way
+    /// Direct3D 12 runs on a Mac (DirectX 11 stays with DXMT and DXVK, which run it better).
+    static func attempts(for analysis: GameAnalysis, profile: GameProfile?,
+                         d3dMetal: Bool = Engine.d3dMetalReady) -> [LaunchAttempt] {
         if analysis.usesD3D11 || analysis.apis.isEmpty {
             let arguments = analysis.preferD3D11Arguments
-            let first = profile?.graphics ?? Engine.defaultGraphics
+            let first = profile?.graphics.flatMap { $0 == .d3dmetal && !d3dMetal ? nil : $0 } ?? Engine.defaultGraphics
             let second: GraphicsLayer = first == .dxmt ? .dxvk : .dxmt
             var list = [LaunchAttempt(graphics: first, arguments: arguments), LaunchAttempt(graphics: second, arguments: arguments)]
-            // Direct3D 12 through Wine is the last resort for engines that would pick it.
-            if !arguments.isEmpty { list.append(LaunchAttempt(graphics: first)) }
+            // Direct3D 12 is the last resort for games that would pick it.
+            if d3dMetal, analysis.apis.contains(.d3d12) {
+                list.append(LaunchAttempt(graphics: .d3dmetal))
+            } else if !arguments.isEmpty {
+                list.append(LaunchAttempt(graphics: first))
+            }
             return list
         }
         if analysis.usesD3D9 {
             return [LaunchAttempt(graphics: .dxvk), LaunchAttempt(graphics: .wined3d)]
+        }
+        if analysis.onlyD3D12, d3dMetal {
+            return [LaunchAttempt(graphics: .d3dmetal)]
         }
         // Vulkan, OpenGL and Direct3D 12 have one way each; there's nothing to switch.
         return [LaunchAttempt(graphics: Engine.defaultGraphics)]
@@ -182,6 +191,19 @@ enum LearnedFixes {
     static func addWinetricks(_ verbs: [String], for appID: Int) {
         let known = winetricks(appID)
         UserDefaults.standard.set(known + verbs.filter { !known.contains($0) }, forKey: winetricksKey(appID))
+    }
+
+    private static func noAVXKey(_ appID: Int) -> String { "learned.noAVX.\(appID)" }
+
+    /// The game crashed on an instruction Rosetta can't run while AVX was advertised: it starts
+    /// without the hint from now on.
+    static func noAVX(_ appID: Int) -> Bool { UserDefaults.standard.bool(forKey: noAVXKey(appID)) }
+
+    static func setNoAVX(_ appID: Int) { UserDefaults.standard.set(true, forKey: noAVXKey(appID)) }
+
+    /// Whether Rosetta advertises AVX to this game.
+    static func avx(_ appID: Int, profile: GameProfile?) -> Bool {
+        profile?.avx != false && !noAVX(appID)
     }
 
     static func setLastLaunch(_ appID: Int, logMark: UInt64) {

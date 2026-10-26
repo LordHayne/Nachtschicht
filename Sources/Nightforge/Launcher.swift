@@ -71,6 +71,8 @@ enum GraphicsLayer: String, Codable, CaseIterable, Identifiable {
     case dxvk
     /// Wine's own Direct3D 9 on OpenGL, for older games DXVK can't run.
     case wined3d
+    /// Apple's D3DMetal (Game Porting Toolkit): Direct3D 10–12 to Metal, the way DirectX 12 runs.
+    case d3dmetal
 
     var id: String { rawValue }
 
@@ -80,6 +82,7 @@ enum GraphicsLayer: String, Codable, CaseIterable, Identifiable {
         case .dxmt: return "DXMT (Metal)"
         case .dxvk: return "DXVK (Vulkan)"
         case .wined3d: return "WineD3D (OpenGL)"
+        case .d3dmetal: return "D3DMetal (Metal)"
         }
     }
 
@@ -90,12 +93,14 @@ enum GraphicsLayer: String, Codable, CaseIterable, Identifiable {
         case .dxmt: return "DXMT"
         case .dxvk: return "DXVK"
         case .wined3d: return "WineD3D"
+        case .d3dmetal: return "D3DMetal"
         }
     }
 
     /// DXMT upscales with MetalFX itself; DXVK and games drawing with Vulkan get it from
-    /// Nightforge's Vulkan layer. WineD3D draws through OpenGL, which MetalFX can't reach.
-    var upscales: Bool { self != .wined3d }
+    /// Nightforge's Vulkan layer. WineD3D draws through OpenGL, which MetalFX can't reach, and
+    /// D3DMetal brings its own (a game's DLSS setting goes to MetalFX there).
+    var upscales: Bool { self != .wined3d && self != .d3dmetal }
 }
 
 /// Automatic follows the global "Sharp & smooth" setting; on and off override it for one game.
@@ -335,7 +340,8 @@ enum Launcher {
                                     frameLimit: frameLimit,
                                     upscaling: options.effectiveUpscaling(profile: profile),
                                     vulkanSamplers: profile?.vulkanSamplers, hdr: options.hdr)
-            Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner)
+            Engine.applyGameSettings(options.graphics, profile: profile, installDir: game.installDir, wine: runner,
+                                     avx: LearnedFixes.avx(game.appID, profile: profile))
         }
         // CrossOver bottles: the game inherits this process's environment. Nightforge's own
         // games get the HUD from the background Steam instead (Prefs.performanceHUD).

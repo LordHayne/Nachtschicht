@@ -414,7 +414,28 @@ enum Engine {
             }
             if written { writeStamp(prefixStamp, prefixWanted) }
         }
+        // Only once the engine points at the current versions: with a game running, the graphics
+        // install above waits, and the engine's links (D3DMetal, MoltenVK) may still lead to older ones.
+        if !gameRunning, !windowsGameRunning { removeUnusedComponents(keeping: manifest, store: store) }
         return wine
+    }
+
+    /// Versions the component list no longer names, and components it dropped (an older engine
+    /// line, say), take space for nothing – a gigabyte and more after a few updates. Anything
+    /// still running from a folder stays, like the old engine a game keeps until it ends.
+    private static func removeUnusedComponents(keeping manifest: ComponentManifest, store: ComponentStore) {
+        let fm = FileManager.default
+        let wanted = Dictionary(manifest.components.map { ($0.id, $0.version) }, uniquingKeysWith: { first, _ in first })
+        let ids = (try? fm.contentsOfDirectory(at: store.root, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
+        for id in ids where !id.lastPathComponent.hasPrefix(".")
+            && (try? id.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+            let versions = (try? fm.contentsOfDirectory(at: id, includingPropertiesForKeys: nil)) ?? []
+            for version in versions where version.lastPathComponent != wanted[id.lastPathComponent] {
+                guard ownProcesses(under: version).isEmpty else { continue }
+                try? fm.removeItem(at: version)
+            }
+            if (try? fm.contentsOfDirectory(atPath: id.path))?.isEmpty == true { try? fm.removeItem(at: id) }
+        }
     }
 
     /// What `ensureEngine` last set up in a folder (the engine's lib/wine, the prefix).
@@ -958,6 +979,12 @@ enum Engine {
         let logs = supportDir.appendingPathComponent("Logs", isDirectory: true)
         try? fm.createDirectory(at: logs, withIntermediateDirectories: true)
         let logFile = logs.appendingPathComponent("winetricks.log")
+        // Like wine.log: one older copy, so it doesn't grow with every game for good.
+        if let size = (try? fm.attributesOfItem(atPath: logFile.path))?[.size] as? UInt64, size > 8_000_000 {
+            let previous = logs.appendingPathComponent("winetricks.previous.log")
+            try? fm.removeItem(at: previous)
+            try? fm.moveItem(at: logFile, to: previous)
+        }
         if !fm.fileExists(atPath: logFile.path) { fm.createFile(atPath: logFile.path, contents: nil) }
         let log = try? FileHandle(forWritingTo: logFile)
         _ = try? log?.seekToEnd()

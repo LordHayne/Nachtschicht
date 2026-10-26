@@ -20,9 +20,27 @@ struct GameOptionsSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            Text(game.name)
-                .font(Theme.display(22))
-                .lineLimit(2)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(game.name)
+                    .font(Theme.display(22))
+                    .lineLimit(2)
+                if let origin = profileOrigin {
+                    Label(origin.text, systemImage: origin.symbol)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help(profile?.note ?? origin.text)
+                }
+                if options != GameOptions() {
+                    HStack(spacing: 8) {
+                        Text(L10n.t("Your own settings."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button(profileOrigin == nil ? L10n.t("Back to Automatic") : L10n.t("Back to the Profile")) { options = GameOptions() }
+                            .controlSize(.small)
+                            .padFocus("options.reset", activate: { options = GameOptions() })
+                    }
+                }
+            }
 
             if game.switchable {
                 VStack(alignment: .leading, spacing: 6) {
@@ -161,6 +179,18 @@ private extension GameOptionsSheet {
     }
 
     var refreshRate: Int { GameDisplay.screen?.maximumFramesPerSecond ?? 60 }
+
+    /// Where the game's known fixes come from: Nightforge's own test, or umu-protonfixes.
+    var profileOrigin: (text: String, symbol: String)? {
+        guard let profile else { return nil }
+        if profile.fromNightforge {
+            let chips = Compatibility.chips(in: profile.note)
+            return (chips.isEmpty ? L10n.t("Tested by Nightforge") : L10n.t("Tested by Nightforge on %@", chips.joined(separator: ", ")),
+                    "checkmark.seal")
+        }
+        if profile.hasFixes { return (L10n.t("Community fix · from umu-protonfixes"), "person.2") }
+        return nil
+    }
 
     func automaticLabel(_ value: String) -> String { L10n.t("Automatic (%@)", value) }
 

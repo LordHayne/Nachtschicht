@@ -159,7 +159,7 @@
   - **Design:** `Dialogs.tsx` → `SettingsDialog`.
   - **Stand:** `SettingsView.swift` mit Tab-Leiste (eigene Pad-Knöpfe): **Stores** (Steam: angemeldet/Spiele, „Open Steam“; CrossOver/Whisky/eigenes Wine), **General** (wie bisher), **Controller** (Teil von 5.4), **About** (1.6). `SettingsView(tab:)` öffnet direkt einen Tab. **Storage** seit `claude/ux-storage-4-3` (Teil von 4.3). In General inzwischen auch 5.1 (Mitteilungen), 2.5 (Reduce motion) und 3.4 (Akku sparen).
 
-- [ ] **2.3 Grafik-Voreinstellungen in Klartext + Profil-Herkunft** · `M`
+- [ ] **2.3 Grafik-Voreinstellungen in Klartext + Profil-Herkunft** · `M` · Herkunft in `claude/ux-profile-origin-2-3`
   - **Was:** In den Spieloptionen statt Einzelschaltern zuerst vier Voreinstellungen:
     - **Automatic (recommended):** bisheriges Verhalten.
     - **Fastest / Balanced / Most compatible:** werden auf `GraphicsLayer`, Frame-Limit und MetalFX gemappt.
@@ -168,6 +168,7 @@
     - **Detailseite:** Karte „This game“ zeigt Store, Version, Grafik, HUD, Startoptionen, Engine, Offline-Status sowie „Your own settings … Back to the profile“.
   - **Wo:** `SettingsViews.swift` (`GameOptionsSheet`), `Launcher.swift` (`GameOptions`, `GraphicsLayer`), `Profiles.swift`.
   - **Design:** `Dialogs.tsx` → `GameOptionsDialog`; `Detail.tsx` → `OptionsSummary`; `data.ts` → `PRESETS`.
+  - **Stand** (`claude/ux-profile-origin-2-3`, teilweise): Kopfzeile in den Spieloptionen – „Tested by Nightforge on M5“ (Chips aus der Profilnotiz, Notiz beim Darüberfahren) bzw. „Community fix · from umu-protonfixes“; weichen die Optionen vom Standard ab: „Your own settings. Back to the Profile“ (ohne Profil „Back to Automatic“), wirksam mit „Save“. Offen – **braucht deine Entscheidung:** welche Ebene/Grenze/MetalFX „Fastest“, „Balanced“ und „Most compatible“ genau bedeuten; „updated 5 days ago“ (die Profilliste hat ein `generated`-Datum, aber nicht pro Spiel); Karte „This game“ auf der Detailseite.
 
 - [x] **2.4 „Bereit für offline“** · `M` · Recherche · Branch `claude/ux-offline-2-4`
   - **Was:** Pro Spiel: „Ready“ oder „Start online once“. Steams Offline-Modus muss vorher online aktiviert worden sein – herausfinden, woran man das erkennt (z. B. `loginusers.vdf`, letzter erfolgreicher Online-Start).

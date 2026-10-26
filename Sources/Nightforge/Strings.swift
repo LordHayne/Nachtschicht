@@ -547,6 +547,14 @@ enum L10n {
         "Steam doesn't remember your account: sign in once with “Remember me” so it can start offline.":
             "Steam merkt sich dein Konto nicht: melde dich einmal mit „Angemeldet bleiben“ an, damit es offline starten kann.",
 
+        // Profile origin
+        "Your own settings.": "Deine eigenen Einstellungen.",
+        "Back to Automatic": "Zurück zu Automatisch",
+        "Back to the Profile": "Zurück zum Profil",
+        "Tested by Nightforge": "Von Nightforge getestet",
+        "Tested by Nightforge on %@": "Von Nightforge getestet auf %@",
+        "Community fix · from umu-protonfixes": "Community-Fix · aus umu-protonfixes",
+
         // Library filters
         "Sort": "Sortieren",
         "Recently played": "Zuletzt gespielt",

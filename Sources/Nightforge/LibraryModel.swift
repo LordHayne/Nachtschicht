@@ -53,6 +53,8 @@ final class LibraryModel: ObservableObject {
     @Published private(set) var running: [String: pid_t] = [:]
     @Published var errorMessage: String?
     @Published var controllerConnected = false
+    /// The buttons of the controller in use, as that controller labels them (InputRouter).
+    @Published var padSymbols = PadSymbols()
     /// A newer Nightforge release, offered with one click in the top bar.
     @Published private(set) var availableUpdate: AppUpdate?
     @Published private(set) var updating = false
@@ -636,6 +638,8 @@ final class LibraryModel: ObservableObject {
             let extra = arguments.isEmpty ? ""
                 : "//" + (arguments.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "")
             await takeSavesAlong(game, to: .mac)
+            let installDir = MacSteam.steamapps.appendingPathComponent("common/\(game.installDirName)", isDirectory: true)
+            await Task.detached(priority: .userInitiated) { ControllerCompatibility.prepare(installDir: installDir) }.value
             let watcher = LaunchWatcher(steamRoot: MacSteam.root, appID: game.appID)
             let launchStarted = Date()
             let run = { MacSteam.open("run/\(game.appID)" + extra) }

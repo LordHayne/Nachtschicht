@@ -9,8 +9,9 @@ final class InputRouter {
     private var keyMonitor: Any?
     private var observers: [NSObjectProtocol] = []
     private var repeatTimer: Timer?
-    private var held = 0
-    private var stickDirection = 0
+    private var held = Step()
+    private var dpadStep = Step()
+    private var stickStep = Step()
 
     func start(model: LibraryModel) {
         self.model = model
@@ -41,6 +42,10 @@ final class InputRouter {
             MainActor.assumeIsolated { self?.attach(controller) }
         })
         observers.append(center.addObserver(forName: .GCControllerDidDisconnect, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshConnected() }
+        })
+        // The pad last touched becomes current: its own button labels go into the hints.
+        observers.append(center.addObserver(forName: .GCControllerDidBecomeCurrent, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshConnected() }
         })
 
@@ -89,33 +94,26 @@ final class InputRouter {
     // MARK: - Gamepad
 
     private func refreshConnected() {
-        model?.controllerConnected = GCController.controllers().contains { $0.extendedGamepad != nil }
+        let pads = GCController.controllers().compactMap(\.extendedGamepad)
+        model?.controllerConnected = !pads.isEmpty
+        let current = GCController.current?.extendedGamepad ?? pads.first
+        if let current, model?.padSymbols != PadSymbols(current) { model?.padSymbols = PadSymbols(current) }
     }
 
     private func attach(_ controller: GCController?) {
         guard let pad = controller?.extendedGamepad else { return }
         refreshConnected()
 
-        pad.dpad.left.pressedChangedHandler = { [weak self] _, _, pressed in
-            MainActor.assumeIsolated { self?.dpad(-1, pressed: pressed) }
+        // D-pad and left stick both move in all four directions, repeating while held.
+        pad.dpad.valueChangedHandler = { [weak self] _, x, y in
+            MainActor.assumeIsolated { self?.steer(.dpad, x: x, y: y) }
         }
-        pad.dpad.right.pressedChangedHandler = { [weak self] _, _, pressed in
-            MainActor.assumeIsolated { self?.dpad(1, pressed: pressed) }
-        }
-        pad.dpad.up.pressedChangedHandler = { [weak self] _, _, pressed in
-            guard pressed else { return }
-            MainActor.assumeIsolated { self?.model?.moveRow(-1) }
-        }
-        pad.dpad.down.pressedChangedHandler = { [weak self] _, _, pressed in
-            guard pressed else { return }
-            MainActor.assumeIsolated { self?.model?.moveRow(1) }
+        pad.leftThumbstick.valueChangedHandler = { [weak self] _, x, y in
+            MainActor.assumeIsolated { self?.steer(.stick, x: x, y: y) }
         }
         pad.buttonX.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
             MainActor.assumeIsolated { self?.model?.toggleLibrary() }
-        }
-        pad.leftThumbstick.xAxis.valueChangedHandler = { [weak self] _, value in
-            MainActor.assumeIsolated { self?.stick(value) }
         }
         pad.buttonA.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
@@ -156,42 +154,85 @@ final class InputRouter {
         model.showingOptions.toggle()
     }
 
-    private func dpad(_ direction: Int, pressed: Bool) {
-        if pressed {
-            setHeld(direction)
-        } else if held == direction {
-            setHeld(0)
-        }
+    private enum Source { case dpad, stick }
+
+    /// A step on the grid: left/right within a row, up/down a whole row.
+    private struct Step: Equatable {
+        var dx = 0, dy = 0
+        var isNone: Bool { dx == 0 && dy == 0 }
     }
 
-    private func stick(_ value: Float) {
-        let direction = value > 0.55 ? 1 : (value < -0.55 ? -1 : 0)
-        guard direction != stickDirection else { return }
-        stickDirection = direction
-        setHeld(direction)
+    /// The stronger axis wins, so a slightly diagonal stick still moves straight.
+    private func steer(_ source: Source, x: Float, y: Float) {
+        var step = Step()
+        if abs(x) >= abs(y) {
+            step.dx = x > 0.55 ? 1 : (x < -0.55 ? -1 : 0)
+        } else {
+            step.dy = y > 0.55 ? -1 : (y < -0.55 ? 1 : 0)  // stick up is +y, a row up is -1
+        }
+        switch source {
+        case .dpad: dpadStep = step
+        case .stick: stickStep = step
+        }
+        // The one just moved leads; letting go of it hands over to the other if that's still held.
+        setHeld(step.isNone ? (source == .dpad ? stickStep : dpadStep) : step)
+    }
+
+    private func perform(_ step: Step) {
+        guard let model else { return }
+        if step.dx != 0 { model.move(step.dx) }
+        if step.dy != 0 { model.moveRow(step.dy) }
     }
 
     /// First step immediately, then a short pause, then fast repeat while held.
-    private func setHeld(_ direction: Int) {
-        guard direction != held else { return }
-        held = direction
+    private func setHeld(_ step: Step) {
+        guard step != held else { return }
+        held = step
         repeatTimer?.invalidate()
         repeatTimer = nil
-        guard direction != 0, let model, !model.showingOptions else { return }
+        guard !step.isNone, let model, !model.showingOptions else { return }
 
-        model.move(direction)
+        perform(step)
         repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.38, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.startFastRepeat() }
         }
     }
 
     private func startFastRepeat() {
-        guard held != 0 else { return }
+        guard !held.isNone else { return }
         repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.11, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, self.held != 0 else { return }
-                self.model?.move(self.held)
+                guard let self, !self.held.isNone else { return }
+                self.perform(self.held)
             }
         }
+    }
+}
+
+/// The SF Symbols a controller gives its own buttons: ✕ ○ □ △ on a PlayStation pad, A B X Y on
+/// Xbox, the Nintendo layout on a Switch pad. The defaults are Xbox's.
+struct PadSymbols: Equatable {
+    var confirm = "a.circle.fill"
+    var back = "b.circle.fill"
+    var library = "x.circle.fill"
+    var options = "y.circle.fill"
+    var stick = "l.joystick.fill"
+
+    init() {}
+
+    @MainActor
+    init(_ pad: GCExtendedGamepad) {
+        confirm = Self.filled(pad.buttonA.sfSymbolsName) ?? confirm
+        back = Self.filled(pad.buttonB.sfSymbolsName) ?? back
+        library = Self.filled(pad.buttonX.sfSymbolsName) ?? library
+        options = Self.filled(pad.buttonY.sfSymbolsName) ?? options
+        stick = Self.filled(pad.leftThumbstick.sfSymbolsName) ?? stick
+    }
+
+    /// The filled variant where one exists (they read better at hint size), else the symbol itself.
+    private static func filled(_ name: String?) -> String? {
+        guard let name, NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil else { return nil }
+        let fill = name.hasSuffix(".fill") ? name : name + ".fill"
+        return NSImage(systemSymbolName: fill, accessibilityDescription: nil) != nil ? fill : name
     }
 }

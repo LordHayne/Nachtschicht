@@ -28,7 +28,7 @@ enum Engine {
     ]
     /// Settings games inherit from the background Steam. Bump `steamConfigVersion` whenever this
     /// or `steamDLLOverrides` changes, so a running Steam gets restarted with them.
-    static let steamConfigVersion = 8
+    static let steamConfigVersion = 9
     static var gameEnvironment: [String: String] {
         var env = [
             // Compile shaders in the background instead of stalling the frame that first needs them.
@@ -59,8 +59,18 @@ enum Engine {
         let values = managed.map { name in
             current[name].map { "\"\(name)\"=\"\($0)\"" } ?? "\"\(name)\"=-"
         }
-        importRegistry("[HKEY_CURRENT_USER\\Environment]\n" + values.joined(separator: "\n"), wine: wine)
+        importRegistry("[HKEY_CURRENT_USER\\Environment]\n" + values.joined(separator: "\n") + "\n\n" + controllerRegistry,
+                       wine: wine)
     }
+
+    /// Controllers for Windows games come through SDL, which reads every common pad and hands it
+    /// to games as an XInput controller. Wine would rather pass PlayStation pads through raw, but
+    /// macOS keeps a DualSense or DualShock 4 in its extended report mode, which leaves a raw pad
+    /// dead in DirectInput and missing from XInput. winebus reads this when Steam (re)starts.
+    static let controllerRegistry = """
+        [HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\winebus]
+        "DisableHidraw"=dword:00000001
+        """
 
     /// Changes whenever the background Steam has to restart to hand games different settings.
     static var steamConfigSignature: String {

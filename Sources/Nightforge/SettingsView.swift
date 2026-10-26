@@ -111,6 +111,7 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.Keys.performanceHUD) private var performanceHUD = false
     @AppStorage(Prefs.Keys.gameMode) private var gameMode = true
     @AppStorage(Prefs.Keys.sharpAndSmooth) private var sharpAndSmooth = true
+    @AppStorage(Prefs.Keys.notifyDownloads) private var notifyDownloads = true
 
     var body: some View {
         Form {
@@ -153,6 +154,16 @@ private struct GeneralSettings: View {
                 .toggleStyle(.switch)
                 .onChange(of: performanceHUD) { _, _ in model.applySteamSettings() }
                 .padFocus("settings.hud", toggle: $performanceHUD)
+                Toggle(isOn: $notifyDownloads) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(L10n.t("Notify me when downloads finish"))
+                        Text(L10n.t("A macOS notification with a Play button while Nightforge is in the background."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .padFocus("settings.notify", toggle: $notifyDownloads)
                 Picker(L10n.t("After Launch"), selection: $afterLaunch) {
                     ForEach(AfterLaunch.allCases) { option in
                         Text(option.label).tag(option.rawValue)

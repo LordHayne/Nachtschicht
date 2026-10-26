@@ -382,6 +382,11 @@ enum L10n {
         "Unpacks Windows installers": "Entpackt Windows-Installer",
         "Tool": "Werkzeug",
 
+        "The download is done.": "Der Download ist fertig.",
+        "Notify me when downloads finish": "Mitteilung, wenn Downloads fertig sind",
+        "A macOS notification with a Play button while Nightforge is in the background.":
+            "Eine macOS-Mitteilung mit „Spielen“-Knopf, während Nightforge im Hintergrund ist.",
+
         // Library filters
         "Sort": "Sortieren",
         "Recently played": "Zuletzt gespielt",

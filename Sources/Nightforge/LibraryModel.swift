@@ -106,6 +106,7 @@ final class LibraryModel: ObservableObject {
     func startInput() {
         guard !inputStarted else { return }
         inputStarted = true
+        MacIntegration.model = self
         // Left over from an earlier run whose Steam for Mac has ended since: a Steam the player
         // starts later isn't Nightforge's to quit.
         if !MacSteam.isRunning { MacSteam.startedByNightforge = false }
@@ -319,6 +320,7 @@ final class LibraryModel: ObservableObject {
         let finished = found.filter { $0.isInstalled && wasDownloading.contains($0.id) }
         for game in finished { prepare(game) }
         applyFilter()
+        MacIntegration.announceFinished(finished)
         if let game = finished.first {
             Toasts.shared.show(finished.count == 1 ? L10n.t("%@ is ready to play", game.name) : L10n.t("%ld games are ready to play", finished.count),
                                action: .init(label: L10n.t("Play")) { [weak self] in self?.play(game) })
@@ -1114,11 +1116,19 @@ final class LibraryModel: ObservableObject {
         homeOnAllGames ? homeRail.count : homeRail.firstIndex(of: selectedIndex) ?? 0
     }
 
-    /// Play from somewhere else (a message's button): selects the game where it's shown, then plays it.
+    /// Play from somewhere else (a message's or a notification's button): shows the game, then plays it.
     func play(_ game: Game) {
-        guard let index = games.firstIndex(where: { $0.id == game.id }) else { return }
-        select(index)
+        guard reveal(game) else { return }
         primaryAction()
+    }
+
+    /// Selects the game where it's shown – on Home when a search or filter hides it in the library.
+    @discardableResult
+    func reveal(_ game: Game) -> Bool {
+        if !games.contains(where: { $0.id == game.id }) { goHome() }
+        guard let index = games.firstIndex(where: { $0.id == game.id }) else { return false }
+        select(index)
+        return true
     }
 
     /// A game picked directly (a right-click on its cover).

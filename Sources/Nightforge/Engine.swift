@@ -719,7 +719,8 @@ enum Engine {
         ) else { return [] }
         var found: [URL] = []
         for case let file as URL in files {
-            if files.level > 3 { files.skipDescendants(); continue }
+            // Unreal's game program sits four levels down: <Project>/Binaries/Win64/<Name>-Shipping.exe.
+            if files.level > 4 { files.skipDescendants(); continue }
             if file.pathExtension.lowercased() == "exe" { found.append(file) }
         }
         return found

@@ -1,6 +1,10 @@
 {
  "about": "Nightforge's own per-game profiles, tested on Macs. They take precedence over umu-protonfixes. Fields: graphics (dxmt|dxvk), arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX (false = keep MetalFX off), frameLimit (automatic FPS limit), vulkanSamplers (samplers per shader stage reported to Vulkan games), preferWindows (true = Automatic keeps the Windows version although Steam has a 64-bit Mac one), saves (save folders for games without Steam Cloud rules, carried over when the game changes between its Windows and Mac version), antiCheat ([] = runs on a Mac despite what AreWeAntiCheatYet says), ignoreUpstream, note.",
  "games": {
+  "550": {
+   "name": "Left 4 Dead 2",
+   "note": "Tested 2026-10-26 on M5: DXVK fails (MoltenVK rejects its buffers, 'Failed to create D3D device'), Nightforge switches to WineD3D by itself. Menu and play work, but it crashed after about a minute twice; -vulkan (Valve's DXVK) and WineD3D's Vulkan renderer don't start."
+  },
   "251570": {
    "name": "7 Days to Die",
    "graphics": "dxmt",
@@ -22,6 +26,16 @@
    "name": "No Man's Sky",
    "vulkanSamplers": 32,
    "note": "Tested 2026-10-25 on M5: the Windows version (Vulkan) starts on MoltenVK only with Nightforge's Vulkan layer, which drops wide lines and reports 32 samplers per stage (24 is still too few). Steam also sells a native Mac version."
+  },
+  "1422450": {
+   "name": "Deadlock",
+   "graphics": "dxvk",
+   "note": "Tested 2026-10-26 on M5: plays with DXVK at 60-120 FPS (the Vulkan layer's count). Steam may first ask about controller firmware; Nightforge shows that window."
+  },
+  "1623730": {
+   "name": "Palworld",
+   "graphics": "dxmt",
+   "note": "Tested 2026-10-26 on M5: steady 60 FPS (frame limit) with DXMT and -dx11. With DXVK only the HUD showed over a black world. Steam asks for the EULA once."
   },
   "3907790": {
    "name": "OxyRail",

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generated": "2026-10-25",
+  "generated": "2026-10-26",
   "components": [
     {
       "id": "wine",
@@ -25,10 +25,10 @@
     {
       "id": "graphics",
       "kind": "graphics",
-      "version": "11.18-dxmt0.80-6",
-      "url": "https://github.com/LordHayne/Nightforge/releases/download/graphics-11.18-dxmt0.80-6/nightforge-graphics-11.18-dxmt0.80-6.tar.gz",
-      "sha256": "941de74e18e47bfd504adc00520f4926e95b7dcf8d8269b0f28dd4ddde327db7",
-      "size": 19061781,
+      "version": "11.18-dxmt0.80-9",
+      "url": "https://github.com/LordHayne/Nightforge/releases/download/graphics-11.18-dxmt0.80-9/nightforge-graphics-11.18-dxmt0.80-9.tar.gz",
+      "sha256": "cb90d6291e1d785426790e25233f2c006e038242c5aa4e78b70019581adbe439",
+      "size": 19648839,
       "license": "LGPL-2.1-or-later",
       "source": "https://github.com/LordHayne/Nightforge"
     },

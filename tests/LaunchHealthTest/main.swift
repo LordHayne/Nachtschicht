@@ -144,6 +144,16 @@ struct LaunchHealthTest {
         check(errors.first?.hasPrefix("err:module") == true, "thread ids dropped: \(errors.first ?? "")")
         check(errors.contains("err:   DXGI: Failed to create swap chain"), "DXVK's own error lines kept")
 
+        // MARK: Programs that get the Direct3D layer
+        let unreal = FileManager.default.temporaryDirectory.appendingPathComponent("lht-unreal-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: unreal.appendingPathComponent("Pal/Binaries/Win64"), withIntermediateDirectories: true)
+        for path in ["Palworld.exe", "Pal/Binaries/Win64/Palworld-Win64-Shipping.exe"] {
+            FileManager.default.createFile(atPath: unreal.appendingPathComponent(path).path, contents: Data())
+        }
+        check(Engine.executables(in: unreal) == ["Palworld-Win64-Shipping.exe", "Palworld.exe"],
+              "Unreal's game program four levels down gets the layer: \(Engine.executables(in: unreal))")
+        try? FileManager.default.removeItem(at: unreal)
+
         // MARK: Analysis of a made-up game folder
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("lht-game-\(UUID().uuidString)", isDirectory: true)
         let fm = FileManager.default

@@ -25,6 +25,8 @@ struct GameProfile: Decodable, Equatable {
     /// The game's Windows version runs better than its Mac one (old OpenGL ports, say), so
     /// "Automatic" keeps to Windows even though Steam has a 64-bit Mac version.
     var preferWindows: Bool?
+    /// Save folders for games Steam Cloud doesn't know the folders of (SaveTransfer).
+    var saves: [SaveRule]?
     /// Anti-cheat that stops the game's Windows version on a Mac ("BattlEye", …), from
     /// AreWeAntiCheatYet; an empty list (a Mac profile) means it runs after all.
     var antiCheat: [String]?
@@ -40,7 +42,17 @@ struct GameProfile: Decodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case name, graphics, arguments, dllOverrides, registry, windowsVersion, winetricks, metalFX, frameLimit
-        case vulkanSamplers, preferWindows, antiCheat, geforceNow
+        case vulkanSamplers, preferWindows, saves, antiCheat, geforceNow
+    }
+
+    /// {"root": "WinAppDataRoaming", "path": "7DaysToDie/Saves", "pattern": "*", "recursive": true, "mac": "MacAppSupport"}
+    private struct SaveFolder: Decodable {
+        let root: String
+        let path: String
+        var pattern: String?
+        var recursive: Bool?
+        let mac: String
+        var macPath: String?
     }
 
     init(from decoder: Decoder) throws {
@@ -57,6 +69,10 @@ struct GameProfile: Decodable, Equatable {
         frameLimit = try? container.decodeIfPresent(Int.self, forKey: .frameLimit)
         vulkanSamplers = try? container.decodeIfPresent(Int.self, forKey: .vulkanSamplers)
         preferWindows = try? container.decodeIfPresent(Bool.self, forKey: .preferWindows)
+        saves = (try? container.decodeIfPresent([SaveFolder].self, forKey: .saves))?.map {
+            SaveRule(root: $0.root, path: $0.path, pattern: $0.pattern ?? "*", recursive: $0.recursive ?? true,
+                     macRoot: $0.mac, macAddPath: $0.macPath ?? "")
+        }
         antiCheat = try? container.decodeIfPresent([String].self, forKey: .antiCheat)
         geforceNow = try? container.decodeIfPresent(Int.self, forKey: .geforceNow)
     }

@@ -76,6 +76,12 @@ enum MacSteam {
 
     static var isRunning: Bool { !running.isEmpty }
 
+    /// Steam's own windows: the client (and Steam.app handing over to it), not the in-game overlay
+    /// (gameoverlayui), which shares the bundle ID and has to stay as it is.
+    private static var clientApps: [NSRunningApplication] {
+        running.filter { $0.executableURL?.lastPathComponent == "steam_osx" }
+    }
+
     /// Nightforge started the Steam that runs now, so it ends it again when it quits
     /// (Engine.scheduleSteamShutdown). A Steam the player started stays.
     static var startedByNightforge: Bool {
@@ -148,7 +154,7 @@ enum MacSteam {
     static func show(keepFor seconds: TimeInterval = 0) {
         guard isRunning else { return start(visible: true) }
         allowVisible(for: seconds)
-        for app in running { app.unhide() }
+        for app in clientApps { app.unhide() }
         open("open/main", activate: true)
     }
 
@@ -176,7 +182,7 @@ enum MacSteam {
 
     /// Back to the background after the player has dealt with it.
     static func hide() {
-        for app in running { app.hide() }
+        for app in clientApps { app.hide() }
     }
 
     /// Keeps Steam for Mac out of sight while Nightforge runs. Its window comes up when it starts,
@@ -186,7 +192,7 @@ enum MacSteam {
     @MainActor
     static func guardWindows() async {
         while !Task.isCancelled {
-            if running.contains(where: { !$0.isHidden }), !allowedVisible, hasSignedIn, !waitingForPlayer {
+            if clientApps.contains(where: { !$0.isHidden }), !allowedVisible, hasSignedIn, !waitingForPlayer {
                 hide()
             }
             try? await Task.sleep(for: .seconds(1))

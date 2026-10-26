@@ -21,6 +21,19 @@ struct CatalogApp: Hashable {
     var windows = true
 }
 
+/// One Steam Cloud save location of a game: a folder under a Windows root ("WinAppDataRoaming",
+/// "gameinstall", …) holding files that match `pattern`, and where Steam puts it on macOS.
+struct SaveRule: Equatable {
+    let root: String
+    /// May hold Steam's placeholders, e.g. "HelloGames/NMS/st_{64BitSteamID}/".
+    let path: String
+    let pattern: String
+    let recursive: Bool
+    /// The macOS root ("MacAppSupport", …) and what goes in front of `path` there; nil: no Mac folder.
+    let macRoot: String?
+    let macAddPath: String
+}
+
 /// Reads the owned-games list from the binary caches Steam keeps after sign-in:
 /// `appcache/packageinfo.vdf` (licenses → app IDs) and `appcache/appinfo.vdf` (name, type, depots).
 /// No API key, no network: Steam has already downloaded both for its own library view.
@@ -84,6 +97,28 @@ enum SteamCatalog {
     /// game folder ("Binaries\NMS.exe"); nil when Steam doesn't say.
     static func launchExecutable(appID: Int, steamRoot: URL) -> String? {
         windowsLaunchOptions(appID: appID, steamRoot: steamRoot).first?["executable"]?.string
+    }
+
+    /// Where Steam Cloud finds a game's saves (appinfo ufs/savefiles), with the macOS folder each
+    /// Windows one maps to (ufs/rootoverrides). Rules only for other systems are left out.
+    static func saveRules(appID: Int, steamRoot: URL) -> [SaveRule] {
+        guard let bytes = try? Data(contentsOf: steamRoot.appendingPathComponent("appcache/appinfo.vdf")),
+              let ufs = appInfo(Array(bytes), appID: appID)?["ufs"]?.object
+        else { return [] }
+        let overrides = (ufs["rootoverrides"]?.object ?? [:]).values.compactMap(\.object)
+            .filter { ($0["os"]?.string ?? "").lowercased() == "macos" && $0["pathtransforms"] == nil }
+        return (ufs["savefiles"]?.object ?? [:]).sorted { $0.key < $1.key }.compactMap { _, value in
+            guard let rule = value.object, let root = rule["root"]?.string else { return nil }
+            let platforms = (rule["platforms"]?.object ?? [:]).values.compactMap { $0.string?.lowercased() }
+            if !platforms.isEmpty && !platforms.contains("all") && !(platforms.contains("windows") && platforms.contains("macos")) {
+                return nil
+            }
+            let mac = overrides.first { $0["root"]?.string?.lowercased() == root.lowercased() }
+            return SaveRule(root: root, path: rule["path"]?.string ?? "", pattern: rule["pattern"]?.string ?? "*",
+                            recursive: rule["recursive"]?.int == 1,
+                            macRoot: mac?["useinstead"]?.string ?? (root.lowercased() == "gameinstall" ? root : nil),
+                            macAddPath: mac?["addpath"]?.string ?? "")
+        }
     }
 
     /// The game's launch options that apply to Windows, in Steam's order.

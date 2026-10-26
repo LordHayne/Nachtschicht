@@ -534,6 +534,7 @@ final class LibraryModel: ObservableObject {
             // steam://run/<id>//<arguments>: the extra part goes to the game.
             let extra = arguments.isEmpty ? ""
                 : "//" + (arguments.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "")
+            await takeSavesAlong(game, to: .mac)
             let watcher = LaunchWatcher(steamRoot: MacSteam.root, appID: game.appID)
             MacSteam.open("run/\(game.appID)" + extra)
             let start = await waitForMacStart(game, watcher: watcher)
@@ -560,6 +561,23 @@ final class LibraryModel: ObservableObject {
             case .stay: break
             }
         }
+    }
+
+    /// The first start of a game's other version (SaveTransfer): its empty save folders get the
+    /// saves the version played before left, so it doesn't start from scratch.
+    private func takeSavesAlong(_ game: Game, to platform: Platform) async {
+        guard game.macNative else { return }
+        let appID = game.appID
+        let installDir = game.installDirName
+        await Task.detached(priority: .userInitiated) {
+            let macCatalog = MacSteam.root.appendingPathComponent("appcache/appinfo.vdf")
+            let rules = SteamCatalog.saveRules(
+                appID: appID, steamRoot: FileManager.default.fileExists(atPath: macCatalog.path) ? MacSteam.root : Engine.steamRoot)
+            var places = SaveTransfer.Places()
+            places.windowsInstall = Engine.steamRoot.appendingPathComponent("steamapps/common/\(installDir)", isDirectory: true)
+            places.macInstall = MacSteam.steamapps.appendingPathComponent("common/\(installDir)", isDirectory: true)
+            SaveTransfer.beforeStart(appID: appID, platform: platform, rules: rules, places: places)
+        }.value
     }
 
     /// Follows the start of a Mac game until its process is there, or Steam's log says it runs.
@@ -709,6 +727,7 @@ final class LibraryModel: ObservableObject {
                 _ = await restartStuckSteam(wine)
                 launchStatus = nil
             }
+            if game.bottle.isBuiltIn { await takeSavesAlong(game, to: .windows) }
             let runner = game.bottle.isBuiltIn ? await Engine.installedWine()?.path : Prefs.runnerPath
             // Known fixes for this game (profiles/profiles.json) and what its files reveal.
             let profile = game.bottle.isBuiltIn ? await ProfileStore.shared.profile(for: game.appID) : nil

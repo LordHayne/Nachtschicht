@@ -10,3 +10,8 @@ for game in games where CommandLine.arguments.count < 3 ? games.firstIndex(of: g
                                                    game.macAppleSilicon ? " Apple silicon" : "", Double(game.macSize) / 1e6)
     print(String(format: "%8d  %8.0f MB  %@  [%@]%@", game.appID, Double(game.size) / 1e6, game.name, game.installDir, mac))
 }
+if CommandLine.arguments.count > 2, let appID = Int(CommandLine.arguments[2]) {
+    for rule in SteamCatalog.saveRules(appID: appID, steamRoot: root) {
+        print("  saves: \(rule.root)/\(rule.path)\(rule.pattern)\(rule.recursive ? " (with subfolders)" : "") → Mac: \(rule.macRoot.map { $0 + "/" + rule.macAddPath + rule.path } ?? "none")")
+    }
+}

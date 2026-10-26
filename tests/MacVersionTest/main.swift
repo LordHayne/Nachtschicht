@@ -122,15 +122,35 @@ struct MacVersionTest {
             if let language { config.append(("language", .string(language))) }
             return .object([("config", .object(config)), ("manifests", .object([("public", .object([("size", .string(size))]))]))])
         }
-        func app(_ name: String, oslist: String, extended: String = "", depots: [(String, KV)] = []) -> [(String, KV)] {
+        func app(_ name: String, oslist: String, extended: String = "", depots: [(String, KV)] = [],
+                 ufs: [(String, KV)] = []) -> [(String, KV)] {
             [("common", .object([("name", .string(name)), ("type", .string("Game")), ("oslist", .string(oslist)),
                                  ("osextended", .string(extended))])),
              ("config", .object([("installdir", .string(name))])),
-             ("depots", .object(depots))]
+             ("depots", .object(depots)),
+             ("ufs", .object(ufs))]
         }
+        // No Man's Sky's rules as Steam has them, plus a Windows-only rule and one in the game folder.
+        let nmsCloud: [(String, KV)] = [
+            ("savefiles", .object([
+                ("0", .object([("root", .string("WinAppDataRoaming")), ("path", .string("HelloGames/NMS/st_{64BitSteamID}/")),
+                               ("pattern", .string("*.hg"))])),
+                ("1", .object([("root", .string("WinMyDocuments")), ("path", .string("Only Windows")), ("pattern", .string("*")),
+                               ("platforms", .object([("1", .string("Windows"))]))])),
+                ("2", .object([("root", .string("gameinstall")), ("path", .string("SNAppData/SavedGames")),
+                               ("pattern", .string("*.*")), ("recursive", .int(1))])),
+            ])),
+            ("rootoverrides", .object([
+                ("0", .object([("root", .string("WinAppDataRoaming")), ("os", .string("MacOS")), ("oscompare", .string("=")),
+                               ("useinstead", .string("MacAppSupport")), ("addpath", .string(""))])),
+                ("1", .object([("root", .string("gameinstall")), ("os", .string("MacOS")), ("oscompare", .string("=")),
+                               ("useinstead", .string("gameinstall")), ("addpath", .string("Silicon.app/"))])),
+            ])),
+        ]
         let apps: [(Int, [(String, KV)])] = [
             (1001, app("Silicon", oslist: "windows,macos", extended: "macos64,macosapplesilicon,macosnotarized",
-                       depots: [("10011", depot("windows", size: "3000")), ("10012", depot("macos", size: "2000"))])),
+                       depots: [("10011", depot("windows", size: "3000")), ("10012", depot("macos", size: "2000"))],
+                       ufs: nmsCloud)),
             (1002, app("DepotArch", oslist: "windows,macos",
                        depots: [("10021", depot("macos", size: "500", arch: .int(64))),
                                 ("10022", depot("macos", size: "70", arch: .int(32), language: "hungarian")),
@@ -153,6 +173,50 @@ struct MacVersionTest {
         check(catalog[1003]?.macNative == true && catalog[1003]?.mac64 == false, "a 32-bit Mac depot doesn't")
         check(catalog[1004]?.macNative == false, "Windows only")
         check(catalog[1005]?.windows == false && catalog[1005]?.mac64 == true, "Mac only")
+
+        // MARK: Saves along when the version changes
+        let rules = SteamCatalog.saveRules(appID: 1001, steamRoot: steam)
+        check(rules == [
+            SaveRule(root: "WinAppDataRoaming", path: "HelloGames/NMS/st_{64BitSteamID}/", pattern: "*.hg", recursive: false,
+                     macRoot: "MacAppSupport", macAddPath: ""),
+            SaveRule(root: "gameinstall", path: "SNAppData/SavedGames", pattern: "*.*", recursive: true,
+                     macRoot: "gameinstall", macAddPath: "Silicon.app/"),
+        ], "Steam Cloud's save rules, Windows-only ones left out: \(rules)")
+        let home = steam.appendingPathComponent("home", isDirectory: true)
+        var places = SaveTransfer.Places()
+        places.prefix = steam.appendingPathComponent("prefix", isDirectory: true)
+        places.windowsUser = "player"
+        places.windowsInstall = steam.appendingPathComponent("win/Silicon", isDirectory: true)
+        places.macHome = home
+        places.macInstall = steam.appendingPathComponent("mac/Silicon", isDirectory: true)
+        let windowsSaves = places.prefix.appendingPathComponent("drive_c/users/player/AppData/Roaming/HelloGames/NMS/st_76561198118309630")
+        let macSaves = home.appendingPathComponent("Library/Application Support/HelloGames/NMS/st_76561198118309630")
+        try? fm.createDirectory(at: windowsSaves.appendingPathComponent("cache"), withIntermediateDirectories: true)
+        for name in ["save.hg", "save5.hg", "mf_save5.hg", "cache/feed.json", "steam_autocloud.vdf"] {
+            try? Data(name.utf8).write(to: windowsSaves.appendingPathComponent(name))
+        }
+        let inGame = places.windowsInstall!.appendingPathComponent("SNAppData/SavedGames/slot1", isDirectory: true)
+        try? fm.createDirectory(at: inGame, withIntermediateDirectories: true)
+        try? Data("world".utf8).write(to: inGame.appendingPathComponent("world.bin"))
+        let suite = UserDefaults(suiteName: "mvt-\(UUID().uuidString)")!
+        check(SaveTransfer.beforeStart(appID: 1001, platform: .mac, rules: rules, places: places, defaults: suite) == 4,
+              "the first Mac start takes the Windows saves along")
+        let carried = ((try? fm.contentsOfDirectory(atPath: macSaves.path)) ?? []).sorted()
+        check(carried == ["mf_save5.hg", "save.hg", "save5.hg"], "only what Steam Cloud would carry: \(carried)")
+        check(fm.fileExists(atPath: places.macInstall!.appendingPathComponent("Silicon.app/SNAppData/SavedGames/slot1/world.bin").path),
+              "saves in the game folder go into the app bundle, subfolders too")
+        try? Data("newer on the Mac".utf8).write(to: macSaves.appendingPathComponent("save.hg"))
+        try? Data("played on Windows".utf8).write(to: windowsSaves.appendingPathComponent("save9.hg"))
+        check(SaveTransfer.beforeStart(appID: 1001, platform: .mac, rules: rules, places: places, defaults: suite) == 0
+              && !fm.fileExists(atPath: macSaves.appendingPathComponent("save9.hg").path), "the same version again: nothing moves")
+        check(SaveTransfer.beforeStart(appID: 1001, platform: .windows, rules: rules, places: places, defaults: suite) == 0
+              && (try? String(contentsOf: windowsSaves.appendingPathComponent("save.hg"), encoding: .utf8)) == "save.hg",
+              "a folder with saves is never overwritten")
+        check(SaveTransfer.beforeStart(appID: 1001, platform: .mac, rules: rules, places: places, defaults: suite) == 0
+              && (try? String(contentsOf: macSaves.appendingPathComponent("save.hg"), encoding: .utf8)) == "newer on the Mac",
+              "back on the Mac, its own saves stay")
+        check(SaveTransfer.resolve("HelloGames/NMS/st_{64BitSteamID}/", under: places.prefix.appendingPathComponent("drive_c/users/player/AppData/Roaming"))
+              == ["HelloGames/NMS/st_76561198118309630"], "placeholders match the folder that's there")
 
         // MARK: Steam for Mac's library
         let steamapps = steam.appendingPathComponent("steamapps", isDirectory: true)

@@ -115,9 +115,7 @@ enum SteamCatalog {
     /// Where Steam Cloud finds a game's saves (appinfo ufs/savefiles), with the macOS folder each
     /// Windows one maps to (ufs/rootoverrides). Rules only for other systems are left out.
     static func saveRules(appID: Int, steamRoot: URL) -> [SaveRule] {
-        guard let bytes = try? Data(contentsOf: steamRoot.appendingPathComponent("appcache/appinfo.vdf")),
-              let ufs = appInfo(Array(bytes), appID: appID)?["ufs"]?.object
-        else { return [] }
+        guard let ufs = cachedAppInfo(appID: appID, steamRoot: steamRoot)?["ufs"]?.object else { return [] }
         let overrides = (ufs["rootoverrides"]?.object ?? [:]).values.compactMap(\.object)
             .filter { ($0["os"]?.string ?? "").lowercased() == "macos" && $0["pathtransforms"] == nil }
         return (ufs["savefiles"]?.object ?? [:]).sorted { $0.key < $1.key }.compactMap { _, value in
@@ -136,9 +134,7 @@ enum SteamCatalog {
 
     /// The game's launch options that apply to Windows, in Steam's order.
     private static func windowsLaunchOptions(appID: Int, steamRoot: URL) -> [[String: BinaryKV]] {
-        guard let bytes = try? Data(contentsOf: steamRoot.appendingPathComponent("appcache/appinfo.vdf")),
-              let info = appInfo(Array(bytes), appID: appID),
-              let launch = info["config"]?.object?["launch"]?.object
+        guard let launch = cachedAppInfo(appID: appID, steamRoot: steamRoot)?["config"]?.object?["launch"]?.object
         else { return [] }
         return launch
             .compactMap { key, value -> (index: Int, option: [String: BinaryKV])? in
@@ -148,6 +144,24 @@ enum SteamCatalog {
             }
             .sorted { $0.index < $1.index }
             .map(\.option)
+    }
+
+    /// One app's appinfo, read once per change of appinfo.vdf: the file is megabytes with a big
+    /// library, and every start and every selection asks for launch options or save rules.
+    private static var appInfoCache: [String: (modified: Date, info: [String: BinaryKV]?)] = [:]
+    private static let appInfoLock = NSLock()
+
+    private static func cachedAppInfo(appID: Int, steamRoot: URL) -> [String: BinaryKV]? {
+        let file = steamRoot.appendingPathComponent("appcache/appinfo.vdf")
+        let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+        let key = "\(steamRoot.path)#\(appID)"
+        appInfoLock.lock()
+        defer { appInfoLock.unlock() }
+        if let cached = appInfoCache[key], cached.modified == modified { return cached.info }
+        guard let bytes = try? Data(contentsOf: file) else { return nil }
+        let info = appInfo(Array(bytes), appID: appID)
+        appInfoCache[key] = (modified, info)
+        return info
     }
 
     /// The "appinfo" section of one app in appinfo.vdf.

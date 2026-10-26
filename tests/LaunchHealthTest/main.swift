@@ -1,4 +1,5 @@
 // Checks GameAnalysis, LaunchHealth, GameLog and FramePacing: tests/LaunchHealthTest/run.sh [Steam folder]
+import AppKit
 import Foundation
 
 @main
@@ -262,6 +263,18 @@ struct LaunchHealthTest {
         for verb in ["annihilate", "list", "--self-update", "-q", "../x.verb", "a b", "VCRUN", ""] {
             check(!Engine.isSafeWinetricksVerb(verb), "winetricks verb \(verb) refused")
         }
+
+        // Covers are kept at the size they're drawn, other art as it is.
+        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1200, pixelsHigh: 1800, bitsPerSample: 8,
+                                      samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                      bytesPerRow: 0, bitsPerPixel: 0)!
+        let jpeg = bitmap.representation(using: .jpeg, properties: [:])!
+        func pixels(_ image: NSImage?) -> (Int, Int)? {
+            image?.cgImage(forProposedRect: nil, context: nil, hints: nil).map { ($0.width, $0.height) }
+        }
+        let cover = pixels(ArtworkStore.decode(jpeg, kind: .cover))
+        check(cover.map { $0 == (427, 640) } == true, "a cover comes down to 427×640: \(String(describing: cover))")
+        check(pixels(ArtworkStore.decode(jpeg, kind: .hero)).map { $0 == (1200, 1800) } == true, "hero art keeps its size")
 
         if CommandLine.arguments.count > 1 {
             let root = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)

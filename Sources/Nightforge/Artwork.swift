@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 
 enum ArtKind: String {
     case cover, hero, logo
@@ -11,6 +12,11 @@ enum ArtKind: String {
         case .logo: return ["logo.png"]
         }
     }
+
+    /// Covers are drawn 154 pt wide (231 tall, a little more when picked): kept at that size on a
+    /// Retina screen rather than Steam's 1200×1800, a quarter of the memory per cover. Hero art
+    /// fills the window, logos are small: both stay as they are.
+    var maxPixelSize: Int? { self == .cover ? 640 : nil }
 }
 
 /// Loads game art in this order: memory → own disk cache → Steam's cache inside the bottle → Steam CDN.
@@ -27,6 +33,8 @@ actor ArtworkStore {
         cacheDir = base.appendingPathComponent("Nightforge/Artwork", isDirectory: true)
         try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
         memory.countLimit = 400
+        // Decoded pixels, not files: a whole library of covers stays well within this.
+        memory.totalCostLimit = 300 * 1024 * 1024
     }
 
     func image(for game: Game, kind: ArtKind) async -> NSImage? {
@@ -41,26 +49,53 @@ actor ArtworkStore {
         inflight[key] = task
         let image = await task.value
         inflight[key] = nil
-        if let image { memory.setObject(image, forKey: key as NSString) }
+        if let image { memory.setObject(image, forKey: key as NSString, cost: Self.cost(of: image)) }
         return image
     }
+
+    private static func cost(of image: NSImage) -> Int {
+        guard let pixels = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return 1 }
+        return max(pixels.width * pixels.height * 4, 1)
+    }
+
+    /// An image from file data, scaled down to `kind`'s size when it's larger.
+    static func decode(_ data: Data, kind: ArtKind) -> NSImage? {
+        guard let maxSize = kind.maxPixelSize, let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+            return NSImage(data: data)
+        }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxSize,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return NSImage(data: data)
+        }
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
+    /// Steam adds art to games now and then; a "nothing there" from a week ago is asked again.
+    private static let missingLifetime: TimeInterval = 7 * 24 * 3600
 
     private static func load(game: Game, kind: ArtKind, cacheDir: URL, key: String) async -> NSImage? {
         let fm = FileManager.default
         let cached = cacheDir.appendingPathComponent(key)
         let missingMarker = cacheDir.appendingPathComponent(key + ".missing")
 
-        if let image = NSImage(contentsOf: cached) { return image }
+        if let data = try? Data(contentsOf: cached), let image = decode(data, kind: kind) { return image }
 
         // Steam's own cache first – it can gain art after a "missing" marker was written.
         if let local = localFile(game: game, kind: kind),
            let data = try? Data(contentsOf: local),
-           let image = NSImage(data: data) {
+           let image = decode(data, kind: kind) {
             try? data.write(to: cached)
             try? fm.removeItem(at: missingMarker)
             return image
         }
-        if fm.fileExists(atPath: missingMarker.path) { return nil }
+        if let written = (try? fm.attributesOfItem(atPath: missingMarker.path))?[.modificationDate] as? Date {
+            guard Date().timeIntervalSince(written) > missingLifetime else { return nil }
+            try? fm.removeItem(at: missingMarker)
+        }
 
         var everythingWas404 = true
         for url in remoteURLs(appID: game.appID, kind: kind) {
@@ -69,7 +104,7 @@ actor ArtworkStore {
             do {
                 let (data, response) = try await URLSession.shared.data(for: request)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                if status == 200, let image = NSImage(data: data) {
+                if status == 200, let image = decode(data, kind: kind) {
                     try? data.write(to: cached)
                     return image
                 }

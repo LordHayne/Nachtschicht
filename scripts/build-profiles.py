@@ -9,11 +9,11 @@ Sources, merged per Steam app ID:
   * AreWeAntiCheatYet (MIT, https://github.com/AreWeAntiCheatYet/AreWeAntiCheatYet), optional:
     games whose anti-cheat stops them even under Proton. On a Mac they don't start at all, so
     Nightforge says so before a download ("antiCheat").
-  * NVIDIA's public GeForce Now game list, optional: which of those games can be streamed
-    instead ("geforceNow", its GeForce Now id).
+  * The GeForce Now catalog (scripts/fetch-geforce-now.py), optional: which of those games can be
+    streamed instead ("geforceNow", the game id its deep links take).
   * profiles/mac.json: Nightforge's own profiles, tested on Macs. They win over upstream.
 
-Usage: build-profiles.py <umu-protonfixes checkout> [--anticheat games.json] [--geforcenow list.json]
+Usage: build-profiles.py <umu-protonfixes checkout> [--anticheat games.json] [--geforcenow catalog.json]
                          [--out profiles/profiles.json]
 """
 
@@ -22,7 +22,6 @@ import ast
 import datetime
 import json
 import pathlib
-import re
 import subprocess
 import sys
 
@@ -163,12 +162,13 @@ def anticheat_blocks(games):
 
 
 def geforce_now_ids(games):
-    """Steam app ID → GeForce Now id, for the games GeForce Now streams from Steam."""
+    """Steam app ID → GeForce Now game id, for the games GeForce Now streams from Steam."""
     ids = {}
     for game in games:
-        match = re.search(r"/app/(\d+)", game.get("steamUrl") or "")
-        if match and game.get("store") == "Steam" and game.get("status") == "AVAILABLE" and game.get("id"):
-            ids.setdefault(match.group(1), game["id"])
+        for variant in game.get("variants") or []:
+            store_id = str(variant.get("storeId") or "")
+            if variant.get("appStore") == "STEAM" and store_id.isdigit() and game.get("id"):
+                ids.setdefault(store_id, game["id"])
     return ids
 
 
@@ -184,7 +184,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("protonfixes", type=pathlib.Path)
     parser.add_argument("--anticheat", type=pathlib.Path, help="AreWeAntiCheatYet games.json")
-    parser.add_argument("--geforcenow", type=pathlib.Path, help="GeForce Now supported-public-game-list JSON")
+    parser.add_argument("--geforcenow", type=pathlib.Path, help="GeForce Now catalog from fetch-geforce-now.py")
     parser.add_argument("--mac", type=pathlib.Path, default=ROOT / "profiles" / "mac.json")
     parser.add_argument("--out", type=pathlib.Path, default=ROOT / "profiles" / "profiles.json")
     options = parser.parse_args()
@@ -218,7 +218,7 @@ def main() -> int:
         cloud = {}
         if options.geforcenow:
             cloud = geforce_now_ids(json.loads(options.geforcenow.read_text(encoding="utf-8")))
-            sources["geforce-now"] = {"url": "https://www.nvidia.com/en-us/geforce-now/games/"}
+            sources["geforce-now"] = {"url": "https://play.geforcenow.com"}
         for app_id, block in anticheat_blocks(json.loads(options.anticheat.read_text(encoding="utf-8"))).items():
             profile = games.setdefault(app_id, {"name": block["name"], "source": "anticheat"})
             profile["antiCheat"] = block["antiCheat"]

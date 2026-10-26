@@ -30,8 +30,8 @@ struct GameProfile: Decodable, Equatable {
     /// Anti-cheat that stops the game's Windows version on a Mac ("BattlEye", …), from
     /// AreWeAntiCheatYet; an empty list (a Mac profile) means it runs after all.
     var antiCheat: [String]?
-    /// Its id on GeForce Now, NVIDIA's cloud gaming, where such a game can be streamed instead.
-    var geforceNow: Int?
+    /// Its game id on GeForce Now, NVIDIA's cloud gaming, where such a game can be streamed instead.
+    var geforceNow: String?
 
     struct RegistryEntry: Decodable, Equatable {
         let key: String
@@ -74,7 +74,7 @@ struct GameProfile: Decodable, Equatable {
                      macRoot: $0.mac, macAddPath: $0.macPath ?? "")
         }
         antiCheat = try? container.decodeIfPresent([String].self, forKey: .antiCheat)
-        geforceNow = try? container.decodeIfPresent(Int.self, forKey: .geforceNow)
+        geforceNow = try? container.decodeIfPresent(String.self, forKey: .geforceNow)
     }
 }
 
@@ -82,12 +82,20 @@ struct GameProfile: Decodable, Equatable {
 /// run it, and getting around it would get the player banned.
 struct AntiCheatBlock: Hashable {
     let antiCheat: [String]
-    /// Its GeForce Now id, when it can be streamed there instead.
-    let geforceNow: Int?
+    /// Its GeForce Now game id, when it can be streamed there instead.
+    let geforceNow: String?
 
-    /// GeForce Now opens the game's page from this link, in its app or the browser.
+    /// GeForce Now's deep link to the game's page, where it can be played
+    /// (NVIDIA GeForce NOW SDK, doc/GfnSdk-Deep-Linking.md).
     var geforceNowURL: URL? {
-        geforceNow.flatMap { URL(string: "https://play.geforcenow.com/mall/#/deeplink?game-id=\($0)") }
+        guard let geforceNow else { return nil }
+        var link = URLComponents(string: "https://play.geforcenow.com/games")
+        link?.queryItems = [
+            URLQueryItem(name: "game-id", value: geforceNow),
+            URLQueryItem(name: "utm_source", value: "nightforge"),
+            URLQueryItem(name: "utm_campaign", value: "library"),
+        ]
+        return link?.url
     }
 }
 

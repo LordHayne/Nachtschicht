@@ -77,13 +77,12 @@ class AntiCheatTests(unittest.TestCase):
         ])
         self.assertEqual(blocks, {"578080": {"name": "PUBG", "antiCheat": ["BattlEye"]}})
 
-    def test_geforce_now_ids_come_from_available_steam_games(self):
+    def test_geforce_now_ids_come_from_steam_variants(self):
         ids = build_profiles.geforce_now_ids([
-            {"id": 7, "steamUrl": "https://store.steampowered.com/app/252490", "store": "Steam", "status": "AVAILABLE"},
-            {"id": 8, "steamUrl": "", "store": "Epic", "status": "AVAILABLE"},
-            {"id": 9, "steamUrl": "https://store.steampowered.com/app/1", "store": "Steam", "status": "MAINTENANCE"},
+            {"id": "d176-uuid", "variants": [{"appStore": "EPIC", "storeId": "06bd"}, {"appStore": "STEAM", "storeId": "1085660"}]},
+            {"id": "cb2b-uuid", "variants": [{"appStore": "EA_APP", "storeId": "Origin.OFR.50.0002694"}]},
         ])
-        self.assertEqual(ids, {"252490": 7})
+        self.assertEqual(ids, {"1085660": "d176-uuid"})
 
 
 if __name__ == "__main__":

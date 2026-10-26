@@ -7,7 +7,7 @@
    "license": "BSD-2-Clause"
   },
   "geforce-now": {
-   "url": "https://www.nvidia.com/en-us/geforce-now/games/"
+   "url": "https://play.geforcenow.com"
   },
   "areweanticheatyet": {
    "url": "https://areweanticheatyet.com",
@@ -567,7 +567,7 @@
    "antiCheat": [
     "PunkBuster"
    ],
-   "geforceNow": 8686111
+   "geforceNow": "f10ec947-01d0-44c0-92d4-60d451dcc1fc"
   },
   "205650": {
    "name": "The Testament of Sherlock Holmes",
@@ -630,8 +630,7 @@
    "source": "anticheat",
    "antiCheat": [
     "XIGNCODE3"
-   ],
-   "geforceNow": 100222811
+   ]
   },
   "213330": {
    "name": "LEGO Batman 2: DC Super Heroes",
@@ -684,8 +683,7 @@
    "source": "anticheat",
    "antiCheat": [
     "Nexon Game Security"
-   ],
-   "geforceNow": 17941911
+   ]
   },
   "219990": {
    "name": "Grim Dawn",
@@ -734,8 +732,7 @@
    "source": "anticheat",
    "antiCheat": [
     "BattlEye"
-   ],
-   "geforceNow": 18102411
+   ]
   },
   "228260": {
    "name": "Fallen Enchantress: Legendary Heroes",
@@ -881,7 +878,7 @@
    "antiCheat": [
     "Easy Anti-Cheat"
    ],
-   "geforceNow": 18105111
+   "geforceNow": "ef34a057-8ff1-4129-9e9b-387e67cecda5"
   },
   "252950": {
    "name": "Rocket League",
@@ -1046,8 +1043,7 @@
    "antiCheat": [
     "FairFight",
     "Mail.ru Anti-Cheat"
-   ],
-   "geforceNow": 100606411
+   ]
   },
   "292820": {
    "name": "Pajama Sam 4: Life is Rough When you Lose your Stuff!",
@@ -1115,7 +1111,7 @@
    "antiCheat": [
     "Easy Anti-Cheat"
    ],
-   "geforceNow": 100228711
+   "geforceNow": "5d1d027f-569c-4839-b417-fc3dc084f6dd"
   },
   "304030": {
    "name": "ArcheAge",
@@ -1300,7 +1296,7 @@
     "BattlEye",
     "R6 ShieldGuard"
    ],
-   "geforceNow": 100028511
+   "geforceNow": "1dd07d47-6601-42f7-80e9-e4d8db08ea1b"
   },
   "360760": {
    "name": "Run and Fire",
@@ -1381,7 +1377,7 @@
    "antiCheat": [
     "Easy Anti-Cheat"
    ],
-   "geforceNow": 100223211
+   "geforceNow": "e6913020-9364-43dc-aef6-61030ae64353"
   },
   "384030": {
    "name": "Florensia",
@@ -1462,7 +1458,7 @@
    "antiCheat": [
     "BattlEye"
    ],
-   "geforceNow": 100030011
+   "geforceNow": "3ad93cb1-8352-4fce-a423-7b0a00fafc25"
   },
   "442080": {
    "name": "Riders of Icarus",
@@ -1517,7 +1513,7 @@
    "antiCheat": [
     "Easy Anti-Cheat"
    ],
-   "geforceNow": 100129011
+   "geforceNow": "5fb76381-4d51-4300-b08e-0607e312d8b3"
   },
   "475100": {
    "name": "KAL Online",
@@ -1615,7 +1611,7 @@
    "antiCheat": [
     "Easy Anti-Cheat"
    ],
-   "geforceNow": 100184811
+   "geforceNow": "37b56bdc-829e-457c-8ec6-3d0accd3b9ec"
   },
   "518660": {
    "name": "Zone4",
@@ -1669,7 +1665,7 @@
    "antiCheat": [
     "Easy Anti-Cheat"
    ],
-   "geforceNow": 100202611
+   "geforceNow": "2c4a6b3d-702e-4aaf-bff0-6f3d56fd2525"
   },
   "547860": {
    "name": "Rend",
@@ -1734,7 +1730,7 @@
    "antiCheat": [
     "Easy Anti-Cheat"
    ],
-   "geforceNow": 100230611
+   "geforceNow": "2a4d1cd1-b3b4-457b-b083-781ff92ed39b"
   },
   "578080": {
    "name": "PUBG: Battlegrounds",
@@ -1761,7 +1757,7 @@
    "antiCheat": [
     "BattlEye"
    ],
-   "geforceNow": 100080311
+   "geforceNow": "a9260ecb-dab1-4df2-ac91-d74868ea1672"
   },
   "601510": {
    "name": "Yu-Gi-Oh Duel Links needs vcrun2019",
@@ -1844,7 +1840,7 @@
    "antiCheat": [
     "BattlEye"
    ],
-   "geforceNow": 100154211
+   "geforceNow": "b97d848a-3ac5-4d1c-ae4a-cdee27b2d3d6"
   },
   "647590": {
    "name": "Space Junkies",
@@ -1940,7 +1936,8 @@
    "source": "anticheat",
    "antiCheat": [
     "Easy Anti-Cheat"
-   ]
+   ],
+   "geforceNow": "ddd9e176-d7f0-4554-9149-ceedaf3cba2c"
   },
   "719890": {
    "name": "Beasts of Bermuda",
@@ -1976,7 +1973,7 @@
    "antiCheat": [
     "Easy Anti-Cheat"
    ],
-   "geforceNow": 100238511
+   "geforceNow": "9e405dab-acf1-4c0f-8347-4da792be243a"
   },
   "747610": {
    "name": "Zula Global",
@@ -2019,8 +2016,7 @@
    "source": "anticheat",
    "antiCheat": [
     "TenProtect"
-   ],
-   "geforceNow": 100261111
+   ]
   },
   "760160": {
    "name": "Vampire: The Masquerade - Bloodhunt",
@@ -2093,7 +2089,7 @@
    "antiCheat": [
     "Easy Anti-Cheat"
    ],
-   "geforceNow": 100221711
+   "geforceNow": "4da9b042-0cb9-4944-a9c7-586c1d1ee5e7"
   },
   "815940": {
    "name": "AVA: Dog Tag",
@@ -2119,7 +2115,7 @@
    "antiCheat": [
     "Easy Anti-Cheat"
    ],
-   "geforceNow": 100204911
+   "geforceNow": "49c8a559-5bef-4cdd-af49-190b6424e2c7"
   },
   "834910": {
    "name": "Atlas",
@@ -2127,7 +2123,7 @@
    "antiCheat": [
     "BattlEye"
    ],
-   "geforceNow": 100250311
+   "geforceNow": "fd1e2fdf-6639-4101-942e-7e58efe16e25"
   },
   "835860": {
    "name": "Dreadnought",
@@ -2209,7 +2205,7 @@
     "Easy Anti-Cheat",
     "BattlEye"
    ],
-   "geforceNow": 100655211
+   "geforceNow": "b0ea006a-daf5-49da-b9ea-5ce51bca6afb"
   },
   "895870": {
    "name": "Project Wingman",
@@ -2224,7 +2220,7 @@
    "antiCheat": [
     "Easy Anti-Cheat"
    ],
-   "geforceNow": 100632811
+   "geforceNow": "a9c09a3f-5ecd-40eb-b3a0-2c19e9aff7f2"
   },
   "906510": {
    "name": "Conception PLUS: Maidens of the Twelve Stars",
@@ -2252,7 +2248,8 @@
    "source": "anticheat",
    "antiCheat": [
     "Easy Anti-Cheat"
-   ]
+   ],
+   "geforceNow": "7780c752-eca2-4dd0-8ef6-f93e28e6e01e"
   },
   "921940": {
    "name": "Icarus Online",
@@ -2281,8 +2278,7 @@
    "source": "anticheat",
    "antiCheat": [
     "Easy Anti-Cheat"
-   ],
-   "geforceNow": 100580111
+   ]
   },
   "939510": {
    "name": "Pandemic Express - Zombie Escape",
@@ -2303,8 +2299,7 @@
    "source": "anticheat",
    "antiCheat": [
     "Easy Anti-Cheat"
-   ],
-   "geforceNow": 100935611
+   ]
   },
   "955050": {
    "name": "Bright Memory",
@@ -2431,7 +2426,7 @@
    "antiCheat": [
     "Easy Anti-Cheat"
    ],
-   "geforceNow": 100607511
+   "geforceNow": "c941579c-9e3a-4341-9ba8-3fcbff07cb81"
   },
   "1058650": {
    "name": "Beyond the Wire",
@@ -2453,7 +2448,7 @@
    "antiCheat": [
     "BattlEye"
    ],
-   "geforceNow": 100362311
+   "geforceNow": "d1768dc1-b451-449a-8f7f-cf5b20f98f6f"
   },
   "1093170": {
    "name": "Monstrum 2",
@@ -2555,7 +2550,8 @@
    "source": "anticheat",
    "antiCheat": [
     "Easy Anti-Cheat"
-   ]
+   ],
+   "geforceNow": "b45bde41-18d5-478a-8951-906e4ef01b47"
   },
   "1172470": {
    "name": "Apex Legends",
@@ -2563,8 +2559,7 @@
    "antiCheat": [
     "Easy Anti-Cheat",
     "Hyperion"
-   ],
-   "geforceNow": 100901811
+   ]
   },
   "1174180": {
    "name": "Red Dead Redemption 2",
@@ -2596,7 +2591,7 @@
    "antiCheat": [
     "Easy Anti-Cheat"
    ],
-   "geforceNow": 100757111
+   "geforceNow": "3c8cbe05-875c-4d05-93fa-9939c43ad0b2"
   },
   "1183940": {
    "name": "Scavengers",
@@ -2693,7 +2688,7 @@
     "FairFight",
     "EA anticheat"
    ],
-   "geforceNow": 101904911
+   "geforceNow": "619b3461-3e7e-4b88-9087-c09e9e0b8c2e"
   },
   "1238840": {
    "name": "Battlefield 1",
@@ -2702,7 +2697,7 @@
     "FairFight",
     "EA anticheat"
    ],
-   "geforceNow": 101905311
+   "geforceNow": "dd4fd889-9124-425f-8df5-1c121d61ae40"
   },
   "1239520": {
    "name": "Madden NFL 21 needs vcrun2019 for online mode to work",
@@ -2768,7 +2763,8 @@
    "source": "anticheat",
    "antiCheat": [
     "Easy Anti-Cheat"
-   ]
+   ],
+   "geforceNow": "36b052ea-cb34-4782-953f-ef2c7bd20765"
   },
   "1277510": {
    "name": "Re:ZERO -Starting Life in Another World- The Prophecy of the Throne",
@@ -2871,7 +2867,8 @@
    "source": "anticheat",
    "antiCheat": [
     "Easy Anti-Cheat"
-   ]
+   ],
+   "geforceNow": "7ddee0fa-e073-4373-93df-ca5316da86a3"
   },
   "1379750": {
    "name": "Ragnarok: The Lost Memories",
@@ -2900,8 +2897,7 @@
    "source": "anticheat",
    "antiCheat": [
     "Easy Anti-Cheat"
-   ],
-   "geforceNow": 101658711
+   ]
   },
   "1434950": {
    "name": "Game fix HighFleet",
@@ -2972,7 +2968,8 @@
    "source": "anticheat",
    "antiCheat": [
     "EA anticheat"
-   ]
+   ],
+   "geforceNow": "2584fa7f-a3fd-4c6c-9f64-ed0154f6a0c4"
   },
   "1524370": {
    "name": "Astellia Royal",
@@ -3207,7 +3204,8 @@
    "source": "anticheat",
    "antiCheat": [
     "NetEase Anti-Cheat Expert"
-   ]
+   ],
+   "geforceNow": "78a9d85f-785f-422c-8996-8571d202bd21"
   },
   "1799530": {
    "name": "Smelogs Playground",
@@ -3298,14 +3296,16 @@
    "source": "anticheat",
    "antiCheat": [
     "NetEase Yidun"
-   ]
+   ],
+   "geforceNow": "6581d7a5-d8fd-47d3-8696-3df5ccc00afb"
   },
   "1938090": {
    "name": "Call of Duty: Modern Warfare II (2022)",
    "source": "anticheat",
    "antiCheat": [
     "RICOCHET"
-   ]
+   ],
+   "geforceNow": "8bfa0687-60fc-425e-9f10-6232693b90d7"
   },
   "1955960": {
    "name": "HAWKED",
@@ -3333,7 +3333,8 @@
    "source": "anticheat",
    "antiCheat": [
     "RICOCHET"
-   ]
+   ],
+   "geforceNow": "c5c8bd30-79de-40e8-b78a-5d74e9c184d8"
   },
   "1991140": {
    "name": "Robocraft 2",
@@ -3602,7 +3603,8 @@
    "antiCheat": [
     "Anti-Cheat Expert",
     "Seasun Protect"
-   ]
+   ],
+   "geforceNow": "1f8b6f1e-fff3-4ebb-b870-6a45bdaf59c7"
   },
   "2484250": {
    "name": "ASTRA: Knights of Veda",
@@ -3651,7 +3653,8 @@
    "source": "anticheat",
    "antiCheat": [
     "Easy Anti-Cheat"
-   ]
+   ],
+   "geforceNow": "b05a92fa-c59b-4a4d-9111-9deb5dd8596f"
   },
   "2698870": {
    "name": "Midnight Murder Club",
@@ -3694,14 +3697,16 @@
    "source": "anticheat",
    "antiCheat": [
     "Easy Anti-Cheat"
-   ]
+   ],
+   "geforceNow": "48a20451-6d49-4c26-a24d-e87069f895f5"
   },
   "2807960": {
    "name": "Battlefield 6",
    "source": "anticheat",
    "antiCheat": [
     "EA anticheat"
-   ]
+   ],
+   "geforceNow": "cb4e2225-1c30-456b-ac8e-1424f3218329"
   },
   "2933620": {
    "name": "Call of Duty: Black Ops 6",
@@ -3843,5 +3848,5 @@
    "source": "umu"
   }
  },
- "generated": "2026-10-26T12:35:04Z"
+ "generated": "2026-10-26T16:02:17Z"
 }

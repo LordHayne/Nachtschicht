@@ -56,6 +56,19 @@ class TranslateTests(unittest.TestCase):
         ''')
         self.assertEqual([entry["key"] for entry in profile["registry"]], ["HKLM\\Software\\Wow6432Node\\Example"])
 
+    def test_winetricks_commands_and_options_are_dropped(self):
+        profile, _ = translate('''
+            """Game fix for Example"""
+            from protonfixes import util
+
+            def main() -> None:
+                util.protontricks('annihilate')
+                util.protontricks('--self-update')
+                util.protontricks('../evil.verb')
+                util.protontricks('d3dcompiler_47')
+        ''')
+        self.assertEqual(profile["winetricks"], ["d3dcompiler_47"])
+
     def test_conditional_code_is_left_out_and_marked(self):
         profile, partial = translate('''
             from protonfixes import util

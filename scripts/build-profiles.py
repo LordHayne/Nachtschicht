@@ -24,6 +24,7 @@ import ast
 import datetime
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -93,6 +94,14 @@ def registry_key_allowed(key) -> bool:
 # Settings-style winetricks arguments ("sound=alsa", "hidewineexports=enable") are Linux/Proton
 # knobs; Steam runtime verbs that make no sense outside Proton are dropped as well.
 IGNORED_VERBS = {"ubisoftconnect"}
+# Only plain install verbs reach the app, never an option or a winetricks command
+# (`annihilate` deletes the whole prefix). Engine.isSafeWinetricksVerb checks the same.
+WINETRICKS_COMMANDS = {"annihilate", "apps", "benchmarks", "dlls", "fonts", "games", "settings", "list", "help", "version"}
+SAFE_VERB = re.compile(r"[a-z0-9_]{1,64}")
+
+
+def safe_verb(verb) -> bool:
+    return isinstance(verb, str) and SAFE_VERB.fullmatch(verb) is not None and verb not in WINETRICKS_COMMANDS
 
 
 def literal(node):
@@ -138,7 +147,7 @@ def translate(path: pathlib.Path):
             verb = args[0]
             if verb in WINDOWS_VERSIONS:
                 profile["windowsVersion"] = verb
-            elif "=" in verb or verb in IGNORED_VERBS:
+            elif verb in IGNORED_VERBS or not safe_verb(verb):
                 continue
             else:
                 profile.setdefault("winetricks", [])

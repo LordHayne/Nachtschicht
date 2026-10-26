@@ -54,11 +54,12 @@ jobs:
       - name: Validate
         run: |
           python3 -I - <<'PY'
-          import importlib.util, json
+          import importlib.util, json, re
           spec = importlib.util.spec_from_file_location("build_profiles", "scripts/build-profiles.py")
           build_profiles = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(build_profiles)
           doc = json.load(open("profiles/profiles.json"))
+          commands = {"annihilate", "apps", "benchmarks", "dlls", "fonts", "games", "settings", "list", "help", "version"}
           assert doc["formatVersion"] == 1
           assert len(doc["games"]) > 50, "suspiciously few games"
           for app_id, game in doc["games"].items():
@@ -72,6 +73,8 @@ jobs:
               for entry in game.get("registry") or []:
                   assert build_profiles.registry_key_allowed(entry["key"]), (app_id, entry["key"])
                   assert all("\n" not in str(v) and "\r" not in str(v) for v in entry.values()), (app_id, entry)
+              for verb in game.get("winetricks") or []:
+                  assert re.fullmatch(r"[a-z0-9_]{1,64}", verb) and verb not in commands, (app_id, verb)
           blocked = sum(1 for game in doc["games"].values() if game.get("antiCheat"))
           assert blocked > 50, "suspiciously few anti-cheat games"
           cloud = sum(1 for game in doc["games"].values() if game.get("geforceNow"))

@@ -216,7 +216,9 @@ enum Engine {
         let root = folder.resolvingSymlinksInPath().path
         return output.split(separator: "\n").compactMap { line in
             let parts = line.trimmingCharacters(in: .whitespaces).split(separator: " ", maxSplits: 1)
-            guard parts.count == 2, let pid = pid_t(parts[0]), executablePath(pid)?.hasPrefix(root) == true else { return nil }
+            // Inside the folder, not merely a sibling with the same start (engine 4.7.3 vs 4.7.3-3).
+            guard parts.count == 2, let pid = pid_t(parts[0]), let path = executablePath(pid),
+                  path == root || path.hasPrefix(root + "/") else { return nil }
             return (pid, String(parts[1]))
         }
     }
@@ -342,19 +344,20 @@ enum Engine {
         guard let engine = engineComponent(in: manifest), let graphics = graphicsComponent(in: manifest) else {
             throw ComponentError.noManifest
         }
-        let fresh = await store.installedPath(for: engine) == nil
         let engineDir = try await store.install(engine)
         let graphicsDir = try await store.install(graphics)
         guard let wine = wineBinary(in: engineDir) else { throw SetupError.engineBroken }
-        if fresh {
-            // A wineserver from the previous engine can't talk to the new one; end the old session.
-            for other in [engineID, winecxEngineID, "wine-staging"] {
-                for dir in (try? FileManager.default.contentsOfDirectory(
-                    at: store.root.appendingPathComponent(other), includingPropertiesForKeys: nil)) ?? []
-                where dir != engineDir {
-                    if let old = wineBinary(in: dir) { stopAll(old) }
-                }
-            }
+        // A wineserver from a previous engine can't talk to the new one, so its session has to end –
+        // but not under a running game: that keeps the old engine until the next start without one.
+        let oldEngines = [engineID, winecxEngineID, "wine-staging"].flatMap { id in
+            ((try? FileManager.default.contentsOfDirectory(
+                at: store.root.appendingPathComponent(id), includingPropertiesForKeys: nil)) ?? [])
+                .filter { $0 != engineDir }
+        }
+        for dir in oldEngines where !ownProcesses(under: dir).isEmpty {
+            guard let old = wineBinary(in: dir) else { continue }
+            if gameRunning || windowsGameRunning { return old }
+            stopAll(old)
         }
         // On winecx, D3DMetal takes the engine's Direct3D builtins and DXMT and DXVK move into the
         // prefix as native DLLs (see `layerOverrides`).
@@ -526,13 +529,16 @@ enum Engine {
         lsof -a -d cwd -Fpn 2>/dev/null           | awk -v root="$PREFIX" '/^p/ { pid = substr($0, 2) } /^n/ { if (index(substr($0, 2), root) == 1) print pid }'           | while read -r pid; do kill -9 "$pid" 2>/dev/null; done
         """#
 
-    /// Installed engine binary, if setup has got that far.
+    /// Installed engine binary, if setup has got that far. While the engine the component list
+    /// names isn't there yet (still downloading, or its download failed), the newest installed one.
     static func installedWine() async -> URL? {
-        guard let manifest = try? await ComponentStore.shared.manifest(),
-              let component = engineComponent(in: manifest),
-              let dir = await ComponentStore.shared.installedPath(for: component)
-        else { return nil }
-        return wineBinary(in: dir)
+        if let manifest = try? await ComponentStore.shared.manifest(),
+           let component = engineComponent(in: manifest),
+           let dir = await ComponentStore.shared.installedPath(for: component),
+           let wine = wineBinary(in: dir) {
+            return wine
+        }
+        return installedWineNow()
     }
 
     /// Copies DXMT (Direct3D 10/11 → Metal) into the engine's builtin DLL folders. Safe to repeat.
@@ -905,11 +911,24 @@ enum Engine {
         return verbs.filter { !installed.contains($0) && !sharedPrefixUnsafeVerbs.contains($0) }
     }
 
+    /// winetricks commands that look like verbs but aren't installs (scripts/build-profiles.py keeps the same list).
+    static let winetricksCommands: Set<String> = [
+        "annihilate", "apps", "benchmarks", "dlls", "fonts", "games", "settings", "list", "help", "version",
+    ]
+
+    static func isSafeWinetricksVerb(_ verb: String) -> Bool {
+        !verb.isEmpty && verb.count <= 64 && !winetricksCommands.contains(verb)
+            && verb.allSatisfy { ("a"..."z").contains($0) || ("0"..."9").contains($0) || $0 == "_" }
+    }
+
     /// Installs winetricks verbs into the prefix (runtimes like vcrun2019, d3dcompiler_47). Needs the
     /// winetricks and cabextract components; returns false when something was missing or failed –
     /// the game is started anyway. Output goes to Logs/winetricks.log for troubleshooting.
     @discardableResult
     static func installWinetricks(_ verbs: [String], wine: URL) async -> Bool {
+        // The verbs come from the online fixes: only plain install verbs, never an option or one of
+        // winetricks' commands (`annihilate` deletes the whole prefix, Steam and games included).
+        let verbs = verbs.filter(isSafeWinetricksVerb)
         guard !verbs.isEmpty else { return true }
         let store = ComponentStore.shared
         guard let manifest = try? await store.manifest(),
@@ -1322,6 +1341,19 @@ enum Engine {
         }.value
     }
 
+    /// Takes the "paused" mark (StateFlags 512) and the failure off a download in Steam's manifest,
+    /// so Steam carries on with it at its next start.
+    static func unpauseDownload(appID: Int, steamapps: URL) {
+        let manifest = steamapps.appendingPathComponent("appmanifest_\(appID).acf")
+        guard var text = try? String(contentsOf: manifest, encoding: .utf8) else { return }
+        let flags = #/"StateFlags"(\s+)"(\d+)"/#
+        if let match = text.firstMatch(of: flags), let value = Int(match.2) {
+            text.replaceSubrange(match.range, with: "\"StateFlags\"\(match.1)\"\(value & ~512)\"")
+        }
+        text.replace(#/"UpdateResult"(\s+)"\d+"/#) { "\"UpdateResult\"\($0.1)\"0\"" }
+        try? text.write(to: manifest, atomically: true, encoding: .utf8)
+    }
+
     /// Asks Steam to download a game without any Steam window: an appmanifest marked "update
     /// required" makes Steam fetch the game on its next start. Call `restartSteamInBackground` after.
     static func requestDownload(appID: Int, name: String, installDir: String,
@@ -1355,8 +1387,12 @@ enum Engine {
     static func ensureSteamRunning(_ wine: URL, busy: Bool = false) async throws {
         let key = "steamConfigSignature"
         let current = UserDefaults.standard.string(forKey: key) == steamConfigSignature
-        if !isSteamRunning, ownProcesses().contains(where: { $0.command.lowercased().contains("steam") }) {
-            stopAll(wine)  // a Steam whose wineserver is gone: clear it away before starting afresh
+        // A Steam whose wineserver is gone: clear it away before starting afresh. A running game's
+        // path (…\steamapps\common\…) also says "steam"; while one runs, its session stays.
+        let ours = ownProcesses().map { $0.command.lowercased() }
+        if !isSteamRunning, !ours.contains(where: { $0.contains(#"\steamapps\common\"#) }),
+           ours.contains(where: { $0.contains("steam") }) {
+            stopAll(wine)
         }
         if isSteamRunning {
             guard !current, !busy else { return }
@@ -1466,11 +1502,12 @@ enum Engine {
     /// Removes a game (or a download in progress) without any Steam window: with Steam stopped,
     /// its manifest and files go, and Steam simply finds it not installed when it starts again.
     /// The game stays in the Steam library, and saves outside the game folder are untouched.
-    static func uninstall(appID: Int, installDirName: String, wine: URL) async throws {
+    static func uninstall(appID: Int, installDir: URL, wine: URL) async throws {
         try await stopSteam(wine)
         defer { try? startSteam(wine, arguments: ["-silent"]) }
-        try removeGameFiles(appID: appID, installDirName: installDirName,
-                            steamapps: steamRoot.appendingPathComponent("steamapps", isDirectory: true))
+        // The game's own library folder (steamapps/common/<folder>), which may be an extra one.
+        let library = installDir.deletingLastPathComponent().deletingLastPathComponent()
+        try removeGameFiles(appID: appID, installDirName: installDir.lastPathComponent, steamapps: library)
     }
 
     /// A game's manifest, files, download leftovers and shader cache in one Steam library folder.

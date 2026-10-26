@@ -255,6 +255,14 @@ struct LaunchHealthTest {
             check(!Engine.isAllowedRegistryKey(key), "registry key \(key.debugDescription) refused")
         }
 
+        // Winetricks verbs from the online fixes: install verbs pass, commands and options don't.
+        for verb in ["vcrun2019", "d3dcompiler_47", "xact_x64"] {
+            check(Engine.isSafeWinetricksVerb(verb), "winetricks verb \(verb) allowed")
+        }
+        for verb in ["annihilate", "list", "--self-update", "-q", "../x.verb", "a b", "VCRUN", ""] {
+            check(!Engine.isSafeWinetricksVerb(verb), "winetricks verb \(verb) refused")
+        }
+
         if CommandLine.arguments.count > 1 {
             let root = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
             let common = root.appendingPathComponent("steamapps/common")

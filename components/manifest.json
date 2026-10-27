@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generated": "2026-10-26",
+  "generated": "2026-10-27",
   "components": [
     {
       "id": "wine",
@@ -35,10 +35,10 @@
     {
       "id": "gamepad",
       "kind": "graphics",
-      "version": "4.7.3-7",
-      "url": "https://github.com/LordHayne/Nightforge/releases/download/gamepad-winecx4.7.3-7/nightforge-gamepad-winecx-4.7.3-7.tar.gz",
-      "sha256": "6e411c21b03535cf7cbde3a4d9eda828c5cd053735c553a8a038c5dee489dced",
-      "size": 623707,
+      "version": "4.7.3-15",
+      "url": "https://github.com/LordHayne/Nightforge/releases/download/gamepad-winecx4.7.3-15/nightforge-gamepad-winecx-4.7.3-15.tar.gz",
+      "sha256": "621b6a66219cf22dbbe2ccbeb8ad33c9a68e03f9c3a45cd2a7b2cc8274f98660",
+      "size": 632469,
       "license": "LGPL-2.1-or-later AND Zlib",
       "source": "https://github.com/LordHayne/Nightforge"
     },
@@ -55,10 +55,10 @@
     {
       "id": "graphics",
       "kind": "graphics",
-      "version": "11.18-dxmt0.80-13",
-      "url": "https://github.com/LordHayne/Nightforge/releases/download/graphics-11.18-dxmt0.80-13/nightforge-graphics-11.18-dxmt0.80-13.tar.gz",
-      "sha256": "cd434a33c0387d125b8e54a4bfac82824ba6e16ebaa2b432739070ab1a6133cf",
-      "size": 19673869,
+      "version": "11.18-dxmt0.80-17",
+      "url": "https://github.com/LordHayne/Nightforge/releases/download/graphics-11.18-dxmt0.80-17/nightforge-graphics-11.18-dxmt0.80-17.tar.gz",
+      "sha256": "669aded6abd15d70695614c5fc11343701f8349adadbb4eb63fa925d2218907c",
+      "size": 19685676,
       "license": "LGPL-2.1-or-later",
       "source": "https://github.com/LordHayne/Nightforge"
     },
@@ -95,9 +95,9 @@
     {
       "id": "cabextract",
       "kind": "tool",
-      "version": "1.11-3",
-      "url": "https://github.com/LordHayne/Nightforge/releases/download/cabextract-1.11-3/nightforge-cabextract-1.11-3.tar.gz",
-      "sha256": "8f11a677d7e3c73e8926232ae040e328ace14ea0abbfcc1270e4104b1c0de964",
+      "version": "1.11-4",
+      "url": "https://github.com/LordHayne/Nightforge/releases/download/cabextract-1.11-4/nightforge-cabextract-1.11-4.tar.gz",
+      "sha256": "82578d50b3ff41a1c79825680f009ea0de019836e43fe06f53b0b58b526c4f80",
       "size": 85622,
       "license": "GPL-3.0-or-later",
       "source": "https://github.com/LordHayne/Nightforge"

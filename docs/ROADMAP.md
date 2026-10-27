@@ -92,7 +92,7 @@
   - **Fertig wenn:** Kein Fehlstart endet ohne mindestens eine Aktion außer „OK“.
   - **Stand:** Sheet `FailedLaunchSheet` statt Alert: was versucht wurde („Tried: DXMT · DXVK · D3DMetal“), **„Try Again From the First Way“** (Primär, ↩/A – setzt `LaunchHealth` zurück und startet neu; hilft bei Steam-Update oder Rückfrage-Fenster), **„Choose Graphics by Hand …“** (öffnet die Spieloptionen; nur wo es Ebenen zur Wahl gibt) und „Report problem“. **Abweichung:** „Most compatible“ gibt es erst mit den Voreinstellungen aus 2.3 – heute hat „Automatic“ bei einem Fehlstart schon jede passende Ebene probiert. „Start through <anderer Store>“ kommt mit Phase 7.
 
-- [ ] **1.3 Kompatibilitäts-Abzeichen („Runs great“)** · `M`
+- [x] **1.3 Kompatibilitäts-Abzeichen („Runs great“)** · `M` · PR #9, angezeigt seit 0.1 und 2.1 (PR #27)
   - **Warum:** „Läuft das überhaupt?“ ist die erste Frage. Steam Deck Verified hat gezeigt, wie viel klare Stufen bringen – für den Mac gibt es so etwas nicht.
   - **Was:** Stufen `great` / `tweaks` / `no` / `untested`, immer **Icon + Wort** (nie nur Farbe). Ableitung lokal:
     - `no`: `AntiCheatBlock` (ohne GeForce Now), VR-only

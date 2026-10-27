@@ -260,6 +260,7 @@ struct Segmented<Value: Hashable>: View {
                     .padding(.horizontal, 12)
                     .frame(maxHeight: .infinity)
                     .background(on ? Theme.ink : .clear, in: Capsule())
+                    .shadow(color: .black.opacity(on ? 0.3 : 0), radius: 4, y: 2)
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -269,7 +270,7 @@ struct Segmented<Value: Hashable>: View {
         }
         .padding(3)
         .frame(height: 32)
-        .background(.ultraThinMaterial, in: Capsule())
+        .background(GlassBackground(glass: .regular, shape: Capsule()))
         .fixedSize()
     }
 }
@@ -299,12 +300,8 @@ struct FilterToggle: View {
             .foregroundStyle(on ? Theme.night : Theme.ink.opacity(0.85))
             .padding(.horizontal, 13)
             .frame(height: 32)
-            .background {
-                if on { Capsule().fill(Theme.ink) } else { Capsule().fill(.ultraThinMaterial) }
-            }
-            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassButtonStyle(glass: on ? .tinted(Theme.ink) : .regular, shape: Capsule()))
         .help(help ?? title)
         .accessibilityAddTraits(on ? .isSelected : [])
         .padFocus(id, cornerRadius: 16, activate: action)

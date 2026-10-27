@@ -35,18 +35,15 @@ struct DownloadsButton: View {
                     .stroke(Theme.sodium, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 Text("\(downloads.count)")
-                    .font(.system(size: 12, weight: .bold).monospacedDigit())
+                    .font(.system(size: 10, weight: .bold).monospacedDigit())
                     .foregroundStyle(Theme.ink)
             }
-            .padding(6)
-            .frame(width: 34, height: 34)
-            .background(.ultraThinMaterial, in: Circle())
-            .contentShape(Circle())
+            .frame(width: 22, height: 22)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassGroupButtonStyle())
         .help(downloads.count == 1 ? L10n.t("1 download (D)") : L10n.t("%ld downloads (D)", downloads.count))
         .accessibilityLabel(downloads.count == 1 ? L10n.t("1 download") : L10n.t("%ld downloads", downloads.count))
-        .padFocus("top.downloads", cornerRadius: 17, activate: { model.showingDownloads.toggle() })
+        .padFocus("top.downloads", cornerRadius: 15, activate: { model.showingDownloads.toggle() })
         .popover(isPresented: $model.showingDownloads, arrowEdge: .bottom) {
             DownloadsPanel()
                 .environmentObject(model)

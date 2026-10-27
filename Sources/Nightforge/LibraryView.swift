@@ -188,6 +188,7 @@ private struct HomeLevel: View {
 
             if !model.allGames.isEmpty {
                 CoverRail()
+                    .padding(.bottom, 10)  // air between the rail's glass and the hints
             }
         }
     }
@@ -231,8 +232,7 @@ private struct NoFilterMatches: View {
                 .font(Theme.display(30))
                 .foregroundStyle(Theme.ink)
             Button(L10n.t("Clear filters")) { model.filters = model.filters.cleared }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                .buttonStyle(GlassTextButtonStyle())
                 .padFocus("noResults.clearFilters", activate: { model.filters = model.filters.cleared })
         }
     }
@@ -273,10 +273,8 @@ private struct BackPill: View {
             .padding(.leading, 10)
             .padding(.trailing, 14)
             .frame(height: 34)
-            .background(.ultraThinMaterial, in: Capsule())
-            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassButtonStyle(shape: Capsule()))
         .help(L10n.t("Back (Esc)"))
         .accessibilityLabel(to == .home ? L10n.t("Back to Home") : L10n.t("Back to the library"))
         .padFocus("detail.back", cornerRadius: 17, activate: { model.back() })
@@ -313,10 +311,8 @@ private struct AllGamesHero: View {
                 .foregroundStyle(Theme.night)
                 .padding(.horizontal, 32)
                 .frame(height: 52)
-                .background(Theme.sodium, in: Capsule())
-                .contentShape(Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(GlassButtonStyle(glass: .tinted(Theme.sodium, glows: true), shape: Capsule()))
             .help(L10n.t("Whole library (L)"))
             .padFocus("play", cornerRadius: 34, activate: { model.goLibrary() })
         }
@@ -536,14 +532,14 @@ private struct TopBar: View {
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             Text("Nightforge")
                 .font(Theme.display(15))
                 .foregroundStyle(Theme.ink)
             if !model.allGames.isEmpty {
                 SectionSwitch()
                     .fixedSize()
-                    .padding(.leading, 6)
+                    .padding(.leading, 10)
             }
 
             Spacer()
@@ -566,9 +562,8 @@ private struct TopBar: View {
                     .foregroundStyle(Theme.night)
                     .padding(.horizontal, 14)
                     .frame(height: 34)
-                    .background(Theme.sodium, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GlassButtonStyle(glass: .tinted(Theme.sodium), shape: Capsule(), fadesWhenDisabled: false))
                 .disabled(model.updating)
                 .padFocus("top.update", enabled: !model.updating, cornerRadius: 17, activate: { model.installUpdate() })
                 .help(L10n.t("Installs the new version and restarts Nightforge. Your games and settings stay."))
@@ -582,36 +577,49 @@ private struct TopBar: View {
                 Label("\(Int((level * 100).rounded())) %", systemImage: PowerSource.symbol(level))
                     .font(.system(size: 13, weight: .semibold).monospacedDigit())
                     .foregroundStyle(level < 0.2 ? Theme.sodium : Theme.ink.opacity(0.9))
+                    .padding(.horizontal, 12)
+                    .frame(height: 38)
+                    .background(GlassBackground(glass: .regular, shape: Capsule()))
                     .help(Prefs.saveBattery ? L10n.t("On battery – games are capped at 30 FPS to last longer")
                           : L10n.t("On battery – “Save battery when unplugged” in Settings caps games at 30 FPS"))
-            }
-            if !model.downloads.isEmpty {
-                DownloadsButton()
             }
             if model.isScanning {
                 ProgressView().controlSize(.small)
             }
-            RoundIconButton(symbol: "arrow.clockwise", help: L10n.t("Rescan library (⌘R)"), size: 34) {
-                model.reload()
+            // Downloads, rescan and settings share one piece of glass.
+            HStack(spacing: 2) {
+                if !model.downloads.isEmpty {
+                    DownloadsButton()
+                    GlassDivider()
+                }
+                Button { model.reload() } label: {
+                    Image(systemName: "arrow.clockwise").font(.system(size: 13, weight: .semibold))
+                }
+                .buttonStyle(GlassGroupButtonStyle())
+                .help(L10n.t("Rescan library (⌘R)"))
+                .accessibilityLabel(L10n.t("Rescan library"))
+                .padFocus("top.rescan", cornerRadius: 15, activate: { model.reload() })
+                GlassDivider()
+                SettingsLink {
+                    Image(systemName: "gearshape").font(.system(size: 14, weight: .semibold))
+                }
+                .buttonStyle(GlassGroupButtonStyle())
+                .help(L10n.t("Settings (⌘,)"))
+                .accessibilityLabel(L10n.t("Settings"))
+                .padFocus("top.settings", cornerRadius: 15, activate: { openSettings() })
             }
-            SettingsLink {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.ink)
-                    .frame(width: 34, height: 34)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
-            .buttonStyle(.plain)
-            .help(L10n.t("Settings (⌘,)"))
-            .accessibilityLabel(L10n.t("Settings"))
-            .padFocus("top.settings", cornerRadius: 17, activate: { openSettings() })
+            .padding(.horizontal, 4)
+            .frame(height: 38)
+            .background(GlassBackground(glass: .regular, shape: Capsule()))
 
             TimelineView(.everyMinute) { context in
                 Text(context.date, format: .dateTime.hour().minute().locale(L10n.locale))  // the app's language, not the Mac's
-                    .font(.system(size: 15, weight: .semibold).monospacedDigit())
+                    .font(.system(size: 14, weight: .semibold).monospacedDigit())
                     .foregroundStyle(Theme.ink)
             }
-            .padding(.leading, 6)
+            .padding(.horizontal, 14)
+            .frame(height: 38)
+            .background(GlassBackground(glass: .regular, shape: Capsule()))
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.top, 36)
@@ -628,9 +636,9 @@ private struct SectionSwitch: View {
             segment(.home, L10n.t("Home"), count: nil) { model.goHome() }
             segment(.library, L10n.t("Library"), count: model.visibleCount) { model.goLibrary() }
         }
-        .padding(3)
-        .frame(height: 34)
-        .background(.ultraThinMaterial, in: Capsule())
+        .padding(4)
+        .frame(height: 38)
+        .background(GlassBackground(glass: .regular, shape: Capsule()))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L10n.t("Sections"))
     }
@@ -648,15 +656,16 @@ private struct SectionSwitch: View {
             }
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(on ? Theme.night : Theme.ink.opacity(0.8))
-            .padding(.horizontal, 13)
+            .padding(.horizontal, 14)
             .frame(maxHeight: .infinity)
             .background(on ? Theme.ink : .clear, in: Capsule())
+            .shadow(color: .black.opacity(on ? 0.3 : 0), radius: 4, y: 2)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .help(level == .home ? L10n.t("Home – what you play (L)") : L10n.t("Whole library (L)"))
         .accessibilityAddTraits(on ? .isSelected : [])
-        .padFocus("top.\(level == .home ? "home" : "library")", cornerRadius: 14, activate: action)
+        .padFocus("top.\(level == .home ? "home" : "library")", cornerRadius: 15, activate: action)
     }
 }
 
@@ -694,11 +703,11 @@ private struct SearchField: View {
             }
         }
         .padding(.horizontal, 12)
-        .frame(minWidth: 120, idealWidth: 230, maxWidth: 230)
-        .frame(height: 34)
-        .background(.ultraThinMaterial, in: Capsule())
+        .frame(minWidth: 100, idealWidth: 230, maxWidth: 230)
+        .frame(height: 38)
+        .background(GlassBackground(glass: .regular, shape: Capsule()))
         .overlay(Capsule().strokeBorder(Theme.sodium.opacity(focused ? 0.8 : 0), lineWidth: 1.5))
-        .padFocus("top.search", cornerRadius: 17, activate: { focused = true })
+        .padFocus("top.search", cornerRadius: 19, activate: { focused = true })
         .onChange(of: model.searchFocusRequest) { _, _ in focused = true }
         .help(L10n.t("Search (⌘F)"))
     }
@@ -713,8 +722,7 @@ private struct NoResults: View {
                 .font(Theme.display(30))
                 .foregroundStyle(Theme.ink)
             Button(L10n.t("Clear search")) { model.searchText = "" }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                .buttonStyle(GlassTextButtonStyle())
                 .padFocus("noResults.clear", activate: { model.searchText = "" })
         }
     }
@@ -833,8 +841,7 @@ private struct GameDetail: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.sodium)
                     Button(L10n.t("Battery Settings"), action: Self.openBatterySettings)
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .buttonStyle(GlassTextButtonStyle(small: true))
                         .padFocus("detail.battery", activate: Self.openBatterySettings)
                 }
             }
@@ -1022,7 +1029,6 @@ private struct PlayButton: View {
     /// An update Steam downloads first: its size, 0 when not known yet.
     var update: Int64?
     let action: () -> Void
-    @State private var hovering = false
 
     private var busy: Bool {
         if isLaunching || unavailable != nil || isUninstalling { return true }
@@ -1081,25 +1087,17 @@ private struct PlayButton: View {
             .foregroundStyle(Theme.night)
             .padding(.horizontal, 32)
             .frame(height: 52)
-            .background(
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Theme.sodium.opacity(busy ? 0.55 : 1))
-                    if case .downloading(let fraction?) = install, !noSpace {
-                        GeometryReader { geo in
-                            Capsule().fill(Theme.sodium).frame(width: max(52, geo.size.width * fraction))
-                        }
-                    }
-                }
-            )
-            .clipShape(Capsule())
-            .shadow(color: Theme.sodium.opacity(hovering ? 0.55 : 0.3), radius: hovering ? 24 : 14)
-            .contentShape(Capsule())
             .animation(.easeOut(duration: 0.4), value: install)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassButtonStyle(glass: .tinted(Theme.sodium, glows: true), shape: Capsule(), dimmed: busy,
+                                      progress: progress, fadesWhenDisabled: false))
         .disabled(busy && !(isLaunching && needsConfirmation))  // then it brings Steam's window up
-        .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.15), value: hovering)
+    }
+
+    /// How far a download is, filled into the button.
+    private var progress: Double? {
+        if case .downloading(let fraction?) = install, !noSpace { return fraction }
+        return nil
     }
 
     struct Unavailable {
@@ -1122,10 +1120,8 @@ struct RoundIconButton: View {
                 .font(.system(size: size * 0.32, weight: .semibold))
                 .foregroundStyle(Theme.ink)
                 .frame(width: size, height: size)
-                .background(.ultraThinMaterial, in: Circle())
-                .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassButtonStyle(shape: Circle()))
         .help(help)
         // Spoken without the shortcut in brackets ("Rescan library", not "arrow.clockwise").
         .accessibilityLabel(help.replacingOccurrences(of: #" \(.*\)$"#, with: "", options: .regularExpression))
@@ -1193,10 +1189,13 @@ private struct CoverRail: View {
                             }
                         }
                 }
-                .padding(.horizontal, Theme.gutter)
+                .padding(.horizontal, 22)
                 .padding(.vertical, 22)
             }
             .frame(height: 290)
+            .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+            .background(GlassBackground(glass: .regular, shape: RoundedRectangle(cornerRadius: 34, style: .continuous)))
+            .padding(.horizontal, Theme.gutter - 22)
             .onChange(of: model.homePlace) { _, _ in
                 let id = model.homeOnAllGames ? Self.allGamesID : model.selected?.id
                 guard let id else { return }
@@ -1458,48 +1457,51 @@ private struct HintBar: View {
         HStack(spacing: 22) {
             if model.controllerConnected, let status = model.controllerStatus {
                 Label(status.label, systemImage: status.symbol)
-                    .font(.system(size: 13, weight: .medium).monospacedDigit())
-                    .foregroundStyle(status.isLow ? Theme.sodium : Theme.muted)
+                    .font(.system(size: 12, weight: .medium).monospacedDigit())
+                    .foregroundStyle(status.isLow ? Theme.sodium : Theme.ink.opacity(0.8))
+                    .padding(.horizontal, 12)
+                    .frame(height: 32)
+                    .background(GlassBackground(glass: .regular, shape: Capsule()))
                     .help(L10n.t("Controller battery"))
             }
             Spacer()
             let pad = model.padSymbols
             if let action = toasts.current?.action, focus.focused != Toasts.padID {
-                Hint(symbol: model.controllerConnected ? pad.stick : "command", text: model.controllerConnected ? action.label : "↩ " + action.label)
+                Hint(model.controllerConnected ? .pad(pad.stick) : .key("⌘↩"), text: action.label)
             }
             let controller = model.controllerConnected
             if controller && focus.focused != nil {
-                Hint(symbol: pad.confirm, text: L10n.t("Select"))
-                Hint(symbol: pad.stick, text: L10n.t("Move"))
-                Hint(symbol: pad.back, text: L10n.t("Back"))
+                Hint(.pad(pad.confirm), text: L10n.t("Select"))
+                Hint(.pad(pad.stick), text: L10n.t("Move"))
+                Hint(.pad(pad.back), text: L10n.t("Back"))
             } else {
                 switch model.route {
                 case .home:
                     if model.heroGame != nil {
-                        Hint(symbol: controller ? pad.confirm : "return", text: L10n.t("Play"))
-                        Hint(symbol: controller ? pad.library : "i.square", text: L10n.t("Details"))
+                        Hint(controller ? .pad(pad.confirm) : .key("↵"), text: L10n.t("Play"))
+                        Hint(controller ? .pad(pad.library) : .key("I"), text: L10n.t("Details"))
                     } else {
-                        Hint(symbol: controller ? pad.confirm : "return", text: L10n.t("Open"))
+                        Hint(controller ? .pad(pad.confirm) : .key("↵"), text: L10n.t("Open"))
                     }
-                    Hint(symbol: controller ? "line.3.horizontal.circle.fill" : "l.square", text: L10n.t("Library"))
-                    Hint(symbol: controller ? pad.stick : "arrow.left.and.right", text: L10n.t("Select"))
+                    Hint(controller ? .pad("line.3.horizontal.circle.fill") : .key("L"), text: L10n.t("Library"))
+                    Hint(controller ? .pad(pad.stick) : .key("← →"), text: L10n.t("Select"))
                 case .library:
-                    Hint(symbol: controller ? pad.confirm : "return", text: L10n.t("Open"))
-                    Hint(symbol: controller ? pad.stick : "arrow.up.and.down.and.arrow.left.and.right",
+                    Hint(controller ? .pad(pad.confirm) : .key("↵"), text: L10n.t("Open"))
+                    Hint(controller ? .pad(pad.stick) : .key("← ↑ →"),
                          text: L10n.t("Select"))
-                    Hint(symbol: controller ? pad.back : "escape",
+                    Hint(controller ? .pad(pad.back) : .key("esc"),
                          text: !model.searchText.isEmpty ? L10n.t("Clear search") : model.showingHidden ? L10n.t("All games") : L10n.t("Home"))
                 case .detail(_, let from):
                     if let game = model.selected, game.install != .inStore {
                         // What Return does here: the big button's word, short.
-                        Hint(symbol: controller ? pad.confirm : "return",
+                        Hint(controller ? .pad(pad.confirm) : .key("↵"),
                              text: game.install == .notInstalled && !game.playsInCloud ? L10n.t("Download") : L10n.t("Play"))
-                        Hint(symbol: controller ? pad.options : "o.square", text: L10n.t("Options"))
+                        Hint(controller ? .pad(pad.options) : .key("O"), text: L10n.t("Options"))
                         if !controller {
-                            Hint(symbol: "h.square", text: model.isHidden(game) ? L10n.t("Show") : L10n.t("Hide"))
+                            Hint(.key("H"), text: model.isHidden(game) ? L10n.t("Show") : L10n.t("Hide"))
                         }
                     }
-                    Hint(symbol: controller ? pad.back : "escape", text: from == .home ? L10n.t("Home") : L10n.t("Library"))
+                    Hint(controller ? .pad(pad.back) : .key("esc"), text: from == .home ? L10n.t("Home") : L10n.t("Library"))
                 }
             }
         }
@@ -1508,12 +1510,33 @@ private struct HintBar: View {
 }
 
 private struct Hint: View {
-    let symbol: String
+    /// A key on a glass keycap, or the controller's own button.
+    enum Glyph {
+        case key(String)
+        case pad(String)
+    }
+
+    let glyph: Glyph
     let text: String
 
+    init(_ glyph: Glyph, text: String) {
+        self.glyph = glyph
+        self.text = text
+    }
+
     var body: some View {
-        HStack(spacing: 7) {
-            Image(systemName: symbol).font(.system(size: 14, weight: .semibold))
+        HStack(spacing: 8) {
+            switch glyph {
+            case .key(let key):
+                Text(key)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.ink.opacity(0.9))
+                    .padding(.horizontal, key.count > 1 ? 7 : 0)
+                    .frame(minWidth: 22, minHeight: 22)
+                    .background(GlassBackground(glass: .regular, shape: Capsule()))
+            case .pad(let symbol):
+                Image(systemName: symbol).font(.system(size: 17, weight: .semibold))
+            }
             Text(text).font(.system(size: 13, weight: .medium))
         }
         .foregroundStyle(Theme.muted)
@@ -1544,14 +1567,11 @@ private struct EmptyLibrary: View {
             HStack(spacing: 12) {
                 Button(L10n.t("Open Steam")) { model.openSteam() }
                     .padFocus("empty.openSteam", activate: { model.openSteam() })
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.sodium)
-                    .foregroundStyle(Theme.night)
+                    .buttonStyle(GlassTextButtonStyle(prominent: true))
                 Button(L10n.t("Rescan")) { model.reload() }
                     .padFocus("empty.rescan", activate: { model.reload() })
-                    .buttonStyle(.bordered)
+                    .buttonStyle(GlassTextButtonStyle())
             }
-            .controlSize(.large)
         }
     }
 
@@ -1572,14 +1592,11 @@ private struct EmptyLibrary: View {
             HStack(spacing: 12) {
                 Button(L10n.t("Rescan")) { model.reload() }
                     .padFocus("empty.rescan", activate: { model.reload() })
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.sodium)
-                    .foregroundStyle(Theme.night)
+                    .buttonStyle(GlassTextButtonStyle(prominent: true))
                 Button(L10n.t("Choose Another Folder …")) { model.chooseBottlesFolder() }
                     .padFocus("empty.chooseFolder", activate: { model.chooseBottlesFolder() })
-                    .buttonStyle(.bordered)
+                    .buttonStyle(GlassTextButtonStyle())
             }
-            .controlSize(.large)
         }
     }
 }
@@ -1626,16 +1643,14 @@ private struct VersionNotes: View {
                             .font(.system(size: 12, weight: .medium).monospacedDigit())
                             .foregroundStyle(Theme.muted)
                         Button(L10n.t("Cancel")) { model.cancelMacVersion(of: game) }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
+                            .buttonStyle(GlassTextButtonStyle(small: true))
                             .padFocus("detail.cancelMac", enabled: model.uninstallingID == nil,
                                       activate: { model.cancelMacVersion(of: game) })
                     } else {
                         Button(game.macSize > 0 ? L10n.t("Load Mac Version (%@)", Format.bytes(game.macSize)) : L10n.t("Load Mac Version")) {
                             model.loadMacVersion(of: game)
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .buttonStyle(GlassTextButtonStyle(small: true))
                         .padFocus("detail.loadMac", enabled: model.uninstallingID == nil,
                                   activate: { model.loadMacVersion(of: game) })
                     }
@@ -1652,8 +1667,7 @@ private struct VersionNotes: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Theme.muted)
                     Button(L10n.t("Remove …")) { model.requestLeftoverRemoval(game) }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .buttonStyle(GlassTextButtonStyle(small: true))
                         .disabled(model.uninstallingID != nil || model.launchingID != nil)
                         .padFocus("detail.removeLeftover", enabled: model.uninstallingID == nil && model.launchingID == nil,
                                   activate: { model.requestLeftoverRemoval(game) })

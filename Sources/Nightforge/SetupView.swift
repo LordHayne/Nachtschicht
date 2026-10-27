@@ -41,8 +41,7 @@ struct SetupView: View {
         case .waitingForSignIn:
             Note(L10n.t("Sign in in the Steam window – with the QR code from the Steam app on your phone or with your password. Nightforge never sees your login."))
             Button(L10n.t("Show Steam window again")) { setup.reopenSteam() }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                .buttonStyle(GlassTextButtonStyle())
                 .padFocus("setup.showSteam", activate: { setup.reopenSteam() })
 
         case .failed(_, let message):
@@ -147,7 +146,6 @@ struct SetupButton: View {
     let title: String
     let symbol: String
     let action: () -> Void
-    @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
@@ -158,13 +156,8 @@ struct SetupButton: View {
             .foregroundStyle(Theme.night)
             .padding(.horizontal, 32)
             .frame(height: 52)
-            .background(Capsule().fill(Theme.sodium))
-            .shadow(color: Theme.sodium.opacity(hovering ? 0.55 : 0.3), radius: hovering ? 24 : 14)
-            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.15), value: hovering)
+        .buttonStyle(GlassButtonStyle(glass: .tinted(Theme.sodium, glows: true), shape: Capsule()))
         .keyboardShortcut(.defaultAction)
         .padFocus("setup.\(symbol)", cornerRadius: 26, activate: action)
     }

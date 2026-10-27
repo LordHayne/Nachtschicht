@@ -160,6 +160,10 @@ weil die Bildschirmfreigabe abgelehnt war.
   App?), „Update & Play“ bei einem echten Update, Download-Ring und Wachhalten bei einem echten Download,
   „Welcome back“ nach einer echten Sitzung (wird die Steam-Cloud-Zeile grün?), das Fehlstart-Sheet, das
   Platz-Sheet.
+- **Glas-Look** (`Glass.swift`, nach dem MagicPath-Entwurf): In den Offscreen-Renderings ist das Milchglas eine
+  flache graue Fläche. Ob es auf dem echten Bildschirm den Hintergrund so durchscheinen lässt wie im Entwurf und wie
+  Hover und Drücken wirken, einmal in der App ansehen. Das Liquid Glass von macOS 26 (`glassEffect`) wäre die
+  Alternative, lässt sich offscreen aber nicht prüfen (die Aufnahme wird weiß).
 - **Entscheidungen:** Was „Fastest / Balanced / Most compatible“ in 2.3 genau einstellen; ob „Save battery when
   unplugged“ (3.4) standardmäßig an sein soll (jetzt aus); ob „Welcome back“ nach *jeder* Sitzung kommen soll.
 - **`syncstate` in `remotecache.vdf`:** Nur „1“ (im Einklang) ist sicher belegt; die anderen Werte während eines

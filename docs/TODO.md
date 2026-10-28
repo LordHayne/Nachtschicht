@@ -170,6 +170,51 @@ Recherche vom 27.10. (Stand der Projekte: DXMT 0.80 ist aktuell, D3DMetal 4.0b3 
 - **Video im Spiel testen.** winecx bringt `winegstreamer` mit GStreamer und `gptk-video` mit; Zwischensequenzen
   (Media Foundation, H.264 in Unreal/Unity) sind noch nicht gezielt geprüft.
 
+## Voreinstellungen aus offenen Daten und Lernen
+
+Ziel (28.10.): kaum noch einzeln testen. Offene Datenbanken liefern den Start, jeder Mac verfeinert ihn, das
+Gelernte fließt zurück in die Profile. Geprüft am 28.10.:
+
+- **Quellen, die gehen** (in `scripts/build-profiles.py` einbauen, nächtlich wie umu-protonfixes):
+  - **Steam Deck Verified** (Valve hat tausende Windows-Spiele mit Proton getestet: läuft, Controller komplett,
+    Standardeinstellungen flüssig, Text lesbar). Pro Spiel unter
+    `store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID=<id>` (nicht offiziell dokumentiert,
+    funktioniert) und lokal in Steams `appinfo.vdf`.
+  - **AppleGamingWiki**: 1892 Spiele mit Mac-Bewertung (nativ, Rosetta 2, CrossOver, Wine, Parallels). Export per
+    `index.php?title=Special:CargoExport&tables=Compatibility_macOS&fields=_pageName,native,rosetta_2,crossover,wine&format=json`
+    (`cargoquery` über die API ist gesperrt). Lizenz CC BY-NC-SA 3.0. Spiele stehen unter ihrem Namen, nicht mit
+    Steam-ID: Zuordnung über den Namen braucht Sorgfalt.
+  - **ProtonDB**: monatlicher Datensatz `bdefore/protondb-data` (`reports_piiremoved.json`), ODbL + DbCL.
+    Startoptionen, Winetricks, Basteleien pro Spiel.
+  - Schon im Einsatz: umu-protonfixes, AreWeAntiCheatYet, GeForce Now. DXVK, DXMT und vkd3d haben eigene
+    Spiel-Listen eingebaut, die automatisch greifen.
+- **Quellen, die nicht gehen:** CrossOver-Datenbank (rund 22.000 Programme, geschlossen), GameHub (geschlossen),
+  MacGameDB (App ohne offenen Zugang). PCGamingWiki (DirectX-Version, Engine) blockt automatische Abfragen mit
+  einer Bot-Sperre; nicht umgehen, sondern dort um Zugang fragen.
+- **Was das Vorab-Profil entscheidet:** Mac-Version oder Windows (AppleGamingWiki), läuft es unter Wine
+  (Steam Deck + CrossOver-Bewertung; „unspielbar“ bekommt vor dem Download einen ehrlichen Hinweis wie beim
+  Anti-Cheat), Fixes (ProtonDB, umu-protonfixes), Controller (Steam Deck), Anti-Cheat und GeForce Now.
+  Beim Installieren kommt `GameAnalysis` dazu (DirectX-Version aus der `.exe`).
+- **Lizenzen:** Wegen Share-Alike (CC BY-NC-SA, ODbL) gehören abgeleitete Daten in eigene Dateien mit eigener
+  Lizenz und Namensnennung, wie heute `profiles/LICENSE-umu-protonfixes`. NC passt nur, solange Nightforge kostenlos ist.
+- **Die Lücke schließt Nightforge selbst.** Keine offene Quelle sagt, ob DXMT oder D3DMetal schneller ist. Das
+  übernimmt die Leiter (Absturz → nächste Engine) und die stille Messung (siehe „Das Maximum aus dem Chip“).
+- **Nicht nach einem Absturz für immer abschreiben.** Abstürze können am Spiel, an einem Update oder am Netz liegen.
+  Eine Engine gilt erst als ungeeignet, wenn sie zweimal am selben Punkt scheitert und die nächste dann läuft
+  (`LaunchHealth`, `LearnedFixes`). Sonst lernt die Automatik das Falsche und bleibt auf einem langsameren Weg.
+- **Gelerntes teilen, ohne Server und ohne Nutzerdaten.** Ein Bericht enthält nur Spiel-ID, Engine, läuft ja/nein,
+  Bildzeit, Chip, macOS- und Nightforge-Version. Kein Name, keine Geräte-ID, keine Bibliothek.
+  1. **Jetzt:** nur abholen. Ein Skript exportiert die eigenen gelernten Ergebnisse (des Entwicklers) als
+     Profil-PR, Beiträge kommen per PR. Null Nutzerdaten.
+  2. **Sobald es Nutzer gibt:** nach einem gelernten Ergebnis einmal „Ergebnis teilen?“, dann öffnet sich ein
+     fertig ausgefülltes GitHub-Issue im Browser (wie `ProblemReport`), der Nutzer sieht alles und schickt selbst
+     ab. Eine GitHub Action sammelt nachts und macht Profil-Updates. Nightforge speichert nichts, die IP sieht nur
+     GitHub. Haken: braucht ein GitHub-Konto, der Benutzername steht am Bericht.
+  3. **Nur falls die Konto-Hürde zu viele Berichte verhindert:** anonyme Annahmestelle (z. B. Cloudflare Worker,
+     speichert nichts, loggt keine IP), offen dokumentiert. Ist technisch doch ein Mini-Server, der gepflegt werden muss.
+  Vorteil der GitHub-Wege: Die Daten liegen öffentlich, jeder sieht, was gesammelt wird, andere Projekte können
+  sie nutzen.
+
 ## Anti-Cheat und GeForce Now
 
 - **Store-Suche warnt nicht vor reinen Online-Spielen mit Anti-Cheat** (z. B. Bless Unleashed). Die Sperre

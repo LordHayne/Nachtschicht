@@ -108,6 +108,147 @@ Die Tests vom 26.10. liefen größtenteils noch auf Wine 11.18 (Gcenx). Seit PR 
 - **Ton über HDMI.** macOS stellt meist selbst auf den TV um, aber nicht immer. Erst am TV prüfen; falls nötig beim
   Spielstart das Audiogerät des Spiel-Bildschirms wählen (CoreAudio, Transport HDMI/DisplayPort) und danach zurück,
   wie `GameDisplay.enterGame`/`leaveGame` es mit dem Hauptbildschirm machen.
+- **Ziel fürs Sofa (28.10.):** MacBook anstecken, Controller einschalten, alles läuft, ohne Maus und Tastatur.
+  Was dafür noch fehlt:
+  - **Steam-Dialoge per Pad.** EULA, Startoptionen, „Bestätige im Steam-Fenster“ (siehe „Steam und Start“) brauchen
+    heute einen Mausklick. Am TV ist das der Moment, in dem man aufstehen muss. Nightforge soll sie per Controller
+    bedienbar machen oder die Standardoption selbst wählen.
+  - **Zugeklapptes MacBook.** macOS braucht dafür ein Netzteil, und ein Bluetooth-Controller weckt den Mac nicht aus
+    dem Ruhezustand. Prüfen, was zugeklappt geht, und Nightforge im Zweifel einen kurzen Hinweis geben lassen
+    (Netzteil fehlt, Mac schläft).
+  - **Systemabfragen in die Ersteinrichtung.** Rechte für Bluetooth, Bildschirm oder Bedienungshilfen sind mit dem
+    Controller nicht erreichbar. Alles, was macOS einmal fragt, in `Setup` erledigen, solange man noch am Mac sitzt.
+
+## Das Maximum aus dem Chip
+
+Ziel (Entscheidung 28.10.): Leistung zuerst. Deshalb bleiben mehrere Übersetzer, und die direkten Wege nach
+Metal stehen vorne: Mac-Version (nativ für Apple Silicon) → DXMT/D3DMetal → DXVK über Vulkan → WineD3D.
+Ein einheitlicher Vulkan-Stapel wäre einfacher, aber langsamer, und kommt nur als unterste Stufe in Frage
+(siehe „Fehlende Engines“).
+
+- **Schnellsten Übersetzer pro Spiel messen statt schätzen.** „Automatisch“ nimmt für DirectX 11 DXMT, D3DMetal
+  kann DX11 aber auch und ist bei manchen Spielen schneller. Beim ersten Spielen beide kurz messen und den Sieger
+  pro Spiel merken, wie es die gelernte Bildratengrenze schon tut (`FramePacing`, `LearnedFixes` in `LaunchHealth.swift`).
+  Größter Gewinn ohne Kosten. Unsichtbar für den Spieler: kein Menü, kein Dialog, kein Neustart mitten im Spiel.
+  Ansatz: eine Sitzung mit DXMT, die nächste mit D3DMetal, Bildzeiten aus den Logs vergleichen (DXMT hat dafür
+  den `frame-log`-Patch, für D3DMetal einen Weg finden) und danach immer den Sieger nehmen. Stürzt ein Weg ab,
+  fällt er still raus. Der Spieler soll nie selbst vergleichen müssen.
+- **Leise zeigen, was die Automatik gewählt hat.** In den Spieloptionen eine Zeile wie „Nightforge spielt dieses
+  Spiel mit D3DMetal, das lief auf deinem Mac flüssiger“. Kein Regler, aber nachvollziehbar, und hilfreich in
+  Problemberichten (`SettingsViews.swift`, `ProblemReport`).
+- **Rückweg pro Spiel bei Komponenten-Updates.** Wird ein Spiel mit einem neuen DXMT oder D3DMetal schlechter, bleibt
+  es bei der vorherigen Version, statt die schnellere Engine aufzugeben. Baut auf „Nur geprüfte Komponenten
+  ausliefern“ auf (vorherige Version bleibt im Manifest, `ComponentStore`).
+- **„Mac zuerst“ nur für native Apple-Silicon-Versionen.** Alte Intel-Ports laufen über Rosetta und meist altes
+  OpenGL; die Windows-Version über D3DMetal kann deutlich schneller sein. Regel in `MacVersion.swift` anpassen:
+  nativ → Mac-Version, Intel-Port → messen oder Windows-Version vorziehen.
+- **Render-Auflösung und MetalFX.** Spiele sollen in Punkt-Auflösung rendern (Retina kostet das Vierfache) und
+  MetalFX hochrechnen lassen. Wo ein Spiel DLSS anbietet, temporales MetalFX (über `nvngx.dll`) dem räumlichen
+  vorziehen, es ist schärfer. Ansatz: `Engine.writeGameConfigs`, Profile.
+- **Shader-Caches erhalten.** Für Flüssigkeit zählen die Caches von DXMT (`DXMT_SHADER_CACHE_PATH`) und D3DMetal mehr
+  als die FPS im Schnitt. Prüfen, dass sie Spiel- und Komponenten-Updates überleben und nie unnötig gelöscht werden.
+- **Hinweis bei Stromsparmodus oder Akku.** macOS drosselt dann spürbar. Vor dem Start kurz sagen
+  (`ProcessInfo.isLowPowerModeEnabled`, Netzteil über IOKit `IOPSCopyPowerSourcesInfo`).
+- **Spielmodus von macOS sicherstellen.** Er springt nur im Vollbild an. Prüfen, dass Windows-Spiele über
+  `Nightforge Game.app` wirklich im Vollbild landen und der Spielmodus aktiv wird.
+- **Speicher freimachen.** Bei gemeinsamem Speicher zählt jedes GB. Für schwere Spiele Steam beenden statt nur
+  verstecken (`AfterLaunch`), vielleicht automatisch, wenn der Mac wenig RAM hat.
+- **MetalFX Frame Generation (ab macOS 26)** als Option für schwere Spiele, die unter dem 60-FPS-Lock bleiben
+  (30–40 FPS). Kostet etwas Eingabeverzögerung, deshalb nicht für alle. GPTK 4 nennt Frame Generation als Funktion;
+  prüfen, ob D3DMetal sie Spielen anbietet.
+- Grenze, die bleibt: Windows-Spiele sind x86-Code und laufen über Rosetta. Schneller geht es nur mit echten
+  Apple-Silicon-Ports.
+
+## Fehlende Engines
+
+Recherche vom 27.10. (Stand der Projekte: DXMT 0.80 ist aktuell, D3DMetal 4.0b3 neuer als in CrossOver 26).
+
+- **KosmicKrisp (LunarG, Mesa) als unterste Stufe prüfen.** Vulkan 1.4 auf Metal 4, konform, seit Okt. 2026
+  „production ready“ auf Apple Silicon ab macOS 26. Könnte auf einen Schlag DXVK 2.x (mit d8vk für DirectX 8),
+  vkd3d-proton (DX12 ohne Apples Lizenz, Plan B) und Zink (OpenGL über Vulkan) möglich machen, vielleicht auch
+  bestehende DXVK-Spiele schneller als MoltenVK. Öffentlich hat das noch niemand mit Wine gezeigt. Passt zum
+  Vulkan-Loader für winecx (siehe „Aus dem Code-Audit“): KosmicKrisp per ICD-JSON neben MoltenVK. Kommt im Vulkan
+  SDK mit (`libvulkan_kosmickrisp.dylib`, `libkosmickrisp_icd.json`).
+- **DirectX 12 hat keinen Rückfall.** Scheitert D3DMetal, ist Schluss. winecx bringt Wines `d3d12.dll` (vkd3d) mit,
+  das läuft aber über Vulkan und hängt am Vulkan-Loader; vkd3d auf MoltenVK ist früher gescheitert.
+  Mit KosmicKrisp neu prüfen.
+- **DirectX 9 ist die schwächste Stelle.** Kein Weg direkt nach Metal (DXMT: nur 10/11, D3DMetal: 11/12), nur WineD3D
+  über Apples OpenGL 4.1 und DXVK 1.10.3. Betrifft viele Source- und Unity-Klassiker. Wege: DXVK 2.x auf KosmicKrisp,
+  langfristig bei DirectX 9 in DXMT mithelfen.
+- **DirectX 8 und älter (ddraw)** laufen nur über WineD3D. dgVoodoo2 (DX1–8 → D3D11 → DXMT) wäre ein Weg; erst
+  die Lizenz für die Weitergabe prüfen.
+- **OpenGL-Spiele** sind auf macOS OpenGL 4.1 begrenzt; was 4.3+ braucht, startet nicht. Weg: Zink auf KosmicKrisp.
+- **Winetricks-Zuordnung ergänzen** (`GameLog.winetricksVerb`): XNA Framework (`xna40`) und echtes .NET Framework
+  (`dotnet48`) für Spiele und Launcher, bei denen wine-mono nicht reicht.
+- **Spuren bei GameSir (GameHub für Mac, github.com/gamesir-labs) beobachten.** GameSir baut wie wir direkt
+  auf Metal, ohne KosmicKrisp. Stand 28.10., alles ohne Release:
+  - `gamesir-labs/dxmt` (LGPL, Fork von 3Shain): Beschreibung nennt D3D12, D3D11, D3D10 und D3D9, dazu ein
+    Testplan „D3D12 auf Metal 4“. Wird das reif, wäre es der Metal-Weg für DirectX 9 und ein DX12-Rückfall ohne
+    Apples Lizenz. Austauschbar wie heute DXMT (`components/sources.json`).
+  - `gamesir-labs/MGL` (Fork von openglonmetal/MGL): OpenGL 4.6 auf Metal, gegen die OpenGL-4.1-Grenze.
+    Lizenz vorher prüfen.
+  - `gamesir-labs/rosettax87_jit` (MIT): schnellere x87-Rechnung unter Rosetta für alte 32-Bit-Spiele. Braucht
+    eine Debugger-Freigabe (Systemabfrage), also nur, wenn das ohne Hürde für den Nutzer geht.
+  Unser Unterschied bleibt das Bedienkonzept: GameHub zeigt viele Regler, Nightforge wählt, misst und lernt selbst.
+- **Video im Spiel testen.** winecx bringt `winegstreamer` mit GStreamer und `gptk-video` mit; Zwischensequenzen
+  (Media Foundation, H.264 in Unreal/Unity) sind noch nicht gezielt geprüft.
+
+## Voreinstellungen aus offenen Daten und Lernen
+
+Ziel (28.10.): kaum noch einzeln testen. Offene Datenbanken liefern den Start, jeder Mac verfeinert ihn, das
+Gelernte fließt zurück in die Profile. Geprüft am 28.10.:
+
+- **Quellen, die gehen** (in `scripts/build-profiles.py` einbauen, nächtlich wie umu-protonfixes):
+  - **Steam Deck Verified** (Valve hat tausende Windows-Spiele mit Proton getestet: läuft, Controller komplett,
+    Standardeinstellungen flüssig, Text lesbar). Pro Spiel unter
+    `store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID=<id>` (nicht offiziell dokumentiert,
+    funktioniert) und lokal in Steams `appinfo.vdf`.
+  - **AppleGamingWiki**: 1892 Spiele mit Mac-Bewertung (nativ, Rosetta 2, CrossOver, Wine, Parallels). Export per
+    `index.php?title=Special:CargoExport&tables=Compatibility_macOS&fields=_pageName,native,rosetta_2,crossover,wine&format=json`
+    (`cargoquery` über die API ist gesperrt). Lizenz CC BY-NC-SA 3.0. Spiele stehen unter ihrem Namen, nicht mit
+    Steam-ID: Zuordnung über den Namen braucht Sorgfalt.
+  - **ProtonDB**: monatlicher Datensatz `bdefore/protondb-data` (`reports_piiremoved.json`), ODbL + DbCL.
+    Startoptionen, Winetricks, Basteleien pro Spiel.
+  - Schon im Einsatz: umu-protonfixes, AreWeAntiCheatYet, GeForce Now. DXVK, DXMT und vkd3d haben eigene
+    Spiel-Listen eingebaut, die automatisch greifen.
+- **Quellen, die nicht gehen:** CrossOver-Datenbank (rund 22.000 Programme, geschlossen), GameHub (geschlossen),
+  MacGameDB (App ohne offenen Zugang). PCGamingWiki (DirectX-Version, Engine) blockt automatische Abfragen mit
+  einer Bot-Sperre; nicht umgehen, sondern dort um Zugang fragen.
+- **Was das Vorab-Profil entscheidet:** Mac-Version oder Windows (AppleGamingWiki), läuft es unter Wine
+  (Steam Deck + CrossOver-Bewertung; „unspielbar“ bekommt vor dem Download einen ehrlichen Hinweis wie beim
+  Anti-Cheat), Fixes (ProtonDB, umu-protonfixes), Controller (Steam Deck), Anti-Cheat und GeForce Now.
+  Beim Installieren kommt `GameAnalysis` dazu (DirectX-Version aus der `.exe`).
+- **Lizenzen:** Wegen Share-Alike (CC BY-NC-SA, ODbL) gehören abgeleitete Daten in eigene Dateien mit eigener
+  Lizenz und Namensnennung, wie heute `profiles/LICENSE-umu-protonfixes`. NC passt nur, solange Nightforge kostenlos ist.
+- **Die Lücke schließt Nightforge selbst.** Keine offene Quelle sagt, ob DXMT oder D3DMetal schneller ist. Das
+  übernimmt die Leiter (Absturz → nächste Engine) und die stille Messung (siehe „Das Maximum aus dem Chip“).
+- **Nicht nach einem Absturz für immer abschreiben.** Abstürze können am Spiel, an einem Update oder am Netz liegen.
+  Eine Engine gilt erst als ungeeignet, wenn sie zweimal am selben Punkt scheitert und die nächste dann läuft
+  (`LaunchHealth`, `LearnedFixes`). Sonst lernt die Automatik das Falsche und bleibt auf einem langsameren Weg.
+- **Gelerntes veraltet.** Ein Ergebnis gilt nur für einen Stand: Spiel-Build (`buildid` im `appmanifest_<id>.acf`) plus
+  Komponenten-Versionen (Engine, DXMT, D3DMetal). Ändert sich einer davon, misst Nightforge still neu.
+- **Fair messen.** Die erste Sitzung kompiliert Shader und ruckelt immer. Erst vergleichen, wenn beide Engines einmal
+  mit warmem Cache gelaufen sind. Nicht den Durchschnitt vergleichen, sondern die Ausreißer (1-%-Werte), weil
+  Flüssigkeit vor FPS geht. Nur Sitzungen mit gleicher Stromversorgung vergleichen (Akku gegen Netzteil verfälscht).
+- **Der Chip zählt.** Ein M1 und ein M4 können verschiedene Sieger haben (ab M3 Raytracing in Hardware, dynamischer
+  Grafikspeicher). Geteilte Profile nach Chip-Generation trennen.
+- **Geteilten Berichten nicht blind trauen.** Die Voreinstellung ändert sich erst, wenn mehrere Berichte von
+  verschiedenen Macs übereinstimmen; eigene Messungen gelten mehr als fremde. Prüfung in der GitHub Action.
+- **Shader-Caches nicht teilen** (bewusst verworfen): Unter Linux verteilt Steam vorkompilierte Shader, auf dem Mac
+  hängen die Caches an GPU und macOS-Version, die Weitergabe wäre technisch und rechtlich heikel. Stattdessen Caches
+  nie unnötig verlieren (siehe „Das Maximum aus dem Chip“).
+- **Gelerntes teilen, ohne Server und ohne Nutzerdaten.** Ein Bericht enthält nur Spiel-ID, Engine, läuft ja/nein,
+  Bildzeit, Chip, macOS- und Nightforge-Version. Kein Name, keine Geräte-ID, keine Bibliothek.
+  1. **Jetzt:** nur abholen. Ein Skript exportiert die eigenen gelernten Ergebnisse (des Entwicklers) als
+     Profil-PR, Beiträge kommen per PR. Null Nutzerdaten.
+  2. **Sobald es Nutzer gibt:** nach einem gelernten Ergebnis einmal „Ergebnis teilen?“, dann öffnet sich ein
+     fertig ausgefülltes GitHub-Issue im Browser (wie `ProblemReport`), der Nutzer sieht alles und schickt selbst
+     ab. Eine GitHub Action sammelt nachts und macht Profil-Updates. Nightforge speichert nichts, die IP sieht nur
+     GitHub. Haken: braucht ein GitHub-Konto, der Benutzername steht am Bericht.
+  3. **Nur falls die Konto-Hürde zu viele Berichte verhindert:** anonyme Annahmestelle (z. B. Cloudflare Worker,
+     speichert nichts, loggt keine IP), offen dokumentiert. Ist technisch doch ein Mini-Server, der gepflegt werden muss.
+  Vorteil der GitHub-Wege: Die Daten liegen öffentlich, jeder sieht, was gesammelt wird, andere Projekte können
+  sie nutzen.
 
 ## Anti-Cheat und GeForce Now
 
@@ -132,6 +273,36 @@ Die Tests vom 26.10. liefen größtenteils noch auf Wine 11.18 (Gcenx). Seit PR 
   `SteamCatalog.antiCheatOffArguments` übernimmt aber nur Optionen mit demselben Programm. Die Mac-Version ist
   der Stand von 2020 ohne Online-Spiel.
 - Übersicht nach DX12- und winecx-Tests aktualisieren (Liste: `ISteamChartsService/GetMostPlayedGames`).
+
+## Blick von außen: die ersten 15 Minuten
+
+Einschätzung vom 28.10. aus Code, Notizen und Tests (die App wurde dafür nicht neu durchgespielt): Ist ein Spiel
+installiert und läuft es, ist der Weg sehr gut, besser als bei der Konkurrenz. Am schwächsten ist der Anfang, und
+genau dort entscheidet ein neuer Nutzer, ob er bleibt.
+
+- **Installation per Terminal.** Die README schickt Nutzer zu `curl … | bash`. Für normale Mac-Nutzer ist das
+  fremd und wirkt unsicher. Die DMG ist nicht notarisiert, also blockt Gatekeeper beim ersten Öffnen.
+  **Entscheidung (28.10.): kein bezahlter Apple-Developer-Account.** Nightforge ist ein kostenloses Hobbyprojekt,
+  an Apple wird nichts gezahlt. Also ohne Notarisierung so glatt wie möglich machen:
+  - In der README beide Wege nebeneinander: das Terminal-Kommando (umgeht Gatekeeper, weil `curl` keine
+    Quarantäne setzt) und die DMG mit Bildern für den Gatekeeper-Schritt. Seit macOS 15 reicht „Rechtsklick → Öffnen“
+    nicht mehr, der Weg ist Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“. Auf dem
+    DMG-Hintergrund (`Resources/dmg/background.png`) denselben Hinweis in einem Satz.
+  - Ehrlich sagen, warum: kostenlos, offener Quellcode, Apples Prüfung kostet Geld. Das schafft mehr Vertrauen als
+    ein stummer Warndialog.
+  - Nur einmal: Danach aktualisiert sich Nightforge selbst, ohne dass Gatekeeper erneut fragt (prüfen, dass
+    `Updater` das heruntergeladene Zip nicht unter Quarantäne stellt).
+  - Echte Update-Signatur ohne Apple: der kostenlose Ed25519-Weg aus „Aus dem Code-Audit“ → Entscheidungen.
+- **Ersteinrichtung ist lang und hat Hürden:** Passwort für Rosetta, rund 11 Minuten Steam-Update auf einem frischen
+  Prefix (siehe „Aus dem Code-Audit“ → Steam und Start), Anmeldung. Jeder Schritt braucht eine ehrliche
+  Fortschrittsanzeige und einen Grund, warum er nötig ist (ROADMAP 1.1).
+- **Zwei Steams melden sich gegenseitig ab** („Session Replaced“, siehe „Steam und Start“). Für den Nutzer wirkt
+  das wie ein Fehler. Nightforge sollte das abfangen oder in einem Satz erklären.
+- **Erster Start eines Spiels ruckelt** wegen der Shader und sieht ohne Erklärung kaputt aus (ROADMAP 1.1,
+  „Preparing shaders …“).
+- **Nur Steam.** Epic ist in Arbeit (Branch `claude/ux-roadmap-next`), GOG, EA app, Ubisoft und Battle.net fehlen noch.
+- **Wenig nachweislich geprüfte Spiele.** Eine kleine Liste „geprüft läuft“ schafft Vertrauen (siehe
+  „Ehrlich sagen, was geht“), die Vorab-Profile aus offenen Daten machen sie schnell länger.
 
 ## Wartung und Community
 
@@ -172,6 +343,7 @@ Befunde vom 26.10., die noch offen sind. Alles andere ist behoben (PR #4, #5, #1
 - **Updates sind nicht echt signiert.** `Updater.install` prüft nur `codesign --verify` auf eine Ad-hoc-Signatur,
   `scripts/install.sh` lädt ohne Prüfsumme. Bewusst offen gelassen. Wege: ein Ed25519-Schlüssel als Repo-Secret
   (Release-Zip signieren, im Updater und in install.sh prüfen) oder ein Apple-Developer-Account (Developer ID, Notarisierung).
+  Der Apple-Account fällt weg (Entscheidung 28.10., kostenloses Hobbyprojekt), bleibt der Ed25519-Weg.
 
 ### Vulkan-Layer und winecx
 

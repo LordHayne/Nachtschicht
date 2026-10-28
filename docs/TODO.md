@@ -91,6 +91,11 @@ Die Tests vom 26.10. liefen größtenteils noch auf Wine 11.18 (Gcenx). Seit PR 
 - **DXMT-Shader-Cache über einen Neustart** (`~/Library/Caches/Nightforge/dxmt`, PR #1): Der Cache füllt sich
   (4,9 MB nach OxyRail), aber seit dem 26.10. hat der Mac nicht neu gestartet. Nach dem nächsten Neustart prüfen,
   dass `shaders_320.db` noch da ist und die erste Spielminute weniger hakt.
+- **Einrichtung direkt nach dem Download** (`LibraryModel.prepare`, PR #1): Ist ein Windows-Spiel fertig geladen,
+  installiert Nightforge im Hintergrund, was es braucht (winetricks-Pakete aus dem Profil, Wine Mono für .NET),
+  damit der erste Start ohne „Setting up the game …“ losgeht. Mit einem echten Download nie geprüft. Ein Spiel
+  mit Profil-Paketen oder .NET laden, warten bis es fertig ist, dann Play: kein Einrichtungs-Hinweis, und
+  `winetricks.log` im Prefix nennt die Pakete schon vor dem Start.
 - **Steam-Browser im Hintergrund beim Spielen** (`SteamPriority.swift`, PR #1): Das Skript läuft bei jedem
   Spielstart (`steam-priority.sh`), geprüft ist es nur mit nachgestellten Prozessen. Während eines Spiels mit
   `ps -axo pri,command | grep -i steamwebhelper` nachsehen, ob die Browser-Prozesse auf Priorität 4 stehen und

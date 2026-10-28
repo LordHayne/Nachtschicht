@@ -12,22 +12,25 @@ Jeder Punkt nennt, wo man anfängt.
 Die Tests vom 26.10. liefen größtenteils noch auf Wine 11.18 (Gcenx). Seit PR #7 läuft winecx 4.7.3.
 
 - **Getestete Spiele auf winecx gegenprüfen.** Palworld (DXMT, 60 FPS), Deadlock (DXVK, 60–120 FPS),
-  Left 4 Dead 2 (WineD3D), OxyRail und 7 Days to Die. Die Ergebnisse und Profile in
-  `profiles/mac.json` beziehen sich auf 11.18.
+  Left 4 Dead 2 (WineD3D) und 7 Days to Die. Die Ergebnisse und Profile in
+  `profiles/mac.json` beziehen sich auf 11.18. OxyRail ist am 28.10. auf winecx bestätigt: DXMT mit MetalFX,
+  nach dem Laden gleichmäßig 59,7–59,9 FPS am 60er-Limit, laut Thomas scharf und flüssig.
 - **Left 4 Dead 2.** Auf 11.18 scheitert DXVK an seinen Puffern (`vkCreateBuffer`, MoltenVK lehnt
   externe Speicher-Handles ab). WineD3D läuft, stürzt aber nach etwa einer Minute ab, und im Spiel fehlte der Ton.
   `-vulkan` (Valves DXVK) und WineD3D mit Vulkan starten nicht. Auf winecx (26.10.) scheitert DXVK schon früher:
   `VK_ERROR_FEATURE_NOT_PRESENT` bei `vkCreateDevice`, weil der Vulkan-Layer dort nicht geladen wird (siehe
   „Aus dem Code-Audit“ → Vulkan-Layer). WineD3D bleibt der Weg. Zum Ton:
   In der Cloud-Konfiguration stehen `volume "0.008"` und Quadro-Lautsprecher, also erst im Spiel unter
-  Optionen → Audio hochdrehen, bevor man Wine verdächtigt.
+  Optionen → Audio hochdrehen, bevor man Wine verdächtigt. Stürzt am 28.10. weiterhin ab, noch nicht genauer
+  untersucht.
 - **Andere Source-Spiele** (Team Fortress 2, Garry's Mod): Sie bekommen jetzt dieselbe DirectX-9-Leiter wie L4D2.
   Noch kein einziges getestet.
 - **Unreal-Spiele allgemein.** Bis 26.10. bekam kein Unreal-Spiel DXMT. Die Einstellungen reichten nur drei
   Ordner tief, `<Projekt>/Binaries/Win64/*-Shipping.exe` liegt auf Ebene 4. Wer ein Unreal-Spiel für
   „läuft schlecht“ hielt, sollte es erneut versuchen (z. B. Marvel Rivals).
 - **msync (PR #1)** ist auf 11.18 portiert. winecx bringt ein eigenes msync mit, der Patch greift dort nicht.
-  Klären, ob der 11.18-Weg noch gebraucht wird.
+  Klären, ob der 11.18-Weg noch gebraucht wird. Unter winecx meldet das Log bei jedem Steam-Start
+  `msync: up and running` (Test vom 28.10.), also ist dessen eigenes msync aktiv.
 
 ## DirectX 12 (D3DMetal)
 
@@ -82,7 +85,16 @@ Die Tests vom 26.10. liefen größtenteils noch auf Wine 11.18 (Gcenx). Seit PR 
 - **MetalFX im Vulkan-Layer** (Retina für Vulkan-Spiele, PR #1): Die Metal-Seite ist geprüft, in einem Spiel noch nicht.
 - **MoltenVK 1.4.2** (PR #1) ist in keinem Spiel getestet. 1.4.0 scheiterte an Shadern von No Man's Sky.
 - **D3DM_MAX_FPS** wirkt jetzt über Steams Start-Umgebung. Prüfen, ob die gelernte Bildratengrenze
-  (FramePacing) auch für D3DMetal-Spiele greift.
+  (FramePacing) auch für D3DMetal-Spiele greift. Für DXMT arbeitet sie: OxyRail schreibt seine Bildrate ins
+  Log, hält 60 und bleibt deshalb bei 60 (28.10.). Ein Spiel, das 60 nicht hält, ist noch nicht durchgelaufen
+  (es braucht mindestens drei volle Spielminuten am Stück, bevor das Limit auf 40 geht).
+- **DXMT-Shader-Cache über einen Neustart** (`~/Library/Caches/Nightforge/dxmt`, PR #1): Der Cache füllt sich
+  (4,9 MB nach OxyRail), aber seit dem 26.10. hat der Mac nicht neu gestartet. Nach dem nächsten Neustart prüfen,
+  dass `shaders_320.db` noch da ist und die erste Spielminute weniger hakt.
+- **Steam-Browser im Hintergrund beim Spielen** (`SteamPriority.swift`, PR #1): Das Skript läuft bei jedem
+  Spielstart (`steam-priority.sh`), geprüft ist es nur mit nachgestellten Prozessen. Während eines Spiels mit
+  `ps -axo pri,command | grep -i steamwebhelper` nachsehen, ob die Browser-Prozesse auf Priorität 4 stehen und
+  nach dem Spiel zurückgehen.
 - **TV-Modus an einem echten TV** (`GameDisplay.swift`, PR #6): Mit einem Monitor am MacBook bestätigt (Fenster
   wandert beim Anstecken, Windows-Spiel öffnet dort, Hauptbildschirm kommt danach zurück). Am TV noch offen: die
   Erkennung am Namen (`Candidate.isTV`, Liste der Marken) und das Vollbild des Launchers.

@@ -88,6 +88,11 @@ Die Tests vom 26.10. liefen größtenteils noch auf Wine 11.18 (Gcenx). Seit PR 
   (FramePacing) auch für D3DMetal-Spiele greift. Für DXMT arbeitet sie: OxyRail schreibt seine Bildrate ins
   Log, hält 60 und bleibt deshalb bei 60 (28.10.). Ein Spiel, das 60 nicht hält, ist noch nicht durchgelaufen
   (es braucht mindestens drei volle Spielminuten am Stück, bevor das Limit auf 40 geht).
+- **Automatik nach Hardware im Spiel prüfen** (`Hardware.swift`, PR #31): Nur mit Tests geprüft.
+  An einem externen Monitor ohne Retina muss MetalFX in den Optionen „Automatisch (Aus)“ zeigen, das Spiel ohne
+  Hochskalieren starten (im Log keine `MetalFX`-Zeile bzw. kein `metalSpatialUpscale` in `dxmt.conf`) und am
+  MacBook-Bildschirm wieder mit. Im Stromsparmodus muss das Bildraten-Limit bei 40 (120 Hz) starten und die
+  gelernte Grenze für normales Spielen unverändert bleiben (`framePacing.*` mit `"lowPower":true` getrennt).
 - **DXMT-Shader-Cache über einen Neustart** (`~/Library/Caches/Nightforge/dxmt`, PR #1): Der Cache füllt sich
   (4,9 MB nach OxyRail), aber seit dem 26.10. hat der Mac nicht neu gestartet. Nach dem nächsten Neustart prüfen,
   dass `shaders_320.db` noch da ist und die erste Spielminute weniger hakt.

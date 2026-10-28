@@ -116,6 +116,12 @@ Ein einheitlicher Vulkan-Stapel wäre einfacher, aber langsamer, und kommt nur a
   Ansatz: eine Sitzung mit DXMT, die nächste mit D3DMetal, Bildzeiten aus den Logs vergleichen (DXMT hat dafür
   den `frame-log`-Patch, für D3DMetal einen Weg finden) und danach immer den Sieger nehmen. Stürzt ein Weg ab,
   fällt er still raus. Der Spieler soll nie selbst vergleichen müssen.
+- **Leise zeigen, was die Automatik gewählt hat.** In den Spieloptionen eine Zeile wie „Nightforge spielt dieses
+  Spiel mit D3DMetal, das lief auf deinem Mac flüssiger“. Kein Regler, aber nachvollziehbar, und hilfreich in
+  Problemberichten (`SettingsViews.swift`, `ProblemReport`).
+- **Rückweg pro Spiel bei Komponenten-Updates.** Wird ein Spiel mit einem neuen DXMT oder D3DMetal schlechter, bleibt
+  es bei der vorherigen Version, statt die schnellere Engine aufzugeben. Baut auf „Nur geprüfte Komponenten
+  ausliefern“ auf (vorherige Version bleibt im Manifest, `ComponentStore`).
 - **„Mac zuerst“ nur für native Apple-Silicon-Versionen.** Alte Intel-Ports laufen über Rosetta und meist altes
   OpenGL; die Windows-Version über D3DMetal kann deutlich schneller sein. Regel in `MacVersion.swift` anpassen:
   nativ → Mac-Version, Intel-Port → messen oder Windows-Version vorziehen.
@@ -202,6 +208,18 @@ Gelernte fließt zurück in die Profile. Geprüft am 28.10.:
 - **Nicht nach einem Absturz für immer abschreiben.** Abstürze können am Spiel, an einem Update oder am Netz liegen.
   Eine Engine gilt erst als ungeeignet, wenn sie zweimal am selben Punkt scheitert und die nächste dann läuft
   (`LaunchHealth`, `LearnedFixes`). Sonst lernt die Automatik das Falsche und bleibt auf einem langsameren Weg.
+- **Gelerntes veraltet.** Ein Ergebnis gilt nur für einen Stand: Spiel-Build (`buildid` im `appmanifest_<id>.acf`) plus
+  Komponenten-Versionen (Engine, DXMT, D3DMetal). Ändert sich einer davon, misst Nightforge still neu.
+- **Fair messen.** Die erste Sitzung kompiliert Shader und ruckelt immer. Erst vergleichen, wenn beide Engines einmal
+  mit warmem Cache gelaufen sind. Nicht den Durchschnitt vergleichen, sondern die Ausreißer (1-%-Werte), weil
+  Flüssigkeit vor FPS geht. Nur Sitzungen mit gleicher Stromversorgung vergleichen (Akku gegen Netzteil verfälscht).
+- **Der Chip zählt.** Ein M1 und ein M4 können verschiedene Sieger haben (ab M3 Raytracing in Hardware, dynamischer
+  Grafikspeicher). Geteilte Profile nach Chip-Generation trennen.
+- **Geteilten Berichten nicht blind trauen.** Die Voreinstellung ändert sich erst, wenn mehrere Berichte von
+  verschiedenen Macs übereinstimmen; eigene Messungen gelten mehr als fremde. Prüfung in der GitHub Action.
+- **Shader-Caches nicht teilen** (bewusst verworfen): Unter Linux verteilt Steam vorkompilierte Shader, auf dem Mac
+  hängen die Caches an GPU und macOS-Version, die Weitergabe wäre technisch und rechtlich heikel. Stattdessen Caches
+  nie unnötig verlieren (siehe „Das Maximum aus dem Chip“).
 - **Gelerntes teilen, ohne Server und ohne Nutzerdaten.** Ein Bericht enthält nur Spiel-ID, Engine, läuft ja/nein,
   Bildzeit, Chip, macOS- und Nightforge-Version. Kein Name, keine Geräte-ID, keine Bibliothek.
   1. **Jetzt:** nur abholen. Ein Skript exportiert die eigenen gelernten Ergebnisse (des Entwicklers) als
@@ -238,6 +256,28 @@ Gelernte fließt zurück in die Profile. Geprüft am 28.10.:
   `SteamCatalog.antiCheatOffArguments` übernimmt aber nur Optionen mit demselben Programm. Die Mac-Version ist
   der Stand von 2020 ohne Online-Spiel.
 - Übersicht nach DX12- und winecx-Tests aktualisieren (Liste: `ISteamChartsService/GetMostPlayedGames`).
+
+## Blick von außen: die ersten 15 Minuten
+
+Einschätzung vom 28.10. aus Code, Notizen und Tests (die App wurde dafür nicht neu durchgespielt): Ist ein Spiel
+installiert und läuft es, ist der Weg sehr gut, besser als bei der Konkurrenz. Am schwächsten ist der Anfang, und
+genau dort entscheidet ein neuer Nutzer, ob er bleibt.
+
+- **Installation per Terminal.** Die README schickt Nutzer zu `curl … | bash`. Für normale Mac-Nutzer ist das
+  fremd und wirkt unsicher. Die DMG ist nicht notarisiert, also blockt Gatekeeper beim ersten Öffnen. Hängt an der
+  Entscheidung zur Signatur (siehe „Aus dem Code-Audit“ → Entscheidungen): Mit Developer ID und Notarisierung wäre
+  es „DMG laden, in Programme ziehen, fertig“. Bis dahin mindestens die DMG als ersten Weg in der README, mit
+  einem Satz und Bild zu „Rechtsklick → Öffnen“.
+- **Ersteinrichtung ist lang und hat Hürden:** Passwort für Rosetta, rund 11 Minuten Steam-Update auf einem frischen
+  Prefix (siehe „Aus dem Code-Audit“ → Steam und Start), Anmeldung. Jeder Schritt braucht eine ehrliche
+  Fortschrittsanzeige und einen Grund, warum er nötig ist (ROADMAP 1.1).
+- **Zwei Steams melden sich gegenseitig ab** („Session Replaced“, siehe „Steam und Start“). Für den Nutzer wirkt
+  das wie ein Fehler. Nightforge sollte das abfangen oder in einem Satz erklären.
+- **Erster Start eines Spiels ruckelt** wegen der Shader und sieht ohne Erklärung kaputt aus (ROADMAP 1.1,
+  „Preparing shaders …“).
+- **Nur Steam.** Epic kommt (Branch `claude/ux-roadmap-next`), GOG, EA app, Ubisoft und Battle.net fehlen noch.
+- **Wenig nachweislich geprüfte Spiele.** Eine kleine Liste „geprüft läuft“ schafft Vertrauen (siehe
+  „Ehrlich sagen, was geht“), die Vorab-Profile aus offenen Daten machen sie schnell länger.
 
 ## Wartung und Community
 

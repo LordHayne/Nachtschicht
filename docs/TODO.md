@@ -91,6 +91,16 @@ Die Tests vom 26.10. liefen größtenteils noch auf Wine 11.18 (Gcenx). Seit PR 
 - **Ton über HDMI.** macOS stellt meist selbst auf den TV um, aber nicht immer. Erst am TV prüfen; falls nötig beim
   Spielstart das Audiogerät des Spiel-Bildschirms wählen (CoreAudio, Transport HDMI/DisplayPort) und danach zurück,
   wie `GameDisplay.enterGame`/`leaveGame` es mit dem Hauptbildschirm machen.
+- **Ziel fürs Sofa (28.10.):** MacBook anstecken, Controller einschalten, alles läuft, ohne Maus und Tastatur.
+  Was dafür noch fehlt:
+  - **Steam-Dialoge per Pad.** EULA, Startoptionen, „Bestätige im Steam-Fenster“ (siehe „Steam und Start“) brauchen
+    heute einen Mausklick. Am TV ist das der Moment, in dem man aufstehen muss. Nightforge soll sie per Controller
+    bedienbar machen oder die Standardoption selbst wählen.
+  - **Zugeklapptes MacBook.** macOS braucht dafür ein Netzteil, und ein Bluetooth-Controller weckt den Mac nicht aus
+    dem Ruhezustand. Prüfen, was zugeklappt geht, und Nightforge im Zweifel einen kurzen Hinweis geben lassen
+    (Netzteil fehlt, Mac schläft).
+  - **Systemabfragen in die Ersteinrichtung.** Rechte für Bluetooth, Bildschirm oder Bedienungshilfen sind mit dem
+    Controller nicht erreichbar. Alles, was macOS einmal fragt, in `Setup` erledigen, solange man noch am Mac sitzt.
 
 ## Das Maximum aus dem Chip
 

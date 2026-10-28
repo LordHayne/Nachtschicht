@@ -165,16 +165,24 @@ struct GameOptions: Codable, Equatable {
         if let frameLimit { return frameLimit }
         guard Prefs.sharpAndSmooth else { return 0 }
         if let fromProfile = profile?.frameLimit { return fromProfile }
-        guard displayRefreshRate > 0 else { return 0 }
-        return displayRefreshRate >= 100 ? displayRefreshRate / 2 : displayRefreshRate
+        return Self.standardFrameLimit(displayRefreshRate, lowPower: Hardware.current.lowPower)
     }
 
-    /// A game profile can rule MetalFX out for games it doesn't suit.
+    /// "Sharp & smooth" without a profile: an even share of the refresh rate. In Low Power Mode,
+    /// with CPU and GPU held back, one share lower (40 instead of 60 on 120 Hz), so frames stay even.
+    static func standardFrameLimit(_ refreshRate: Int, lowPower: Bool) -> Int {
+        guard refreshRate > 0 else { return 0 }
+        return refreshRate / ((refreshRate >= 100 ? 2 : 1) + (lowPower ? 1 : 0))
+    }
+
+    /// A game profile can rule MetalFX out for games it doesn't suit. Automatic upscales only on a
+    /// Retina screen: on a screen without (an external monitor, many TV modes) the upscaled frame
+    /// would only be scaled down again, GPU time spent for nothing.
     func effectiveUpscaling(profile: GameProfile? = nil) -> Bool {
         switch upscaling {
         case .on: return true
         case .off: return false
-        case .automatic: return Prefs.sharpAndSmooth && profile?.metalFX != false
+        case .automatic: return Prefs.sharpAndSmooth && profile?.metalFX != false && Hardware.current.retina
         }
     }
 }

@@ -241,6 +241,25 @@ struct LaunchHealthTest {
         steady = FramePacing.next(FramePacing.State(context: context, ranWith: 60), rates: [33, 34, 35], standard: 60)
         check(steady.limit == 30, "far below 40 → 30")
 
+        // MARK: Hardware
+        check(GameOptions.standardFrameLimit(120, lowPower: false) == 60 && GameOptions.standardFrameLimit(120, lowPower: true) == 40,
+              "120 Hz: 60, in Low Power Mode 40")
+        check(GameOptions.standardFrameLimit(60, lowPower: false) == 60 && GameOptions.standardFrameLimit(60, lowPower: true) == 30,
+              "60 Hz: 60, in Low Power Mode 30")
+        check(GameOptions.standardFrameLimit(0, lowPower: true) == 0, "unknown refresh rate: no limit")
+        Hardware.set(.init(retina: false, lowPower: false))
+        check(!GameOptions().effectiveUpscaling() || !Prefs.sharpAndSmooth, "no MetalFX on a screen without Retina")
+        var forced = GameOptions()
+        forced.upscaling = .on
+        check(forced.effectiveUpscaling(), "MetalFX switched on stays on without Retina")
+        Hardware.set(.init(retina: true, lowPower: true))
+        check(GameOptions().effectiveFrameLimit(displayRefreshRate: 120) == (Prefs.sharpAndSmooth ? 40 : 0),
+              "Low Power Mode starts one share lower")
+        check(FramePacing.Context(refreshRate: 120, upscaling: true, graphics: .dxmt, lowPower: true)
+              != FramePacing.Context(refreshRate: 120, upscaling: true, graphics: .dxmt),
+              "Low Power Mode learns apart from normal play")
+        Hardware.set(.init())
+
         // MARK: Installed games
         // Registry keys from the online fixes: a game's own settings and drive letters, nothing that
         // reaches every program in the prefix, and no key that could start lines of its own.

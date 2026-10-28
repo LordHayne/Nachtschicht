@@ -112,7 +112,10 @@ Ein einheitlicher Vulkan-Stapel wäre einfacher, aber langsamer, und kommt nur a
 - **Schnellsten Übersetzer pro Spiel messen statt schätzen.** „Automatisch“ nimmt für DirectX 11 DXMT, D3DMetal
   kann DX11 aber auch und ist bei manchen Spielen schneller. Beim ersten Spielen beide kurz messen und den Sieger
   pro Spiel merken, wie es die gelernte Bildratengrenze schon tut (`FramePacing`, `LearnedFixes` in `LaunchHealth.swift`).
-  Größter Gewinn ohne Kosten.
+  Größter Gewinn ohne Kosten. Unsichtbar für den Spieler: kein Menü, kein Dialog, kein Neustart mitten im Spiel.
+  Ansatz: eine Sitzung mit DXMT, die nächste mit D3DMetal, Bildzeiten aus den Logs vergleichen (DXMT hat dafür
+  den `frame-log`-Patch, für D3DMetal einen Weg finden) und danach immer den Sieger nehmen. Stürzt ein Weg ab,
+  fällt er still raus. Der Spieler soll nie selbst vergleichen müssen.
 - **„Mac zuerst“ nur für native Apple-Silicon-Versionen.** Alte Intel-Ports laufen über Rosetta und meist altes
   OpenGL; die Windows-Version über D3DMetal kann deutlich schneller sein. Regel in `MacVersion.swift` anpassen:
   nativ → Mac-Version, Intel-Port → messen oder Windows-Version vorziehen.

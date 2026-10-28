@@ -144,6 +144,16 @@ Recherche vom 27.10. (Stand der Projekte: DXMT 0.80 ist aktuell, D3DMetal 4.0b3 
 - **OpenGL-Spiele** sind auf macOS OpenGL 4.1 begrenzt; was 4.3+ braucht, startet nicht. Weg: Zink auf KosmicKrisp.
 - **Winetricks-Zuordnung ergänzen** (`GameLog.winetricksVerb`): XNA Framework (`xna40`) und echtes .NET Framework
   (`dotnet48`) für Spiele und Launcher, bei denen wine-mono nicht reicht.
+- **Spuren bei GameSir (GameHub für Mac, github.com/gamesir-labs) beobachten.** GameSir baut wie wir direkt
+  auf Metal, ohne KosmicKrisp. Stand 28.10., alles ohne Release:
+  - `gamesir-labs/dxmt` (LGPL, Fork von 3Shain): Beschreibung nennt D3D12, D3D11, D3D10 und D3D9, dazu ein
+    Testplan „D3D12 auf Metal 4“. Wird das reif, wäre es der Metal-Weg für DirectX 9 und ein DX12-Rückfall ohne
+    Apples Lizenz. Austauschbar wie heute DXMT (`components/sources.json`).
+  - `gamesir-labs/MGL` (Fork von openglonmetal/MGL): OpenGL 4.6 auf Metal, gegen die OpenGL-4.1-Grenze.
+    Lizenz vorher prüfen.
+  - `gamesir-labs/rosettax87_jit` (MIT): schnellere x87-Rechnung unter Rosetta für alte 32-Bit-Spiele. Braucht
+    eine Debugger-Freigabe (Systemabfrage), also nur, wenn das ohne Hürde für den Nutzer geht.
+  Unser Unterschied bleibt das Bedienkonzept: GameHub zeigt viele Regler, Nightforge wählt, misst und lernt selbst.
 - **Video im Spiel testen.** winecx bringt `winegstreamer` mit GStreamer und `gptk-video` mit; Zwischensequenzen
   (Media Foundation, H.264 in Unreal/Unity) sind noch nicht gezielt geprüft.
 

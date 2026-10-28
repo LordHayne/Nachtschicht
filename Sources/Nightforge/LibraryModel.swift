@@ -1072,6 +1072,7 @@ final class LibraryModel: ObservableObject {
             let attempts = insight?.attempts ?? []
             if automatic { LaunchHealth.review(game.appID, attempts, steamRoot: game.steamRoot) }
             let refreshRate = GameDisplay.screen?.maximumFramesPerSecond ?? 60
+            Hardware.refresh()  // the screen the game opens on, Low Power Mode: the automatic choices follow them
             if game.bottle.isBuiltIn {
                 // The last session's frame rates decide this one's automatic frame limit.
                 await Task.detached(priority: .utility) {

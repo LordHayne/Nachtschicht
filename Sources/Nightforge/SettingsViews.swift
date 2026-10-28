@@ -16,6 +16,7 @@ struct GameOptionsSheet: View {
         self.insight = insight
         self.report = report
         _options = State(initialValue: GameOptionsStore.load(game.appID))
+        Hardware.refresh()  // so "Automatic (…)" shows what a start now would do
     }
 
     var body: some View {

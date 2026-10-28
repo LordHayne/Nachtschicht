@@ -75,7 +75,7 @@ final class Toasts: ObservableObject {
 /// Where messages show: bottom centre, above the hint bar. Put it over the main window's content.
 struct ToastHost: View {
     @ObservedObject private var toasts = Toasts.shared
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.reduceMotion) private var reduceMotion
 
     var body: some View {
         VStack {
@@ -133,10 +133,7 @@ private struct ToastView: View {
         .padding(.trailing, toast.action == nil ? 10 : 6)
         .padding(.vertical, 6)
         .frame(width: oneLine ? nil : 560)
-        .background(.ultraThinMaterial, in: Capsule())
-        .background(Theme.slate.opacity(0.7), in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
-        .shadow(color: .black.opacity(0.4), radius: 18, y: 8)
+        .background(GlassBackground(glass: .thick, shape: Capsule()))
         .environment(\.colorScheme, .dark)
         .onHover { Toasts.shared.setHovering($0) }
         .accessibilityElement(children: .contain)

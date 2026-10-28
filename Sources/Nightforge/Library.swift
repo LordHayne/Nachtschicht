@@ -35,6 +35,9 @@ struct Game: Identifiable, Hashable {
     /// Steam stopped its download for lack of disk space: the space it needs for it (download and
     /// unpacking). Steam leaves such a download paused for good, so it waits for the player.
     var downloadNeedsSpace: Int64?
+    /// Installed, with an update Steam has to download before it starts: what's left of it
+    /// (0 while Steam hasn't worked the size out).
+    var pendingUpdate: Int64?
     /// Name of the folder under steamapps/common (needed to ask Steam for a download).
     var installDirName = ""
     /// Steam also sells a macOS version (which may or may not run on current Macs).
@@ -396,6 +399,10 @@ enum LibraryScanner {
         )
         game.install = install
         game.installDirName = installDirName
+        if install == .installed {
+            game.pendingUpdate = UpdateState(flags: flags, toDownload: toDownload, downloaded: downloaded,
+                                             targetBuild: state["targetbuildid"]?.string, build: state["buildid"]?.string).pending
+        }
         // UpdateResult 12: Steam's "not enough disk space".
         if flags & 4 == 0, state["updateresult"]?.string == "12" {
             game.downloadNeedsSpace = Int64(max(toDownload, toStage))
@@ -403,7 +410,19 @@ enum LibraryScanner {
         return game
     }
 
-    private static func folderSize(_ url: URL) -> Int64 {
+    /// Whether a game's update is running now, from its manifest (while Nightforge waits for Steam
+    /// to start a game, which updates it first).
+    static func updateState(of game: Game) -> UpdateState? {
+        let manifest = game.installDir.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("appmanifest_\(game.appID).acf")
+        guard let state = VDF.parse(contentsOf: manifest)?["appstate"] else { return nil }
+        return UpdateState(flags: state["stateflags"]?.string.flatMap { Int($0) } ?? 4,
+                           toDownload: state["bytestodownload"]?.string.flatMap { Double($0) } ?? 0,
+                           downloaded: state["bytesdownloaded"]?.string.flatMap { Double($0) } ?? 0,
+                           targetBuild: state["targetbuildid"]?.string, build: state["buildid"]?.string)
+    }
+
+    static func folderSize(_ url: URL) -> Int64 {
         let keys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .isRegularFileKey]
         guard let files = FileManager.default.enumerator(at: url, includingPropertiesForKeys: Array(keys)) else { return 0 }
         var total: Int64 = 0
@@ -484,4 +503,32 @@ enum LibraryScanner {
         }
         return out
     }
+}
+
+/// What a game's manifest says about updates (Steam's StateFlags: 2 update required, 4 fully
+/// installed, 256 update running, 1024 update started, 1048576 downloading, 2097152 staging,
+/// 4194304 committing).
+struct UpdateState: Equatable {
+    let flags: Int
+    let toDownload: Double
+    let downloaded: Double
+    var targetBuild: String?
+    var build: String?
+
+    /// An update waits: Steam flags it, or the build it's heading for isn't the one installed.
+    var isPending: Bool {
+        if flags & 2 != 0 { return true }
+        guard let targetBuild, let build, targetBuild != "0", !targetBuild.isEmpty else { return false }
+        return targetBuild != build
+    }
+
+    /// What's left to download for it; 0 while Steam hasn't worked the size out.
+    var pending: Int64? {
+        isPending ? Int64(max(0, toDownload - downloaded)) : nil
+    }
+
+    /// Steam is downloading or applying it right now.
+    var isRunning: Bool { flags & (256 | 1024 | 1_048_576 | 2_097_152 | 4_194_304) != 0 }
+
+    var fraction: Double? { toDownload > 0 ? min(downloaded / toDownload, 0.99) : nil }
 }

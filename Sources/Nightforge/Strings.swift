@@ -52,6 +52,7 @@ enum L10n {
         "%ld games": "%ld Spiele",
         "Rescan Library": "Bibliothek neu einlesen",
         "Rescan library (⌘R)": "Bibliothek neu einlesen (⌘R)",
+        "Rescan library": "Bibliothek neu einlesen",
         "Settings (⌘,)": "Einstellungen (⌘,)",
         "Last played": "Zuletzt gespielt",
         "Never": "Noch nie",
@@ -330,6 +331,270 @@ enum L10n {
         "Game Mode": "Spielmodus",
         "Gives games priority on the CPU and graphics and halves Bluetooth latency for controllers and headphones. Turn it off if a game's sound crackles.":
             "Gibt Spielen Vorrang bei CPU und Grafik und halbiert die Bluetooth-Latenz für Controller und Kopfhörer. Schalte ihn aus, wenn der Ton eines Spiels knackt.",
+
+        // Navigation
+        "Home": "Startseite",
+        "Sections": "Bereiche",
+        "Home – what you play (L)": "Startseite – was du spielst (L)",
+        "Details": "Details",
+        "Details (I)": "Details (I)",
+        "Back (Esc)": "Zurück (Esc)",
+        "Back to Home": "Zurück zur Startseite",
+        "Back to the library": "Zurück zur Bibliothek",
+        "All games": "Alle Spiele",
+        "All %ld games": "Alle %ld Spiele",
+        "Your game": "Dein Spiel",
+        "1 in your library": "1 in deiner Bibliothek",
+        "%ld in your library": "%ld in deiner Bibliothek",
+        "All games, %ld in your library": "Alle Spiele, %ld in deiner Bibliothek",
+        "Everything in your library – installed or not – in one place.":
+            "Alles aus deiner Bibliothek – installiert oder nicht – an einem Ort.",
+        "Open Library": "Bibliothek öffnen",
+        "%@ – click again for details": "%@ – noch einmal klicken für Details",
+        "Tested on %@": "Getestet auf %@",
+
+        "Continue playing": "Weiterspielen",
+        "Pinned, then what you played lately": "Angeheftet, dann was du zuletzt gespielt hast",
+
+        // Settings tabs
+        "Stores": "Stores",
+        "About": "Über",
+        "Not set up yet – Nightforge does it at the first start.": "Noch nicht eingerichtet – Nightforge macht das beim ersten Start.",
+        "Signed in · %@": "Angemeldet · %@",
+        "Not signed in · %@": "Nicht angemeldet · %@",
+        "Controllers": "Controller",
+        "No controller connected.": "Kein Controller verbunden.",
+        "Controller battery": "Akku des Controllers",
+        "Connected · works in every game and in Nightforge": "Verbunden · funktioniert in jedem Spiel und in Nightforge",
+        "Pair a Controller …": "Controller koppeln …",
+        "PlayStation: hold PS and Create until the light flashes. Xbox: hold the pair button on top until the logo flashes. Nintendo: hold the sync button. Then choose it in the Bluetooth settings.":
+            "PlayStation: PS und Create halten, bis das Licht blinkt. Xbox: die Kopplungstaste oben halten, bis das Logo blinkt. Nintendo: die Sync-Taste halten. Dann in den Bluetooth-Einstellungen auswählen.",
+        "Button labels": "Tastensymbole",
+        "Like my controller": "Wie mein Controller",
+        "What the hints at the bottom of Nightforge show for the buttons: ✕ ○ □ △ or A B X Y.":
+            "Was die Hinweise unten in Nightforge für die Tasten zeigen: ✕ ○ □ △ oder A B X Y.",
+        "No account. No telemetry. No background service.": "Kein Konto. Keine Telemetrie. Kein Hintergrunddienst.",
+        "Nothing leaves your Mac unless you send it – a problem report opens on GitHub, filled in, and goes nowhere until you submit it.":
+            "Nichts verlässt deinen Mac, außer du schickst es ab – ein Problembericht öffnet sich ausgefüllt auf GitHub und geht nirgendwohin, bis du ihn absendest.",
+        "Nightforge %@": "Nightforge %@",
+        "Nightforge is free software under the GPL-3.0. It stands on these projects – thank you to everyone behind them. Their licence files ship inside the app.":
+            "Nightforge ist freie Software unter der GPL-3.0. Es baut auf diesen Projekten auf – danke an alle, die dahinterstehen. Ihre Lizenzdateien liegen in der App.",
+        "Built on": "Gebaut auf",
+        "Show Licence Files": "Lizenzdateien zeigen",
+        "Fixes for single games": "Korrekturen für einzelne Spiele",
+        "Which games' anti-cheat runs where": "Welches Anti-Cheat wo läuft",
+        "Wine with controller support": "Wine mit Controller-Unterstützung",
+        "Wine with DXMT": "Wine mit DXMT",
+        "Runs Windows games on the Mac": "Lässt Windows-Spiele auf dem Mac laufen",
+        "DirectX 12 on Metal (Apple)": "DirectX 12 auf Metal (Apple)",
+        "DirectX 10 and 11 on Metal": "DirectX 10 und 11 auf Metal",
+        "DirectX 9 to 11 on Vulkan": "DirectX 9 bis 11 auf Vulkan",
+        "Vulkan on Metal": "Vulkan auf Metal",
+        "Installs what games need from Windows": "Installiert, was Spiele von Windows brauchen",
+        "Unpacks Windows installers": "Entpackt Windows-Installer",
+        "Tool": "Werkzeug",
+
+        "The download is done.": "Der Download ist fertig.",
+        "Notify me when downloads finish": "Mitteilung, wenn Downloads fertig sind",
+        "A macOS notification with a Play button while Nightforge is in the background. Your last five games are in the Dock menu, too.":
+            "Eine macOS-Mitteilung mit „Spielen“-Knopf, während Nightforge im Hintergrund ist. Deine letzten fünf Spiele stehen auch im Dock-Menü.",
+
+        "Accessibility": "Bedienungshilfen",
+        "Reduce motion": "Bewegung reduzieren",
+        "No zoom on covers, no sliding – plain cross-fades. Follows “Reduce motion” in macOS until you change it here.":
+            "Kein Zoom auf Covern, kein Gleiten – nur Überblenden. Folgt „Bewegung reduzieren“ in macOS, bis du es hier änderst.",
+
+        // Not enough space
+        "%@ needs up to %@": "%@ braucht bis zu %@",
+        "Your Mac has %@ free – %@ short. Nothing is downloaded until there's room, so nothing stops halfway.":
+            "Dein Mac hat %@ frei – es fehlen %@. Geladen wird erst, wenn Platz ist, damit nichts auf halbem Weg abbricht.",
+        "No game here has gone unplayed for a month. Remove games or other files you don't need, then try again.":
+            "Kein Spiel hier wurde seit einem Monat nicht gespielt. Entferne Spiele oder andere Dateien, die du nicht brauchst, und versuch es dann noch einmal.",
+        "Make room – these haven't been played for a while. They stay in your Steam library, and saves in the Steam Cloud are kept.":
+            "Platz schaffen – diese wurden länger nicht gespielt. Sie bleiben in deiner Steam-Bibliothek, Spielstände in der Steam Cloud bleiben erhalten.",
+        "Last played %@": "Zuletzt gespielt %@",
+        "Never played": "Noch nie gespielt",
+        "Frees %@ – enough": "Macht %@ frei – reicht",
+        "Frees %@ of %@": "Macht %@ von %@ frei",
+        "Uninstall %ld & Download": "%ld deinstallieren & laden",
+
+        // Storage
+        "Storage": "Speicher",
+        "Games": "Spiele",
+        "Other": "Anderes",
+        "%@ free": "%@ frei",
+        "Measuring Nightforge …": "Nightforge wird gemessen …",
+        "“Nightforge” is the game engine, the Windows environment and Steam itself – everything besides the games.":
+            "„Nightforge“ ist die Spiel-Engine, die Windows-Umgebung und Steam selbst – alles außer den Spielen.",
+        "No games on this Mac yet.": "Noch keine Spiele auf diesem Mac.",
+        "Games on this Mac": "Spiele auf diesem Mac",
+
+        // Didn't start
+        "It ended right after starting, with every way Nightforge knows to start it.": "Es hat sich gleich nach dem Start beendet – mit jedem Weg, den Nightforge kennt.",
+        "Tried: %@": "Versucht: %@",
+        "Try Again From the First Way": "Nochmal mit dem ersten Weg versuchen",
+        "Helps when something got in the way the first time – Steam updating, a window asking something.":
+            "Hilft, wenn beim ersten Mal etwas dazwischenkam – ein Steam-Update oder ein Fenster mit einer Frage.",
+        "Choose Graphics by Hand …": "Grafik selbst wählen …",
+        "Still no luck? A problem report opens on GitHub, filled in with what Nightforge tried – nothing is sent until you submit it there.":
+            "Immer noch nicht? Ein Problembericht öffnet sich auf GitHub, ausgefüllt mit dem, was Nightforge versucht hat – nichts wird gesendet, bis du ihn dort abschickst.",
+        "Close": "Schließen",
+
+        // Launch phases
+        "Starting Steam …": "Steam startet …",
+        "Steam runs invisibly in the background – it only has to start once.": "Steam läuft unsichtbar im Hintergrund – es muss nur einmal starten.",
+        "The Mac version starts through Steam for Mac, which runs in the background.": "Die Mac-Version startet über Steam für Mac, das im Hintergrund läuft.",
+        "Steam signs in again, so your cloud saves come along.": "Steam meldet sich neu an, damit deine Cloud-Spielstände mitkommen.",
+        "Steam needs you to sign in – its window is open.": "Steam möchte, dass du dich anmeldest – sein Fenster ist offen.",
+        "Installing what the game needs from Windows. Only the first time.": "Installiert, was das Spiel von Windows braucht. Nur beim ersten Mal.",
+        "Installing .NET, which this game needs. Only the first time.": "Installiert .NET, das dieses Spiel braucht. Nur beim ersten Mal.",
+        "Steam got stuck while starting – a fresh start fixes that.": "Steam ist beim Starten hängen geblieben – ein Neustart behebt das.",
+        "It closed right away – Nightforge starts it the next way and remembers what works.":
+            "Es hat sich sofort beendet – Nightforge startet es auf dem nächsten Weg und merkt sich, was funktioniert.",
+        "First start with this graphics version: shaders are prepared, so it can take a minute. Next time it's quicker.":
+            "Erster Start mit dieser Grafikversion: Shader werden vorbereitet, das kann eine Minute dauern. Beim nächsten Mal geht es schneller.",
+        "Steam asks something before the game starts – answer it in its window.": "Steam fragt vor dem Start etwas – antworte in seinem Fenster.",
+
+        // Shortcuts
+        "%@ is in Applications now – Spotlight finds it": "%@ ist jetzt in den Programmen – Spotlight findet es",
+        "%@ couldn't be added to Applications: %@": "%@ konnte nicht zu den Programmen hinzugefügt werden: %@",
+        "In Applications – show it": "In den Programmen – zeigen",
+        "Add to Applications – Spotlight and Launchpad find it": "Zu den Programmen hinzufügen – Spotlight und Launchpad finden es",
+
+        // Welcome back
+        "Welcome back": "Willkommen zurück",
+        "%@ this time · %@ in total": "%@ diesmal · %@ insgesamt",
+        "How did it run?": "Wie lief es?",
+        "Well": "Gut",
+        "Not well": "Nicht gut",
+        "Stutters": "Ruckelt",
+        "Crashed": "Abgestürzt",
+        "Low frame rate": "Niedrige Bildrate",
+        "Graphics glitches": "Grafikfehler",
+        "Sound": "Ton",
+        "Thanks – noted on this Mac. It shapes how Nightforge rates the game for you.":
+            "Danke – auf diesem Mac vermerkt. Es fließt in Nightforges Bewertung des Spiels für dich ein.",
+        "Play Again": "Nochmal spielen",
+        "Done": "Fertig",
+        "You said it runs well.": "Du hast gesagt, es läuft gut.",
+        "You said it didn't run well.": "Du hast gesagt, es lief nicht gut.",
+        "You said: %@.": "Du hast gesagt: %@.",
+
+        // Update & Play
+        "Update & Play · %@": "Aktualisieren & spielen · %@",
+        "Update & Play": "Aktualisieren & spielen",
+        "Updating … %ld %%": "Aktualisiert … %ld %%",
+        "Steam updates the game first – it starts by itself when the update is done.": "Steam aktualisiert das Spiel zuerst – es startet von selbst, sobald das Update fertig ist.",
+        "An update is waiting – Steam downloads it before the game starts": "Ein Update wartet – Steam lädt es, bevor das Spiel startet",
+        "Installed, update waiting": "Installiert, Update wartet",
+
+        // Downloads
+        "Nightforge is downloading %@": "Nightforge lädt %@",
+        "1 download (D)": "1 Download (D)",
+        "%ld downloads (D)": "%ld Downloads (D)",
+        "1 download": "1 Download",
+        "%ld downloads": "%ld Downloads",
+        "Downloads": "Downloads",
+        "Nothing is downloading.": "Gerade lädt nichts.",
+        "Your Mac stays awake while games download. The display can still turn off.": "Dein Mac bleibt wach, solange Spiele laden. Der Bildschirm darf trotzdem ausgehen.",
+        "Paused – not enough space": "Pausiert – zu wenig Platz",
+        "%ld %% of %@": "%ld %% von %@",
+        "Preparing …": "Wird vorbereitet …",
+
+        // First start
+        "Your library on this Mac": "Deine Bibliothek auf diesem Mac",
+        "%ld of your 1 game runs here": "%ld von deinem 1 Spiel läuft hier",
+        "%ld of your %ld games run here": "%ld deiner %ld Spiele laufen hier",
+        "Tested by Nightforge, a Mac version, or it started fine here.": "Von Nightforge getestet, eine Mac-Version oder hier schon gut gestartet.",
+        "Nightforge applies what they need by itself, at every start.": "Nightforge wendet bei jedem Start selbst an, was sie brauchen.",
+        "Nobody has tried them on a Mac with Nightforge yet – most still run. The first start tells, and Nightforge remembers what works.":
+            "Noch niemand hat sie mit Nightforge auf dem Mac probiert – die meisten laufen trotzdem. Der erste Start zeigt es, und Nightforge merkt sich, was funktioniert.",
+        "Their anti-cheat needs Windows itself – %ld of them play on GeForce Now instead.": "Ihr Anti-Cheat braucht Windows selbst – %ld davon laufen stattdessen auf GeForce Now.",
+        "Their anti-cheat needs Windows itself.": "Ihr Anti-Cheat braucht Windows selbst.",
+        "1 needs a VR headset.": "1 braucht eine VR-Brille.",
+        "%ld need a VR headset.": "%ld brauchen eine VR-Brille.",
+        "Let's Play": "Los geht's",
+        "Show the First Start Again": "Ersten Start noch einmal zeigen",
+
+        // Battery
+        "Save battery when unplugged": "Akku sparen ohne Netzteil",
+        "On battery, games are capped at 30 FPS so the battery lasts longer. Plugged in, everything runs at full speed. Takes effect at the next game start.":
+            "Im Akkubetrieb laufen Spiele mit höchstens 30 FPS, damit der Akku länger hält. Am Netzteil läuft alles mit voller Geschwindigkeit. Gilt ab dem nächsten Spielstart.",
+        "On battery – games are capped at 30 FPS to last longer": "Im Akkubetrieb – Spiele laufen mit höchstens 30 FPS, damit der Akku länger hält",
+        "On battery – “Save battery when unplugged” in Settings caps games at 30 FPS": "Im Akkubetrieb – „Akku sparen ohne Netzteil“ in den Einstellungen begrenzt Spiele auf 30 FPS",
+        "On battery: games are capped at 30 FPS to last longer.": "Im Akkubetrieb: Spiele laufen mit höchstens 30 FPS, damit der Akku länger hält.",
+
+        // Cloud saves
+        "Your save is in the Steam Cloud. You can close your Mac.": "Dein Spielstand ist in der Steam Cloud. Du kannst den Mac zuklappen.",
+        "Steam syncs your save in the background.": "Steam gleicht deinen Spielstand im Hintergrund ab.",
+        "Steam is syncing your save with the Steam Cloud …": "Steam gleicht deinen Spielstand mit der Steam Cloud ab …",
+        "No Steam Cloud for this game – its saves are on this Mac.": "Keine Steam Cloud für dieses Spiel – seine Spielstände liegen auf diesem Mac.",
+
+        // Offline
+        "Offline": "Offline",
+        "Ready": "Bereit",
+        "Start online once": "Einmal online starten",
+        "Update first": "Erst aktualisieren",
+        "Needs internet": "Braucht Internet",
+        "Not yet": "Noch nicht",
+        "Plays without internet: Steam remembers your account and nothing in the game needs to be online.":
+            "Spielbar ohne Internet: Steam merkt sich dein Konto, und im Spiel muss nichts online sein.",
+        "Start it once while online – many games set themselves up the first time. After that it plays offline.":
+            "Starte es einmal mit Internet – viele Spiele richten sich beim ersten Mal ein. Danach läuft es offline.",
+        "An update is waiting; Steam won't start the game offline until it's downloaded.":
+            "Ein Update wartet; Steam startet das Spiel offline erst, wenn es geladen ist.",
+        "Steam lists no single-player mode for it – it needs internet.": "Steam nennt keinen Einzelspielermodus – es braucht Internet.",
+        "It starts through %@, which signs in online.": "Es startet über %@, das sich online anmeldet.",
+        "Steam doesn't remember your account: sign in once with “Remember me” so it can start offline.":
+            "Steam merkt sich dein Konto nicht: melde dich einmal mit „Angemeldet bleiben“ an, damit es offline starten kann.",
+
+        // Profile origin
+        "Your own settings.": "Deine eigenen Einstellungen.",
+        "Back to Automatic": "Zurück zu Automatisch",
+        "Back to the Profile": "Zurück zum Profil",
+        "Tested by Nightforge": "Von Nightforge getestet",
+        "Tested by Nightforge on %@": "Von Nightforge getestet auf %@",
+        "Community fix · from umu-protonfixes": "Community-Fix · aus umu-protonfixes",
+
+        // Library filters
+        "Sort": "Sortieren",
+        "Recently played": "Zuletzt gespielt",
+        "Name": "Name",
+        "Disk space": "Speicherplatz",
+        "All": "Alle",
+        "On this Mac": "Auf diesem Mac",
+        "Not downloaded": "Nicht geladen",
+        "Mac version": "Mac-Version",
+        "Your games": "Deine Spiele",
+        "A – Z": "A – Z",
+        "Largest first": "Größte zuerst",
+        "%ld hidden": "%ld ausgeblendet",
+        "Only games that run great on a Mac": "Nur Spiele, die auf dem Mac super laufen",
+        "Full controller support": "Volle Controller-Unterstützung",
+        "Runs as its Mac version": "Läuft als Mac-Version",
+        "Games you hid from your library": "Spiele, die du aus der Bibliothek ausgeblendet hast",
+        "No games match these filters": "Keine Spiele passen zu diesen Filtern",
+        "Clear filters": "Filter zurücksetzen",
+
+        // Hide & pin
+        "Hidden": "Ausgeblendet",
+        "Hidden games": "Ausgeblendete Spiele",
+        "Hide": "Ausblenden",
+        "Show": "Einblenden",
+        "Hide from library (H)": "Aus der Bibliothek ausblenden (H)",
+        "Show in library again (H)": "Wieder in der Bibliothek zeigen (H)",
+        "Pin to Home – stays on the rail (P)": "An die Startseite heften – bleibt in der Leiste (P)",
+        "Unpin from Home (P)": "Von der Startseite lösen (P)",
+        "Pinned to Home": "An die Startseite geheftet",
+        "Undo": "Rückgängig",
+        "%@ is hidden from your library": "%@ ist aus deiner Bibliothek ausgeblendet",
+        "%@ is back in your library": "%@ ist wieder in deiner Bibliothek",
+        "%@ stays on Home – even when you haven't played it for a while": "%@ bleibt auf der Startseite – auch wenn du es länger nicht gespielt hast",
+        "%@ is no longer pinned": "%@ ist nicht mehr angeheftet",
+        "Open a game to bring it back.": "Öffne ein Spiel, um es zurückzuholen.",
+
+        "%@ is ready to play": "%@ ist bereit zum Spielen",
+        "%ld games are ready to play": "%ld Spiele sind bereit zum Spielen",
 
         // Compatibility
         "Runs great": "Läuft super",

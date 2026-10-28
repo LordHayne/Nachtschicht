@@ -20,9 +20,27 @@ struct GameOptionsSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            Text(game.name)
-                .font(Theme.display(22))
-                .lineLimit(2)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(game.name)
+                    .font(Theme.display(22))
+                    .lineLimit(2)
+                if let origin = profileOrigin {
+                    Label(origin.text, systemImage: origin.symbol)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help(profile?.note ?? origin.text)
+                }
+                if options != GameOptions() {
+                    HStack(spacing: 8) {
+                        Text(L10n.t("Your own settings."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button(profileOrigin == nil ? L10n.t("Back to Automatic") : L10n.t("Back to the Profile")) { options = GameOptions() }
+                            .controlSize(.small)
+                            .padFocus("options.reset", activate: { options = GameOptions() })
+                    }
+                }
+            }
 
             if game.switchable {
                 VStack(alignment: .leading, spacing: 6) {
@@ -162,6 +180,18 @@ private extension GameOptionsSheet {
 
     var refreshRate: Int { GameDisplay.screen?.maximumFramesPerSecond ?? 60 }
 
+    /// Where the game's known fixes come from: Nightforge's own test, or umu-protonfixes.
+    var profileOrigin: (text: String, symbol: String)? {
+        guard let profile else { return nil }
+        if profile.fromNightforge {
+            let chips = Compatibility.chips(in: profile.note)
+            return (chips.isEmpty ? L10n.t("Tested by Nightforge") : L10n.t("Tested by Nightforge on %@", chips.joined(separator: ", ")),
+                    "checkmark.seal")
+        }
+        if profile.hasFixes { return (L10n.t("Community fix · from umu-protonfixes"), "person.2") }
+        return nil
+    }
+
     func automaticLabel(_ value: String) -> String { L10n.t("Automatic (%@)", value) }
 
     /// The version "Automatic" would play (VersionChoice), from what the entry knows about both.
@@ -210,101 +240,4 @@ private extension GameOptionsSheet {
 
 private extension Int {
     var fpsLabel: String { self == 0 ? L10n.t("Off") : "\(self) FPS" }
-}
-
-struct SettingsView: View {
-    @EnvironmentObject private var model: LibraryModel
-    @AppStorage(Prefs.Keys.bottlesRoot) private var bottlesRoot = ""
-    @AppStorage(Prefs.Keys.runnerPath) private var runnerPath = ""
-    @AppStorage(Prefs.Keys.afterLaunch) private var afterLaunch = AfterLaunch.hide.rawValue
-    @AppStorage(AppLanguage.storageKey) private var language = AppLanguage.system.rawValue
-    @AppStorage(Prefs.Keys.performanceHUD) private var performanceHUD = false
-    @AppStorage(Prefs.Keys.gameMode) private var gameMode = true
-    @AppStorage(Prefs.Keys.sharpAndSmooth) private var sharpAndSmooth = true
-    @State private var showAdvanced = false
-
-    var body: some View {
-        Form {
-            Section {
-                Picker(L10n.t("Language"), selection: $language) {
-                    ForEach(AppLanguage.allCases) { option in
-                        Text(option.label).tag(option.rawValue)
-                    }
-                }
-                .padFocus("settings.language", selection: $language, values: AppLanguage.allCases.map(\.rawValue))
-                Toggle(isOn: $sharpAndSmooth) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(L10n.t("Sharp & smooth"))
-                        Text(L10n.t("Every game gets Apple's MetalFX upscaling to full Retina sharpness and an even frame rate that fits your display (60 FPS on a 120 Hz screen). Change it per game in its options."))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .toggleStyle(.switch)
-                .padFocus("settings.sharp", toggle: $sharpAndSmooth)
-                Toggle(isOn: $gameMode) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(L10n.t("Game Mode"))
-                        Text(L10n.t("Gives games priority on the CPU and graphics and halves Bluetooth latency for controllers and headphones. Turn it off if a game's sound crackles."))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .toggleStyle(.switch)
-                .onChange(of: gameMode) { _, _ in model.applySteamSettings() }
-                .padFocus("settings.gameMode", toggle: $gameMode)
-                Toggle(isOn: $performanceHUD) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(L10n.t("Performance HUD in games"))
-                        Text(L10n.t("Shows frames per second and frame times while you play. Takes effect at the next game start."))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .toggleStyle(.switch)
-                .onChange(of: performanceHUD) { _, _ in model.applySteamSettings() }
-                .padFocus("settings.hud", toggle: $performanceHUD)
-                Picker(L10n.t("After Launch"), selection: $afterLaunch) {
-                    ForEach(AfterLaunch.allCases) { option in
-                        Text(option.label).tag(option.rawValue)
-                    }
-                }
-                .padFocus("settings.afterLaunch", selection: $afterLaunch, values: AfterLaunch.allCases.map(\.rawValue))
-            } header: {
-                Text(L10n.t("General"))
-            }
-
-            // Only for players who bring their own Wine setup; Nightforge needs none of it.
-            Section {
-                DisclosureGroup(isExpanded: $showAdvanced) {
-                    LabeledContent(L10n.t("Bottles Folder")) {
-                        HStack {
-                            TextField("", text: $bottlesRoot, prompt: Text(LibraryScanner.defaultBottlesRoot().path))
-                                .labelsHidden()
-                            Button(L10n.t("Choose …")) { model.chooseBottlesFolder() }
-                                .padFocus("settings.chooseBottles", activate: { model.chooseBottlesFolder() })
-                        }
-                    }
-                    LabeledContent("Wine") {
-                        TextField("", text: $runnerPath, prompt: Text(Launcher.detectRunner()))
-                            .labelsHidden()
-                    }
-                    Text(L10n.t("Nightforge brings everything it needs. Fill this in only to also show games from CrossOver or Whisky bottles: leave Wine empty for CrossOver, or enter the path to the wine binary of Whisky or your own Wine."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button(L10n.t("Rescan Library")) { model.reload() }
-                        .padFocus("settings.rescan", activate: { model.reload() })
-                } label: {
-                    Text(L10n.t("CrossOver, Whisky and your own Wine"))
-                        .padFocus("settings.advanced", toggle: $showAdvanced)
-                }
-            } header: {
-                Text(L10n.t("Advanced"))
-            }
-        }
-        .formStyle(.grouped)
-        .frame(width: 580)
-        .fixedSize(horizontal: false, vertical: true)
-    }
 }

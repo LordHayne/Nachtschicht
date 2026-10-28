@@ -16,6 +16,11 @@ final class LibraryModel: ObservableObject {
     @Published var searchText = "" {
         didSet {
             guard searchText != oldValue else { return }
+            // Hits show in the library, wherever the search started.
+            if !searchText.isEmpty, route != .library {
+                rememberSelection()
+                route = .library
+            }
             applyFilter(selectBestMatch: true)
             searchStore()
         }
@@ -25,8 +30,24 @@ final class LibraryModel: ObservableObject {
     private var storeSearch: Task<Void, Never>?
     /// Bumped to move keyboard focus into the search field (⌘F).
     @Published private(set) var searchFocusRequest = 0
-    /// The full-library grid instead of the single game with its cover rail.
-    @Published var showingLibrary = false
+    /// Home, the library grid, or a game's page.
+    @Published private(set) var route = Route.home
+    /// The games on Home's rail, as indices into `games` (HomeRail).
+    @Published private(set) var homeRail: [Int] = []
+    /// On Home, the "All games" tile after the rail is selected instead of a game.
+    @Published private(set) var homeOnAllGames = false
+    /// Games hidden from the library and pinned to Home, by app ID (GameMarks).
+    @Published private(set) var hiddenGames = GameMarks.load(.hidden)
+    @Published private(set) var pinnedGames = GameMarks.load(.pinned)
+    /// The library shows only the hidden games, to bring them back.
+    @Published private(set) var showingHidden = false
+    /// What the library grid shows and how it's ordered (only the library applies them).
+    @Published var filters = LibraryFilters() {
+        didSet { if filters != oldValue { applyFilter() } }
+    }
+    /// The game each level had selected, so going back to it finds it there again.
+    private var homeGameID: String?
+    private var libraryGameID: String?
     /// Covers per row in the grid, reported by the grid so ↑/↓ can jump a row.
     var gridColumns = 1
     @Published private(set) var isScanning = false
@@ -34,12 +55,24 @@ final class LibraryModel: ObservableObject {
     /// Steam is showing a question (licence, setup) for the game being launched.
     @Published private(set) var launchNeedsConfirmation = false
     /// What the launch is busy with when it's more than waiting for Steam ("Restarting Steam …").
-    @Published private(set) var launchStatus: String?
+    @Published private(set) var launchPhase: LaunchPhase?
+    /// The start in progress is the game's first with these graphics: its shaders get built.
+    @Published private(set) var launchBuildsShaders = false
+
+    /// The line under the Play button while a game starts: why it takes a moment.
+    var launchHint: String? {
+        guard launchingID != nil else { return nil }
+        if launchNeedsConfirmation { return LaunchPhase.confirmHint }
+        if let launchPhase { return launchPhase.hint }
+        return launchBuildsShaders ? LaunchPhase.shaderHint : nil
+    }
     /// A game that ended right after starting with every way Nightforge knows.
     @Published var failedLaunch: FailedLaunch?
     /// What Nightforge knows about installed games before starting them, by app ID.
     @Published private(set) var insights: [Int: GameInsight] = [:]
     private var analyses: [Int: GameAnalysis] = [:]
+    /// The profile list at hand, for how well each game runs (Compatibility).
+    @Published private(set) var profiles: [Int: GameProfile] = [:]
     @Published var showingOptions = false
     /// Waiting for the user to confirm removing this game (or its download).
     @Published var pendingUninstall: Game?
@@ -47,6 +80,20 @@ final class LibraryModel: ObservableObject {
     @Published var pendingLeftoverRemoval: Game?
     /// Steam for Mac being set up for a game whose Mac version is wanted.
     @Published var macSetup: MacSteamSetup?
+    /// How the library runs on this Mac, shown once after the first start (and from About).
+    @Published var libraryReveal: LibraryReveal?
+    private var revealAfterScan = false
+
+    func showLibraryReveal() {
+        libraryReveal = LibraryReveal(allGames.map { ($0, compatibility(of: $0).level) })
+    }
+
+    /// The downloads panel under the top bar's ring (D).
+    @Published var showingDownloads = false
+    /// What Steam is downloading now, in the library's order.
+    var downloads: [Game] { allGames.filter { Self.isDownloading($0.install) } }
+    /// A download that wouldn't fit: which games could make room (SpaceCheck).
+    @Published var pendingSpace: SpaceRequest?
     /// A game about to open in GeForce Now for the first time: what that means is said once.
     @Published var pendingCloudGame: Game?
     private var macSteamPrewarmed = false
@@ -57,9 +104,13 @@ final class LibraryModel: ObservableObject {
     @Published var controllerConnected = false
     /// The buttons of the controller in use, as that controller labels them (InputRouter).
     @Published var padSymbols = PadSymbols()
+    /// The controller in use and its battery (InputRouter), for the hint bar.
+    @Published var controllerStatus: ControllerStatus?
     /// A newer Nightforge release, offered with one click in the top bar.
     @Published private(set) var availableUpdate: AppUpdate?
     @Published private(set) var updating = false
+    /// Plugged in or on battery (for the top bar and "Save battery when unplugged").
+    @Published private(set) var power = PowerSource.current()
     /// macOS Low Power Mode: CPU and graphics run much slower, and so do games.
     @Published private(set) var lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
 
@@ -70,7 +121,10 @@ final class LibraryModel: ObservableObject {
     private var inputStarted = false
 
     init() {
-        setup.onFinished = { [weak self] in self?.reload() }
+        setup.onFinished = { [weak self] in
+            self?.revealAfterScan = true  // the first start ends with how the library runs here
+            self?.reload()
+        }
     }
 
     /// Nothing to show and Nightforge's own Steam isn't ready yet.
@@ -80,9 +134,15 @@ final class LibraryModel: ObservableObject {
         games.indices.contains(selectedIndex) ? games[selectedIndex] : nil
     }
 
+    /// After the button labels changed in Settings.
+    func refreshPadSymbols() {
+        input.refreshConnected()
+    }
+
     func startInput() {
         guard !inputStarted else { return }
         inputStarted = true
+        MacIntegration.model = self
         // Left over from an earlier run whose Steam for Mac has ended since: a Steam the player
         // starts later isn't Nightforge's to quit.
         if !MacSteam.isRunning { MacSteam.startedByNightforge = false }
@@ -123,6 +183,9 @@ final class LibraryModel: ObservableObject {
                 }
                 // Every few seconds while it matters (Nightforge in front, a game running or starting),
                 // otherwise less often: nothing waits on it then, and the Mac stays quieter.
+                if controllerConnected && NSApp.isActive { input.refreshBattery() }
+                let source = PowerSource.current()
+                if source != power { power = source }
                 let busy = NSApp.isActive || !found.isEmpty || launchingID != nil
                 try? await Task.sleep(for: .seconds(busy ? 3 : 10))
             }
@@ -134,6 +197,10 @@ final class LibraryModel: ObservableObject {
     /// Games Nightforge started, from when their process shows up until it ends.
     private var startedHere: Set<String> = []
     private var playing: Set<String> = []
+    /// When each of them started running, and the play time Steam had for it then.
+    private var sessionStarts: [String: (date: Date, totalBefore: Int)] = [:]
+    /// The "Welcome back" sheet after a real session (a minute or more).
+    @Published var sessionSummary: SessionSummary?
     private var goneFor = 0
     private var idleLooks = 0
 
@@ -141,6 +208,9 @@ final class LibraryModel: ObservableObject {
     /// launcher handing over to the game doesn't count), Nightforge comes back to the front: the
     /// controller keeps working, and neither the desktop nor Steam is what the player sees.
     private func watchForGameEnd(_ found: [String: pid_t]) {
+        for id in startedHere.intersection(found.keys) where sessionStarts[id] == nil {
+            sessionStarts[id] = (Date(), allGames.first { $0.id == id }?.playtimeMinutes ?? 0)
+        }
         playing.formUnion(startedHere.intersection(found.keys))
         startedHere.subtract(playing)
         guard !playing.isEmpty else { return }
@@ -150,9 +220,19 @@ final class LibraryModel: ObservableObject {
         }
         goneFor += 1
         guard goneFor >= 3 else { return }
+        let ended = playing
         playing = []
         goneFor = 0
+        let sessions = ended.compactMap { id -> SessionSummary? in
+            guard let start = sessionStarts.removeValue(forKey: id), let game = allGames.first(where: { $0.id == id }) else { return nil }
+            let minutes = Int(Date().timeIntervalSince(start.date) / 60)
+            // Shorter is a start that didn't take (LaunchHealth deals with those).
+            // The processes were gone a few looks ago (~6–9 s, up to 30 s in the background).
+            return minutes >= 1 ? SessionSummary(game: game, minutes: minutes, totalBefore: start.totalBefore,
+                                                 endedAt: Date().addingTimeInterval(-30)) : nil
+        }
         comeBack()
+        sessionSummary = sessions.max { $0.minutes < $1.minutes }
     }
 
     private func comeBack() {
@@ -283,6 +363,7 @@ final class LibraryModel: ObservableObject {
         let preferWindows = await ProfileStore.shared.preferWindows()
         let blocks = await ProfileStore.shared.antiCheatBlocks()
         antiCheatBlocks = blocks
+        profiles = await ProfileStore.shared.knownProfiles()
         let found = await Task.detached(priority: .userInitiated) {
             LibraryScanner.markAntiCheat(
                 LibraryScanner.merge(LibraryScanner.scan(bottlesRoot: root, extraBottles: builtIn),
@@ -292,8 +373,21 @@ final class LibraryModel: ObservableObject {
         let wasDownloading = Set(allGames.filter { Self.isDownloading($0.install) }.map(\.id))
         allGames = found
         libraryLoaded = true
-        for game in found where game.isInstalled && wasDownloading.contains(game.id) { prepare(game) }
+        let finished = found.filter { $0.isInstalled && wasDownloading.contains($0.id) }
+        for game in finished { prepare(game) }
         applyFilter()
+        MacIntegration.announceFinished(finished)
+        KeepAwake.update(downloading: found.filter { Self.isDownloading($0.install) && $0.downloadNeedsSpace == nil }.map(\.name))
+        if downloads.isEmpty { showingDownloads = false }
+        MacIntegration.libraryLoaded()
+        if revealAfterScan, !found.isEmpty {
+            revealAfterScan = false
+            showLibraryReveal()
+        }
+        if let game = finished.first {
+            Toasts.shared.show(finished.count == 1 ? L10n.t("%@ is ready to play", game.name) : L10n.t("%ld games are ready to play", finished.count),
+                               action: .init(label: L10n.t("Play")) { [weak self] in self?.play(game) })
+        }
         watchDownloads()
         afterScan()
         if scanAgain {
@@ -473,7 +567,7 @@ final class LibraryModel: ObservableObject {
         case .installed: launchSelected()
         case .installed where game.antiCheatBlock != nil: break
         case .notInstalled where game.isVROnly || game.antiCheatBlock != nil: break
-        case .notInstalled: download(game)
+        case .notInstalled: downloadIfRoom(game)
         case .downloading: if game.downloadNeedsSpace != nil { resumeDownload(game) }
         case .inStore: openStorePage(game)
         }
@@ -601,6 +695,39 @@ final class LibraryModel: ObservableObject {
         }
     }
 
+    /// Download, unless it wouldn't fit: then the player picks games to make room first.
+    private func downloadIfRoom(_ game: Game) {
+        let folder = game.installDir
+        let free = Self.freeSpace(at: SpaceCheck.existingFolder(for: folder))
+        guard let shortfall = SpaceCheck.shortfall(needed: game.sizeOnDisk, free: free) else {
+            download(game)
+            return
+        }
+        let removable = allGames.filter { canUninstall($0) && !isRunning($0) && SpaceCheck.sameVolume($0.installDir, folder) }
+        pendingSpace = SpaceRequest(game: game, free: free, shortfall: shortfall,
+                                    candidates: SpaceCheck.candidates(removable, except: game))
+    }
+
+    /// The space sheet's button: uninstall the picked games one after another, then download.
+    func freeUpAndDownload(_ ids: Set<String>) {
+        guard let request = pendingSpace else { return }
+        pendingSpace = nil
+        let picked = request.candidates.filter { ids.contains($0.id) }
+        Task {
+            for game in picked {
+                await uninstall(game)
+            }
+            reload(quiet: true)
+            let free = Self.freeSpace(at: SpaceCheck.existingFolder(for: request.game.installDir))
+            if SpaceCheck.shortfall(needed: request.game.sizeOnDisk, free: free) == nil {
+                download(request.game)
+            } else {
+                errorMessage = L10n.t("There's still not enough space: Steam needs %@ for %@, your Mac has %@ free.",
+                                      Format.bytes(request.game.sizeOnDisk + SpaceCheck.margin), request.game.name, Format.bytes(free))
+            }
+        }
+    }
+
     /// A download Steam stopped for lack of disk space: once there's room, unpause it in Steam's
     /// manifest and restart that Steam, which then carries on – by itself it never tries again.
     func resumeDownload(_ game: Game) {
@@ -722,28 +849,29 @@ final class LibraryModel: ObservableObject {
         launchingID = game.id
         GameDisplay.enterGame()
         launchNeedsConfirmation = false
-        launchStatus = nil
+        launchPhase = nil
         let behavior = Prefs.afterLaunch
         let arguments = GameOptionsStore.load(game.appID).extraArgs.trimmingCharacters(in: .whitespaces)
         launchTask = Task {
             defer {
                 launchingID = nil
                 launchNeedsConfirmation = false
-                launchStatus = nil
+                launchPhase = nil
+                launchBuildsShaders = false
             }
             // A Wine Steam that is still starting would sign in after Steam for Mac and sign it out.
             if Engine.isSteamRunning, !Engine.steamSignedIn, !Engine.sessionReplaced(),
                let wine = await Engine.installedWine() {
-                launchStatus = L10n.t("Starting Steam for Mac …")
+                launchPhase = .startingSteamForMac
                 try? await Engine.stopSteam(wine)
             }
             if !MacSteam.isRunning {
-                launchStatus = L10n.t("Starting Steam for Mac …")
+                launchPhase = .startingSteamForMac
                 MacSteam.start()
             } else if MacSteam.sessionReplaced {
                 // The Wine Steam signed in since; signing in again needs a fresh start. Without it
                 // the game would start without its cloud saves.
-                launchStatus = L10n.t("Signing in to Steam …")
+                launchPhase = .signingIn
                 await MacSteam.quit()
                 MacSteam.start()
             }
@@ -751,13 +879,13 @@ final class LibraryModel: ObservableObject {
             var waited = 0
             while !(MacSteam.signedIn && MacSteam.startupFinished) && waited < 90 {
                 if waited == 25 {
-                    launchStatus = L10n.t("Sign in in the Steam window")
+                    launchPhase = .signInInSteamWindow
                     MacSteam.show()
                 }
                 try? await Task.sleep(for: .seconds(1))
                 waited += 1
             }
-            launchStatus = nil
+            launchPhase = nil
             // steam://run/<id>//<arguments>: the extra part goes to the game.
             let extra = arguments.isEmpty ? ""
                 : "//" + (arguments.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "")
@@ -935,53 +1063,243 @@ final class LibraryModel: ObservableObject {
 
     // MARK: - Search & views
 
-    /// Matches ignoring case, accents and punctuation, so "baldurs" finds "Baldur's Gate 3".
-    private static func searchKey(_ text: String) -> String {
-        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
-            .unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || $0 == " " }
-            .map(String.init).joined()
-    }
-
     /// `selectBestMatch`: while typing, jump to the first hit instead of keeping the old selection.
     private func applyFilter(selectBestMatch: Bool = false) {
         let previous = selected?.id
-        let words = Self.searchKey(searchText).split(separator: " ").map(String.init)
-        if words.isEmpty {
-            games = allGames
-        } else {
-            let matches = allGames.filter { game in
-                let name = Self.searchKey(game.name)
-                return words.allSatisfy { name.contains($0) }
-            }
-            // Names where a word starts with the search ("ark" → ARK, Arkham) before mid-word hits
-            // (Amnesia: The Dark Descent); otherwise keep the library order.
-            func startsWord(_ game: Game) -> Bool {
-                let nameWords = Self.searchKey(game.name).split(separator: " ")
-                return words.allSatisfy { word in nameWords.contains { $0.hasPrefix(word) } }
-            }
-            let owned = Set(allGames.map(\.appID))
-            games = matches.filter(startsWord) + matches.filter { !startsWord($0) }
-                + storeResults.filter { !owned.contains($0.appID) }
+        let words = Search.key(searchText).split(separator: " ")
+        // Hidden games only show where they're brought back from; the filters only in the library.
+        var shelf = allGames.filter { hiddenGames.contains($0.appID) == showingHidden }
+        if route.level == .library {
+            shelf = shelf.filter { filters.admits($0) { compatibility(of: $0).level } }
+            shelf = showingHidden ? LibraryFilters(sort: .name).sorted(shelf) : filters.sorted(shelf)
         }
-        selectedIndex = selectBestMatch && !words.isEmpty ? 0 : games.firstIndex(where: { $0.id == previous }) ?? 0
+        if words.isEmpty {
+            games = shelf
+        } else {
+            // Word starts first ("ark" → ARK, Arkham), then initials ("rdr2"), then mid-word hits
+            // (Amnesia: The Dark Descent); within each, the order above.
+            let ranked = shelf.compactMap { game in Search.rank(name: game.name, query: searchText).map { (game, $0) } }
+            let owned = Set(allGames.map(\.appID))
+            // Store hits are games you don't own: only without filters that ask about your copy.
+            let storeHits = showingHidden || filters.status != .all || filters.controller || filters.mac ? []
+                : storeResults.filter { !owned.contains($0.appID) && (!filters.great || compatibility(of: $0).level == .great) }
+            games = (0...2).flatMap { rank in ranked.filter { $0.1 == rank }.map(\.0) } + storeHits
+        }
+        let first = route.level == .library ? gridLayout.order.first ?? 0 : 0
+        selectedIndex = selectBestMatch && !words.isEmpty ? first : games.firstIndex(where: { $0.id == previous }) ?? first
+        homeRail = words.isEmpty && !showingHidden ? HomeRail.pick(games, pinned: pinnedGames) : []
+        switch route {
+        case .detail(let id, let from) where !games.contains(where: { $0.id == id }):
+            route = from == .home ? .home : .library  // its game is gone (another scan, another version)
+            if route == .home { selectOnHome() }
+        case .home where !homeOnAllGames && !homeRail.contains(selectedIndex):
+            selectOnHome()
+        default:
+            break
+        }
     }
 
     func focusSearch() {
         searchFocusRequest += 1
     }
 
+    // MARK: - Navigation
+
+    var showingLibrary: Bool { route == .library }
+
+    /// The game shown big: on Home nil while the "All games" tile is selected.
+    var heroGame: Game? {
+        route == .home && homeOnAllGames ? nil : selected
+    }
+
+    /// Stands for the "All games" tile in `homeGameID`.
+    private static let allGamesTile = "\u{0}all"
+
+    private func rememberSelection() {
+        switch route {
+        case .home: homeGameID = homeOnAllGames ? Self.allGamesTile : selected?.id
+        case .library: libraryGameID = selected?.id
+        case .detail: break
+        }
+    }
+
+    /// Home's selection: the one it had, else the rail's first game, else the "All games" tile.
+    private func selectOnHome() {
+        if homeGameID == Self.allGamesTile || homeRail.isEmpty {
+            homeOnAllGames = true
+        } else if let index = homeRail.first(where: { games[$0].id == homeGameID }) ?? homeRail.first {
+            homeOnAllGames = false
+            selectedIndex = index
+        }
+    }
+
+    func goHome() {
+        guard route != .home else { return }
+        rememberSelection()
+        route = .home
+        showingHidden = false
+        applyFilter()  // without the library's filters
+        if !searchText.isEmpty { searchText = "" }  // Home is the whole collection
+        selectOnHome()
+    }
+
+    func goLibrary() {
+        guard route != .library, !allGames.isEmpty else { return }
+        rememberSelection()
+        route = .library
+        applyFilter()  // with its filters
+        if let id = libraryGameID, let index = games.firstIndex(where: { $0.id == id }) {
+            selectedIndex = index
+        }
+    }
+
+    /// L, ☰ and the top bar's switch: between Home and the library.
     func toggleLibrary() {
-        showingLibrary.toggle()
+        route.level == .library ? goHome() : goLibrary()
     }
 
-    /// From the grid: show the chosen game in the big view, where its button is.
-    func showSelectedGame() {
-        showingLibrary = false
+    /// The selected game's page. A second click on a cover comes here – it never starts or downloads.
+    func openDetail() {
+        guard let game = heroGame, !route.isDetail else { return }
+        rememberSelection()
+        route = .detail(gameID: game.id, from: route.level)
     }
 
-    var gridLayout: GridLayout { GridLayout(games: games, columns: gridColumns) }
+    /// Esc and B: a game's page goes back where it came from, the library first drops its search
+    /// and then goes Home. False when there's nothing to go back from.
+    @discardableResult
+    func back() -> Bool {
+        switch route {
+        case .detail(_, .library):
+            route = .library
+        case .detail(_, .home):
+            route = .home
+        case .library:
+            if !searchText.isEmpty {
+                searchText = ""
+            } else if showingHidden {
+                toggleShowingHidden()
+            } else {
+                goHome()
+            }
+        case .home:
+            return false
+        }
+        return true
+    }
 
-    /// The selection is in the grid's first row, where ↑ leaves the grid.
+    /// Return and A: Home plays the game (its last tile opens the library), the library opens the
+    /// game's page, and the page plays it.
+    func activate() {
+        switch route {
+        case .home: homeOnAllGames ? goLibrary() : primaryAction()
+        case .library: openDetail()
+        case .detail: primaryAction()
+        }
+    }
+
+    /// Home's rail by place; `homeRail.count` is the "All games" tile.
+    func selectOnHome(place: Int) {
+        if homeRail.indices.contains(place) {
+            homeOnAllGames = false
+            selectedIndex = homeRail[place]
+        } else if !allGames.isEmpty {
+            homeOnAllGames = true
+        }
+    }
+
+    /// The place of Home's selection on its rail (the tile after the games for "All games").
+    var homePlace: Int {
+        homeOnAllGames ? homeRail.count : homeRail.firstIndex(of: selectedIndex) ?? 0
+    }
+
+    /// Play from somewhere else (a message's button, the Dock menu): shows the game, then plays it.
+    func play(_ game: Game) {
+        guard reveal(game) else { return }
+        primaryAction()
+    }
+
+    /// Selects the game where it's shown – on Home when a search or filter hides it in the library.
+    @discardableResult
+    func reveal(_ game: Game) -> Bool {
+        if !games.contains(where: { $0.id == game.id }) { goHome() }
+        guard let index = games.firstIndex(where: { $0.id == game.id }) else { return false }
+        select(index)
+        return true
+    }
+
+    /// A game picked directly (a right-click on its cover).
+    func select(_ index: Int) {
+        if route == .home { homeOnAllGames = false }
+        selectedIndex = index
+    }
+
+    // MARK: - Hide & pin
+
+    /// The games in the library, without the hidden ones.
+    var visibleCount: Int { allGames.lazy.filter { !self.hiddenGames.contains($0.appID) }.count }
+
+    func isHidden(_ game: Game) -> Bool { hiddenGames.contains(game.appID) }
+    func isPinned(_ game: Game) -> Bool { pinnedGames.contains(game.appID) }
+
+    /// Pinning keeps a game on Home's rail; only games on this Mac are there.
+    func canPin(_ game: Game) -> Bool {
+        guard !isHidden(game) else { return false }
+        switch game.install {
+        case .installed, .downloading: return true
+        case .notInstalled, .inStore: return false
+        }
+    }
+
+    /// H: out of the library, Home and searches (or back in), with Undo.
+    func toggleHidden(_ game: Game) {
+        guard game.install != .inStore else { return }
+        let hide = !isHidden(game), wasPinned = isPinned(game)
+        mark(game.appID, hidden: hide, pinned: hide ? false : nil)
+        Toasts.shared.show(hide ? L10n.t("%@ is hidden from your library", game.name) : L10n.t("%@ is back in your library", game.name),
+                           action: .init(label: L10n.t("Undo")) { [weak self] in
+                               self?.mark(game.appID, hidden: !hide, pinned: hide && wasPinned ? true : nil)
+                           })
+    }
+
+    /// P: stays on Home's rail even when it hasn't been played for a while.
+    func togglePinned(_ game: Game) {
+        guard canPin(game) || isPinned(game) else { return }
+        let pin = !isPinned(game)
+        mark(game.appID, pinned: pin)
+        Toasts.shared.show(pin ? L10n.t("%@ stays on Home – even when you haven't played it for a while", game.name)
+                               : L10n.t("%@ is no longer pinned", game.name))
+    }
+
+    private func mark(_ appID: Int, hidden: Bool? = nil, pinned: Bool? = nil) {
+        if let hidden {
+            if hidden { hiddenGames.insert(appID) } else { hiddenGames.remove(appID) }
+            GameMarks.save(hiddenGames, .hidden)
+            if hiddenGames.isEmpty { showingHidden = false }
+        }
+        if let pinned {
+            if pinned { pinnedGames.insert(appID) } else { pinnedGames.remove(appID) }
+            GameMarks.save(pinnedGames, .pinned)
+        }
+        applyFilter()
+    }
+
+    /// The library's "Hidden" switch: only the hidden games, to bring some back – or all games again.
+    func toggleShowingHidden() {
+        guard showingHidden || !hiddenGames.isEmpty else { return }
+        showingHidden.toggle()
+        applyFilter()
+        selectedIndex = gridLayout.order.first ?? 0
+    }
+
+    /// The grid's groups for what the library shows now.
+    var librarySections: [LibrarySection] {
+        LibrarySection.make(games, sort: filters.sort, searching: !Search.key(searchText).isEmpty, hidden: showingHidden)
+    }
+
+    var gridLayout: GridLayout { GridLayout(sections: librarySections.map(\.items), columns: gridColumns) }
+
+    /// The selection is in the grid's first row, where ↑ leaves the grid for the top bar.
     var selectionInTopGridRow: Bool { (gridLayout.position(of: selectedIndex)?.row ?? 0) == 0 }
 
     /// ↑/↓ in the grid move a whole row, keeping the column (or the last card of a shorter row).
@@ -990,20 +1308,31 @@ final class LibraryModel: ObservableObject {
         selectedIndex = next
     }
 
-    /// ←/→: the rail goes through the list, the grid through what it shows, group by group.
+    /// ←/→: the rail goes through its games to the "All games" tile, the grid through what it
+    /// shows, group by group. A game's page stays on its game.
     func move(_ delta: Int) {
         guard !games.isEmpty else { return }
-        if showingLibrary, let next = gridLayout.index(from: selectedIndex, steps: delta) {
-            selectedIndex = next
-        } else {
-            selectedIndex = max(0, min(games.count - 1, selectedIndex + delta))
+        switch route {
+        case .home:
+            selectOnHome(place: max(0, min(homeRail.count, homePlace + delta)))
+        case .library:
+            if let next = gridLayout.index(from: selectedIndex, steps: delta) { selectedIndex = next }
+        case .detail:
+            break
         }
     }
 
     func jump(toStart: Bool) {
         guard !games.isEmpty else { return }
-        let order = showingLibrary ? gridLayout.order : Array(games.indices)
-        selectedIndex = (toStart ? order.first : order.last) ?? 0
+        switch route {
+        case .home:
+            selectOnHome(place: toStart ? 0 : homeRail.count)
+        case .library:
+            let order = gridLayout.order
+            selectedIndex = (toStart ? order.first : order.last) ?? 0
+        case .detail:
+            break
+        }
     }
 
     func launchSelected() {
@@ -1033,33 +1362,38 @@ final class LibraryModel: ObservableObject {
         launchingID = game.id
         GameDisplay.enterGame()
         launchNeedsConfirmation = false
-        launchStatus = nil
+        launchPhase = nil
         let behavior = Prefs.afterLaunch
         launchTask = Task {
             defer {
                 launchingID = nil
                 launchNeedsConfirmation = false
-                launchStatus = nil
+                launchPhase = nil
+                launchBuildsShaders = false
             }
-            if game.bottle.isBuiltIn { await steamStartup?.value }
+            if game.bottle.isBuiltIn, let startup = steamStartup {
+                if !Engine.isSteamRunning { launchPhase = .startingSteam }
+                await startup.value
+                launchPhase = nil
+            }
             // Steam for Mac signed in since and signed this Steam out: sign it in again, or the
             // game starts without its cloud saves.
             if game.bottle.isBuiltIn, Engine.sessionReplaced(), let wine = await Engine.installedWine() {
-                launchStatus = L10n.t("Signing in to Steam …")
+                launchPhase = .signingIn
                 _ = await restartStuckSteam(wine)
-                launchStatus = nil
+                launchPhase = nil
             }
             // A Steam that is still signing in starts the game offline ("Steam is currently in
             // Offline Mode"): wait for it, and start it afresh if it doesn't get there.
             if game.bottle.isBuiltIn, Engine.isSteamSignedIn, !Engine.steamSignedIn, let wine = await Engine.installedWine() {
-                launchStatus = L10n.t("Signing in to Steam …")
+                launchPhase = .signingIn
                 var waited = 0
                 while !Engine.steamSignedIn, waited < 45 {
                     try? await Task.sleep(for: .seconds(1))
                     waited += 1
                 }
                 if !Engine.steamSignedIn { _ = await restartStuckSteam(wine) }
-                launchStatus = nil
+                launchPhase = nil
             }
             if game.bottle.isBuiltIn { await takeSavesAlong(game, to: .windows) }
             let runner = game.bottle.isBuiltIn ? await Engine.installedWine()?.path : Prefs.runnerPath
@@ -1080,9 +1414,9 @@ final class LibraryModel: ObservableObject {
             }
 
             if let preparing = preparations[game.appID] {
-                launchStatus = L10n.t("Setting up the game …")
+                launchPhase = .settingUp
                 await preparing.value
-                launchStatus = nil
+                launchPhase = nil
             }
             while true {
                 if let runner {
@@ -1101,8 +1435,14 @@ final class LibraryModel: ObservableObject {
                 let logMark = GameLog.mark()
                 let startedAt = Date()
                 LearnedFixes.setLastLaunch(game.appID, logMark: logMark)
-                let (frameLimit, learning) = FramePacing.automaticLimit(appID: game.appID, options: options,
+                var (frameLimit, learning) = FramePacing.automaticLimit(appID: game.appID, options: options,
                                                                          profile: profile, refreshRate: refreshRate)
+                // On battery with "Save battery" on: 30 FPS, and nothing learned from a capped session.
+                let capped = PowerSource.cappedLimit(frameLimit, onBattery: power.onBattery, saveBattery: Prefs.saveBattery)
+                if capped != frameLimit {
+                    frameLimit = capped
+                    learning = false
+                }
                 if game.bottle.isBuiltIn {
                     FramePacing.recordStart(appID: game.appID, options: options, profile: profile, refreshRate: refreshRate,
                                             logMark: logMark, limit: frameLimit, learning: learning)
@@ -1113,13 +1453,18 @@ final class LibraryModel: ObservableObject {
                    Engine.prepareLaunchEnvironment(avx: LearnedFixes.avx(game.appID, profile: profile), d3dMetal: layer == .d3dmetal,
                                                    frameLimit: frameLimit, upscaling: options.effectiveUpscaling(profile: profile)),
                    Engine.isSteamRunning, !anyRunning(.windows), let runner {
-                    launchStatus = L10n.t("Signing in to Steam …")
+                    launchPhase = .signingIn
                     _ = await restartStuckSteam(URL(fileURLWithPath: runner))
-                    launchStatus = nil
+                    launchPhase = nil
                 }
+                let shaders = LaunchPhase.graphicsSignature(runner: runner, layer: layer,
+                                                            components: ComponentStore.localManifest()?.components ?? [])
+                launchBuildsShaders = game.bottle.isBuiltIn && LaunchPhase.isFirstStart(game.appID, signature: shaders)
                 guard await start(game, runner: runner, options: options, profile: profile,
                                   arguments: arguments, frameLimit: frameLimit)
                 else { return }
+                if game.bottle.isBuiltIn { LaunchPhase.recordStart(game.appID, signature: shaders) }
+                launchBuildsShaders = false
                 launchingID = nil
                 if game.bottle.isBuiltIn { SteamPriority.watch(game) }
                 startedHere.insert(game.id)
@@ -1153,7 +1498,7 @@ final class LibraryModel: ObservableObject {
                 }
                 if LaunchHealth.advance(game.appID, attempts) {
                     let next = attempts[LaunchHealth.current(game.appID, attempts).index]
-                    launchStatus = L10n.t("Starting again with %@ …", next.label)
+                    launchPhase = .retrying(next.label)
                     continue
                 }
                 // One way only (Vulkan, DirectX 12): what the game draws with says more than a layer.
@@ -1178,15 +1523,15 @@ final class LibraryModel: ObservableObject {
         let missing = Engine.missingWinetricks((profile?.winetricks ?? []) + learned.filter { $0 != GameLog.wineMono })
             .filter(Engine.isSafeWinetricksVerb)
         if !missing.isEmpty {
-            if showStatus { launchStatus = L10n.t("Setting up the game …") }
+            if showStatus { launchPhase = .settingUp }
             await Engine.installWinetricks(missing, wine: wine)
-            if showStatus { launchStatus = nil }
+            if showStatus { launchPhase = nil }
         }
         if game.bottle.isBuiltIn, analysis?.usesDotNet == true || learned.contains(GameLog.wineMono),
            !Engine.wineMonoInstalled {
-            if showStatus { launchStatus = L10n.t("Setting up .NET for the game …") }
+            if showStatus { launchPhase = .settingUpDotNet }
             await Engine.installWineMono(wine)
-            if showStatus { launchStatus = nil }
+            if showStatus { launchPhase = nil }
         }
     }
 
@@ -1237,6 +1582,15 @@ final class LibraryModel: ObservableObject {
         while quietSeconds < 120 && totalSeconds < 900 {
             try? await Task.sleep(for: .seconds(1))
             if Task.isCancelled { return false }
+            // Steam updates the game first ("Update & Play"): that's no silence, however long it takes.
+            if let update = await Task.detached(priority: .utility, operation: { LibraryScanner.updateState(of: game) }).value,
+               update.isRunning {
+                launchPhase = .updating(update.fraction)
+                quietSeconds = 0
+                continue
+            } else if case .updating? = launchPhase {
+                launchPhase = nil
+            }
             totalSeconds += 1
             switch watcher.poll() {
             case .running?:
@@ -1273,7 +1627,7 @@ final class LibraryModel: ObservableObject {
                 if game.bottle.isBuiltIn, !watcher.steamReceivedLaunch, !retriedAfterRestart,
                    totalSeconds % 5 == 0, running.isEmpty, let runner, Engine.steamLooksStuck(quietFor: 30) {
                     retriedAfterRestart = true
-                    launchStatus = L10n.t("Restarting Steam …")
+                    launchPhase = .restartingSteam
                     if await restartStuckSteam(URL(fileURLWithPath: runner)) {
                         watcher = LaunchWatcher(steamRoot: game.steamRoot, appID: game.appID)
                         try? await Task.detached(priority: .userInitiated) {
@@ -1281,7 +1635,7 @@ final class LibraryModel: ObservableObject {
                                                 frameLimit: frameLimit, extraArguments: arguments)
                         }.value
                     }
-                    launchStatus = nil
+                    launchPhase = nil
                     quietSeconds = 0
                     continue
                 }
@@ -1352,6 +1706,46 @@ final class LibraryModel: ObservableObject {
         let insight = GameInsight(analysis: analysis, attempts: LaunchHealth.attempts(for: analysis, profile: profile))
         if insights[game.appID] != insight { insights[game.appID] = insight }
         return insight
+    }
+
+    /// How well it runs on a Mac, from the profile list and what this Mac learned about it.
+    func compatibility(of game: Game) -> Compatibility {
+        Compatibility.of(game, profile: profiles[game.appID], analysis: insights[game.appID]?.analysis)
+    }
+
+    /// The detail page's "Add to Applications": a little app that opens the game, found by Spotlight.
+    func addShortcut(for game: Game) {
+        Task {
+            let cover = await ArtworkStore.shared.image(for: game, kind: .cover)
+            do {
+                let app = try GameShortcut.create(for: game, icon: cover)
+                shortcutsChanged += 1
+                Toasts.shared.show(L10n.t("%@ is in Applications now – Spotlight finds it", game.name),
+                                   action: .init(label: L10n.t("Show")) { NSWorkspace.shared.activateFileViewerSelecting([app]) })
+            } catch {
+                errorMessage = L10n.t("%@ couldn't be added to Applications: %@", game.name, error.localizedDescription)
+            }
+        }
+    }
+
+    /// Bumped when a game's app was added, so its button turns into "Show in Applications".
+    @Published private(set) var shortcutsChanged = 0
+
+    /// After a failed start: every way again from the first, as if the game were new.
+    func startOver(_ failed: FailedLaunch) {
+        failedLaunch = nil
+        LaunchHealth.reset(failed.game.appID)
+        play(failed.game)
+    }
+
+    /// After a failed start: the game's options, where the graphics layer is picked by hand.
+    func chooseGraphicsByHand(_ failed: FailedLaunch) {
+        failedLaunch = nil
+        guard reveal(failed.game) else { return }
+        Task {
+            try? await Task.sleep(for: .milliseconds(400))  // one sheet closes before the next opens
+            showingOptions = true
+        }
     }
 
     /// Opens a pre-filled problem report for the game in the browser.
@@ -1437,22 +1831,24 @@ final class LibraryModel: ObservableObject {
     func confirmUninstall() {
         guard let game = pendingUninstall else { return }
         pendingUninstall = nil
-        uninstallingID = game.id
         Task {
-            defer {
-                uninstallingID = nil
-                reload(quiet: true)
+            await uninstall(game)
+            reload(quiet: true)
+        }
+    }
+
+    private func uninstall(_ game: Game) async {
+        uninstallingID = game.id
+        defer { uninstallingID = nil }
+        do {
+            if game.platform == .mac {
+                try await MacSteam.uninstall(appID: game.appID, installDir: game.installDir)
+                return
             }
-            do {
-                if game.platform == .mac {
-                    try await MacSteam.uninstall(appID: game.appID, installDir: game.installDir)
-                    return
-                }
-                guard let wine = await Engine.installedWine() else { return }
-                try await Engine.uninstall(appID: game.appID, installDir: game.installDir, wine: wine)
-            } catch {
-                errorMessage = L10n.t("%@ could not be uninstalled: %@", game.name, error.localizedDescription)
-            }
+            guard let wine = await Engine.installedWine() else { return }
+            try await Engine.uninstall(appID: game.appID, installDir: game.installDir, wine: wine)
+        } catch {
+            errorMessage = L10n.t("%@ could not be uninstalled: %@", game.name, error.localizedDescription)
         }
     }
 

@@ -311,6 +311,42 @@ struct LaunchHealthTest {
             }
         }
 
+        // The first start with new graphics says shaders are being built; the second doesn't.
+        let shaderDefaults = UserDefaults(suiteName: "nightforge.launch-phase-test")!
+        shaderDefaults.removePersistentDomain(forName: "nightforge.launch-phase-test")
+        func component(_ id: String, _ version: String, _ kind: Component.Kind) -> Component {
+            try! JSONDecoder().decode(Component.self, from: Data("""
+                {"id":"\(id)","kind":"\(kind.rawValue)","version":"\(version)","url":"https://x/\(id).tar","sha256":"","size":1,"license":"MIT","source":"https://x"}
+                """.utf8))
+        }
+        let before = [component("dxmt", "0.80", .graphics), component("winetricks", "1", .tool)]
+        let signature = LaunchPhase.graphicsSignature(runner: "/wine/4.7.3/bin/wine", layer: .dxmt, components: before)
+        check(LaunchPhase.isFirstStart(570, signature: signature, defaults: shaderDefaults), "a game never started builds shaders")
+        LaunchPhase.recordStart(570, signature: signature, defaults: shaderDefaults)
+        check(!LaunchPhase.isFirstStart(570, signature: signature, defaults: shaderDefaults), "the second start doesn't")
+        let toolUpdate = LaunchPhase.graphicsSignature(runner: "/wine/4.7.3/bin/wine", layer: .dxmt,
+                                                       components: [component("dxmt", "0.80", .graphics), component("winetricks", "2", .tool)])
+        check(toolUpdate == signature, "a tool update doesn't touch the shaders")
+        let graphicsUpdate = LaunchPhase.graphicsSignature(runner: "/wine/4.7.3/bin/wine", layer: .dxmt,
+                                                           components: [component("dxmt", "0.81", .graphics)])
+        check(LaunchPhase.isFirstStart(570, signature: graphicsUpdate, defaults: shaderDefaults), "a graphics update does")
+        let otherLayer = LaunchPhase.graphicsSignature(runner: "/wine/4.7.3/bin/wine", layer: .dxvk, components: before)
+        check(LaunchPhase.isFirstStart(570, signature: otherLayer, defaults: shaderDefaults), "so does another layer")
+        let otherEngine = LaunchPhase.graphicsSignature(runner: "/wine/4.8/bin/wine", layer: .dxmt, components: before)
+        check(LaunchPhase.isFirstStart(570, signature: otherEngine, defaults: shaderDefaults), "and a new engine")
+        shaderDefaults.removePersistentDomain(forName: "nightforge.launch-phase-test")
+        check(Set([LaunchPhase.startingSteam, .signingIn, .settingUp, .settingUpDotNet, .restartingSteam, .retrying("DXVK"),
+                   .startingSteamForMac, .signInInSteamWindow].map(\.hint)).count == 8, "every phase explains itself differently")
+
+        // "Save battery when unplugged": 30 FPS on battery, nothing changes plugged in or with the setting off.
+        check(PowerSource.cappedLimit(60, onBattery: true, saveBattery: true) == 30, "60 becomes 30 on battery")
+        check(PowerSource.cappedLimit(24, onBattery: true, saveBattery: true) == 24, "a lower limit stays")
+        check(PowerSource.cappedLimit(0, onBattery: true, saveBattery: true) == 30, "no limit becomes 30")
+        check(PowerSource.cappedLimit(60, onBattery: false, saveBattery: true) == 60, "plugged in: as it was")
+        check(PowerSource.cappedLimit(60, onBattery: true, saveBattery: false) == 60, "setting off: as it was")
+        let power = PowerSource.current()
+        check(power.level.map { (0...1).contains($0) } ?? true, "battery level reads as 0…1: \(String(describing: power.level))")
+
         print(failures == 0 ? "✓ all checks passed" : "\(failures) checks failed")
         exit(failures == 0 ? 0 : 1)
     }

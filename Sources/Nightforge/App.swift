@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 
 @main
 struct NightforgeApp: App {
@@ -17,6 +18,7 @@ struct NightforgeApp: App {
             LibraryView()
                 .id(language)
                 .environmentObject(model)
+                .modifier(ReduceMotionFromSettings())
                 .frame(minWidth: 980, minHeight: 640)
                 .preferredColorScheme(.dark)
         }
@@ -38,11 +40,30 @@ struct NightforgeApp: App {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
         GameDisplay.follow()
+        MacIntegration.setUp(delegate: self)
+    }
+
+    /// Right-click on the Dock icon: the last games played, one click to play.
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        MacIntegration.dockMenu(target: self, action: #selector(playFromDock(_:)))
+    }
+
+    /// nightforge://play/<app ID> – from a game's app in ~/Applications, Spotlight or a shortcut.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        urls.forEach { MacIntegration.open($0) }
+    }
+
+    @MainActor @objc private func playFromDock(_ item: NSMenuItem) {
+        MacIntegration.open(id: item.representedObject as? String, play: true)
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        MacIntegration.handle(response)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

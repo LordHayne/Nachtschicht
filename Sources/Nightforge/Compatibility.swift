@@ -51,6 +51,8 @@ struct Compatibility: Equatable {
         var learnedFixes = false
         /// Where the self-healing launch stands (LaunchHealth): nil before the first start.
         var launch: (index: Int, confirmed: Bool)?
+        /// How it ran for the player ("Welcome back"): beats everything but what stops the game.
+        var ownRating: GameRating?
     }
 
     /// Worst first: what stops the game, then what it needs, then what shows it runs.
@@ -63,6 +65,12 @@ struct Compatibility: Equatable {
             return .init(level: .no, note: block.geforceNow == nil
                 ? L10n.t("Its anti-cheat needs Windows itself.")
                 : L10n.t("Its anti-cheat needs Windows – playable on GeForce Now instead."))
+        }
+        if let rating = facts.ownRating {
+            return rating.good
+                ? .init(level: .great, note: L10n.t("You said it runs well."))
+                : .init(level: .tweaks, note: rating.issues.isEmpty ? L10n.t("You said it didn't run well.")
+                        : L10n.t("You said: %@.", rating.issues.map(\.label).joined(separator: ", ")))
         }
         // Steam's own Mac version: nothing to translate.
         if facts.platform == .mac {
@@ -115,6 +123,7 @@ extension Compatibility {
         var facts = Facts(platform: game.platform, vrOnly: game.isVROnly, antiCheatBlock: game.antiCheatBlock,
                           profile: profile, analysis: analysis)
         facts.learnedFixes = !LearnedFixes.winetricks(game.appID).isEmpty || LearnedFixes.noAVX(game.appID)
+        facts.ownRating = GameRatings.load(game.appID)
         if let analysis {
             facts.launch = LaunchHealth.peek(game.appID, LaunchHealth.attempts(for: analysis, profile: profile))
         }

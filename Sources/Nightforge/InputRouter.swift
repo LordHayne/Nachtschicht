@@ -76,24 +76,34 @@ final class InputRouter {
         case 115: model.jump(toStart: true); return true // Pos1
         case 119: model.jump(toStart: false); return true // Ende
         case 36, 76:                                     // Return / Enter
-            if model.showingLibrary { model.showSelectedGame() } else { model.primaryAction() }
+            model.activate()
             return true
         case 53:                                         // Esc
             if model.awaitingSteam { model.cancelLaunch(); return true }
-            if model.showingLibrary { model.showingLibrary = false; return true }
-            if !model.searchText.isEmpty { model.searchText = ""; return true }
-            return false
+            return model.back()
         default: break
         }
         switch chars.lowercased() {
-        case "o" where model.selected.map { $0.install != .inStore } ?? false:
+        case "o" where model.heroGame.map { $0.install != .inStore } ?? false:
             model.showingOptions = true
             return true
         case "l":
             model.toggleLibrary()
             return true
+        case "i" where !model.route.isDetail && model.heroGame != nil:
+            model.openDetail()
+            return true
+        case "h" where model.route.isDetail:
+            if let game = model.selected { model.toggleHidden(game) }
+            return true
+        case "p" where model.route.isDetail:
+            if let game = model.selected { model.togglePinned(game) }
+            return true
         case "/":
             model.focusSearch()
+            return true
+        case "d" where !model.downloads.isEmpty:
+            model.showingDownloads.toggle()
             return true
         default:
             return false
@@ -102,11 +112,24 @@ final class InputRouter {
 
     // MARK: - Gamepad
 
-    private func refreshConnected() {
+    func refreshConnected() {
         let pads = GCController.controllers().compactMap(\.extendedGamepad)
         model?.controllerConnected = !pads.isEmpty
         let current = GCController.current?.extendedGamepad ?? pads.first
-        if let current, model?.padSymbols != PadSymbols(current) { model?.padSymbols = PadSymbols(current) }
+        let symbols = Prefs.padGlyphs == .automatic ? current.map { PadSymbols($0) } : PadSymbols(style: Prefs.padGlyphs)
+        if let symbols, model?.padSymbols != symbols { model?.padSymbols = symbols }
+        refreshBattery()
+    }
+
+    /// The controller in use and its battery, for the hint bar ("DualSense · 80 %").
+    func refreshBattery() {
+        let controller = GCController.current ?? GCController.controllers().first { $0.extendedGamepad != nil }
+        let status = controller.map { pad -> ControllerStatus in
+            let battery = pad.battery.flatMap { $0.batteryState == .unknown ? nil : $0 }
+            return ControllerStatus(name: pad.vendorName ?? pad.productCategory, battery: battery?.batteryLevel,
+                                    charging: battery?.batteryState == .charging)
+        }
+        if model?.controllerStatus != status { model?.controllerStatus = status }
     }
 
     private func attach(_ controller: GCController?) {
@@ -120,11 +143,12 @@ final class InputRouter {
         pad.leftThumbstick.valueChangedHandler = { [weak self] _, x, y in
             MainActor.assumeIsolated { self?.steer(.stick, x: x, y: y) }
         }
+        // X: the selected game's page (A on Home plays it).
         pad.buttonX.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
             MainActor.assumeIsolated {
                 guard self?.dialog == nil else { return }
-                self?.model?.toggleLibrary()
+                self?.model?.openDetail()
             }
         }
         // A presses the highlighted control (PadFocus). Otherwise, in a dialog or sheet, A and B
@@ -162,10 +186,8 @@ final class InputRouter {
                     }
                 } else if model.awaitingSteam {
                     model.cancelLaunch()  // stop waiting for a game Steam hasn't started
-                } else if model.showingLibrary {
-                    model.showingLibrary = false
-                } else if !model.searchText.isEmpty {
-                    model.searchText = ""  // like Esc: back from a filtered list to the whole library
+                } else {
+                    model.back()  // like Esc: a level up, a search dropped first
                 }
             }
         }
@@ -173,9 +195,13 @@ final class InputRouter {
             guard pressed else { return }
             MainActor.assumeIsolated { self?.toggleOptions() }
         }
+        // ☰: between Home and the library, like L.
         pad.buttonMenu.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
-            MainActor.assumeIsolated { self?.toggleOptions() }
+            MainActor.assumeIsolated {
+                guard self?.dialog == nil else { return }
+                self?.model?.toggleLibrary()
+            }
         }
         pad.leftShoulder.pressedChangedHandler = { [weak self] _, _, pressed in
             guard pressed else { return }
@@ -247,11 +273,11 @@ final class InputRouter {
 
     private func primary() {
         guard let model, !model.showingOptions, model.macSetup == nil else { return }
-        if model.showingLibrary { model.showSelectedGame() } else { model.primaryAction() }
+        model.activate()
     }
 
     private func toggleOptions() {
-        guard let model, let game = model.selected, game.install != .inStore else { return }
+        guard let model, let game = model.heroGame, game.install != .inStore else { return }
         // Opens over the library only; closes its own sheet but never one behind a question.
         guard model.showingOptions ? NSApp.modalWindow == nil : dialog == nil else { return }
         model.showingOptions.toggle()
@@ -281,8 +307,9 @@ final class InputRouter {
         setHeld(step.isNone ? (source == .dpad ? stickStep : dpadStep) : step)
     }
 
-    /// Down on the start page opens the library; up from its top row goes back. Returns true when
-    /// the view changed: holding on then mustn't run on through the other view.
+    /// Down on Home opens the library; up from Home's rail or the grid's top row enters the
+    /// buttons above, and on a game's page every direction moves between its buttons. Returns
+    /// true when the view or the focus changed: holding on then mustn't run on through it.
     @discardableResult
     private func perform(_ step: Step) -> Bool {
         guard let model else { return false }
@@ -301,18 +328,16 @@ final class InputRouter {
                 }
                 return false
             }
-            if step.dy < 0, !model.showingLibrary {
+            // A game's page has no covers: the pad starts on its Play button.
+            if model.route.isDetail || (step.dy < 0 && (model.route == .home || model.selectionInTopGridRow)) {
                 focus.move(dx: 0, dy: -1, in: window)
                 return true
             }
         }
+        if model.route.isDetail { return false }
         if step.dx != 0 { model.move(step.dx) }
-        if step.dy > 0, !model.showingLibrary {
-            model.showingLibrary = true
-            return true
-        }
-        if step.dy < 0, model.showingLibrary, model.selectionInTopGridRow {
-            model.showingLibrary = false
+        if step.dy > 0, model.route == .home {
+            model.goLibrary()
             return true
         }
         if step.dy != 0 { model.moveRow(step.dy) }
@@ -350,6 +375,19 @@ final class InputRouter {
 /// The SF Symbols a controller gives its own buttons: ✕ ○ □ △ on a PlayStation pad, A B X Y on
 /// Xbox, the Nintendo layout on a Switch pad. The defaults are Xbox's.
 struct PadSymbols: Equatable {
+    /// What Settings › Controller › Button labels asks for.
+    enum Style: String, CaseIterable {
+        case automatic, xbox, playstation
+
+        var label: String {
+            switch self {
+            case .automatic: return L10n.t("Like my controller")
+            case .xbox: return "Xbox"
+            case .playstation: return "PlayStation"
+            }
+        }
+    }
+
     var confirm = "a.circle.fill"
     var back = "b.circle.fill"
     var library = "x.circle.fill"
@@ -357,6 +395,15 @@ struct PadSymbols: Equatable {
     var stick = "l.joystick.fill"
 
     init() {}
+
+    /// Always one maker's labels, whatever controller is in use.
+    init(style: Style) {
+        guard style == .playstation else { return }
+        confirm = "xmark.circle.fill"
+        back = "circle.circle.fill"
+        library = "square.circle.fill"
+        options = "triangle.circle.fill"
+    }
 
     @MainActor
     init(_ pad: GCExtendedGamepad) {
@@ -373,4 +420,34 @@ struct PadSymbols: Equatable {
         let fill = name.hasSuffix(".fill") ? name : name + ".fill"
         return NSImage(systemSymbolName: fill, accessibilityDescription: nil) != nil ? fill : name
     }
+}
+
+/// The controller in use, as the hint bar shows it.
+struct ControllerStatus: Equatable {
+    let name: String
+    /// 0…1; nil when the controller doesn't say.
+    let battery: Float?
+    var charging = false
+
+    /// "DualSense · 80 %" – the name shortened to its last word for the long ones Apple reports
+    /// ("DualSense Wireless Controller" → "DualSense").
+    var label: String {
+        let short = name.replacingOccurrences(of: " Wireless Controller", with: "").replacingOccurrences(of: " Controller", with: "")
+        guard let battery else { return short }
+        return "\(short) · \(Int((battery * 100).rounded())) %"
+    }
+
+    var symbol: String {
+        if charging { return "battery.100.bolt" }
+        switch battery ?? 1 {
+        case ..<0.13: return "battery.0percent"
+        case ..<0.38: return "battery.25percent"
+        case ..<0.63: return "battery.50percent"
+        case ..<0.88: return "battery.75percent"
+        default: return "battery.100percent"
+        }
+    }
+
+    /// Low enough to say so in the accent colour.
+    var isLow: Bool { (battery ?? 1) < 0.2 && !charging }
 }

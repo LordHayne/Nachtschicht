@@ -142,6 +142,19 @@ actor ComponentStore {
         throw failure
     }
 
+    /// The list at hand without asking the network (Settings › About): the last one fetched, else
+    /// the one bundled with the app.
+    static func localManifest() -> ComponentManifest? {
+        let cached = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Nightforge/Components/manifest.json")
+        for url in [cached, Bundle.main.url(forResource: "manifest", withExtension: "json")].compactMap({ $0 }) {
+            if let data = try? Data(contentsOf: url), let manifest = try? JSONDecoder().decode(ComponentManifest.self, from: data) {
+                return manifest
+            }
+        }
+        return nil
+    }
+
     private func decode(_ data: Data) throws -> ComponentManifest {
         let manifest = try JSONDecoder().decode(ComponentManifest.self, from: data)
         guard manifest.schemaVersion <= ComponentManifest.supportedSchema else {

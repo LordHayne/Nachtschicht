@@ -264,10 +264,18 @@ installiert und läuft es, ist der Weg sehr gut, besser als bei der Konkurrenz. 
 genau dort entscheidet ein neuer Nutzer, ob er bleibt.
 
 - **Installation per Terminal.** Die README schickt Nutzer zu `curl … | bash`. Für normale Mac-Nutzer ist das
-  fremd und wirkt unsicher. Die DMG ist nicht notarisiert, also blockt Gatekeeper beim ersten Öffnen. Hängt an der
-  Entscheidung zur Signatur (siehe „Aus dem Code-Audit“ → Entscheidungen): Mit Developer ID und Notarisierung wäre
-  es „DMG laden, in Programme ziehen, fertig“. Bis dahin mindestens die DMG als ersten Weg in der README, mit
-  einem Satz und Bild zu „Rechtsklick → Öffnen“.
+  fremd und wirkt unsicher. Die DMG ist nicht notarisiert, also blockt Gatekeeper beim ersten Öffnen.
+  **Entscheidung (28.10.): kein bezahlter Apple-Developer-Account.** Nightforge ist ein kostenloses Hobbyprojekt,
+  an Apple wird nichts gezahlt. Also ohne Notarisierung so glatt wie möglich machen:
+  - In der README beide Wege nebeneinander: das Terminal-Kommando (umgeht Gatekeeper, weil `curl` keine
+    Quarantäne setzt) und die DMG mit Bildern für den Gatekeeper-Schritt. Seit macOS 15 reicht „Rechtsklick → Öffnen“
+    nicht mehr, der Weg ist Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“. Auf dem
+    DMG-Hintergrund (`Resources/dmg/background.png`) denselben Hinweis in einem Satz.
+  - Ehrlich sagen, warum: kostenlos, offener Quellcode, Apples Prüfung kostet Geld. Das schafft mehr Vertrauen als
+    ein stummer Warndialog.
+  - Nur einmal: Danach aktualisiert sich Nightforge selbst, ohne dass Gatekeeper erneut fragt (prüfen, dass
+    `Updater` das heruntergeladene Zip nicht unter Quarantäne stellt).
+  - Echte Update-Signatur ohne Apple: der kostenlose Ed25519-Weg aus „Aus dem Code-Audit“ → Entscheidungen.
 - **Ersteinrichtung ist lang und hat Hürden:** Passwort für Rosetta, rund 11 Minuten Steam-Update auf einem frischen
   Prefix (siehe „Aus dem Code-Audit“ → Steam und Start), Anmeldung. Jeder Schritt braucht eine ehrliche
   Fortschrittsanzeige und einen Grund, warum er nötig ist (ROADMAP 1.1).
@@ -275,7 +283,7 @@ genau dort entscheidet ein neuer Nutzer, ob er bleibt.
   das wie ein Fehler. Nightforge sollte das abfangen oder in einem Satz erklären.
 - **Erster Start eines Spiels ruckelt** wegen der Shader und sieht ohne Erklärung kaputt aus (ROADMAP 1.1,
   „Preparing shaders …“).
-- **Nur Steam.** Epic kommt (Branch `claude/ux-roadmap-next`), GOG, EA app, Ubisoft und Battle.net fehlen noch.
+- **Nur Steam.** Epic ist in Arbeit (Branch `claude/ux-roadmap-next`), GOG, EA app, Ubisoft und Battle.net fehlen noch.
 - **Wenig nachweislich geprüfte Spiele.** Eine kleine Liste „geprüft läuft“ schafft Vertrauen (siehe
   „Ehrlich sagen, was geht“), die Vorab-Profile aus offenen Daten machen sie schnell länger.
 
@@ -318,6 +326,7 @@ Befunde vom 26.10., die noch offen sind. Alles andere ist behoben (PR #4, #5, #1
 - **Updates sind nicht echt signiert.** `Updater.install` prüft nur `codesign --verify` auf eine Ad-hoc-Signatur,
   `scripts/install.sh` lädt ohne Prüfsumme. Bewusst offen gelassen. Wege: ein Ed25519-Schlüssel als Repo-Secret
   (Release-Zip signieren, im Updater und in install.sh prüfen) oder ein Apple-Developer-Account (Developer ID, Notarisierung).
+  Der Apple-Account fällt weg (Entscheidung 28.10., kostenloses Hobbyprojekt), bleibt der Ed25519-Weg.
 
 ### Vulkan-Layer und winecx
 

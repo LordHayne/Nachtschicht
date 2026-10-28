@@ -92,6 +92,61 @@ Die Tests vom 26.10. liefen größtenteils noch auf Wine 11.18 (Gcenx). Seit PR 
   Spielstart das Audiogerät des Spiel-Bildschirms wählen (CoreAudio, Transport HDMI/DisplayPort) und danach zurück,
   wie `GameDisplay.enterGame`/`leaveGame` es mit dem Hauptbildschirm machen.
 
+## Das Maximum aus dem Chip
+
+Ziel (Entscheidung 28.10.): Leistung zuerst. Deshalb bleiben mehrere Übersetzer, und die direkten Wege nach
+Metal stehen vorne: Mac-Version (nativ für Apple Silicon) → DXMT/D3DMetal → DXVK über Vulkan → WineD3D.
+Ein einheitlicher Vulkan-Stapel wäre einfacher, aber langsamer, und kommt nur als unterste Stufe in Frage
+(siehe „Fehlende Engines“).
+
+- **Schnellsten Übersetzer pro Spiel messen statt schätzen.** „Automatisch“ nimmt für DirectX 11 DXMT, D3DMetal
+  kann DX11 aber auch und ist bei manchen Spielen schneller. Beim ersten Spielen beide kurz messen und den Sieger
+  pro Spiel merken, wie es die gelernte Bildratengrenze schon tut (`FramePacing`, `LearnedFixes` in `LaunchHealth.swift`).
+  Größter Gewinn ohne Kosten.
+- **„Mac zuerst“ nur für native Apple-Silicon-Versionen.** Alte Intel-Ports laufen über Rosetta und meist altes
+  OpenGL; die Windows-Version über D3DMetal kann deutlich schneller sein. Regel in `MacVersion.swift` anpassen:
+  nativ → Mac-Version, Intel-Port → messen oder Windows-Version vorziehen.
+- **Render-Auflösung und MetalFX.** Spiele sollen in Punkt-Auflösung rendern (Retina kostet das Vierfache) und
+  MetalFX hochrechnen lassen. Wo ein Spiel DLSS anbietet, temporales MetalFX (über `nvngx.dll`) dem räumlichen
+  vorziehen, es ist schärfer. Ansatz: `Engine.writeGameConfigs`, Profile.
+- **Shader-Caches erhalten.** Für Flüssigkeit zählen die Caches von DXMT (`DXMT_SHADER_CACHE_PATH`) und D3DMetal mehr
+  als die FPS im Schnitt. Prüfen, dass sie Spiel- und Komponenten-Updates überleben und nie unnötig gelöscht werden.
+- **Hinweis bei Stromsparmodus oder Akku.** macOS drosselt dann spürbar. Vor dem Start kurz sagen
+  (`ProcessInfo.isLowPowerModeEnabled`, Netzteil über IOKit `IOPSCopyPowerSourcesInfo`).
+- **Spielmodus von macOS sicherstellen.** Er springt nur im Vollbild an. Prüfen, dass Windows-Spiele über
+  `Nightforge Game.app` wirklich im Vollbild landen und der Spielmodus aktiv wird.
+- **Speicher freimachen.** Bei gemeinsamem Speicher zählt jedes GB. Für schwere Spiele Steam beenden statt nur
+  verstecken (`AfterLaunch`), vielleicht automatisch, wenn der Mac wenig RAM hat.
+- **MetalFX Frame Generation (ab macOS 26)** als Option für schwere Spiele, die unter dem 60-FPS-Lock bleiben
+  (30–40 FPS). Kostet etwas Eingabeverzögerung, deshalb nicht für alle. GPTK 4 nennt Frame Generation als Funktion;
+  prüfen, ob D3DMetal sie Spielen anbietet.
+- Grenze, die bleibt: Windows-Spiele sind x86-Code und laufen über Rosetta. Schneller geht es nur mit echten
+  Apple-Silicon-Ports.
+
+## Fehlende Engines
+
+Recherche vom 27.10. (Stand der Projekte: DXMT 0.80 ist aktuell, D3DMetal 4.0b3 neuer als in CrossOver 26).
+
+- **KosmicKrisp (LunarG, Mesa) als unterste Stufe prüfen.** Vulkan 1.4 auf Metal 4, konform, seit Okt. 2026
+  „production ready“ auf Apple Silicon ab macOS 26. Könnte auf einen Schlag DXVK 2.x (mit d8vk für DirectX 8),
+  vkd3d-proton (DX12 ohne Apples Lizenz, Plan B) und Zink (OpenGL über Vulkan) möglich machen, vielleicht auch
+  bestehende DXVK-Spiele schneller als MoltenVK. Öffentlich hat das noch niemand mit Wine gezeigt. Passt zum
+  Vulkan-Loader für winecx (siehe „Aus dem Code-Audit“): KosmicKrisp per ICD-JSON neben MoltenVK. Kommt im Vulkan
+  SDK mit (`libvulkan_kosmickrisp.dylib`, `libkosmickrisp_icd.json`).
+- **DirectX 12 hat keinen Rückfall.** Scheitert D3DMetal, ist Schluss. winecx bringt Wines `d3d12.dll` (vkd3d) mit,
+  das läuft aber über Vulkan und hängt am Vulkan-Loader; vkd3d auf MoltenVK ist früher gescheitert.
+  Mit KosmicKrisp neu prüfen.
+- **DirectX 9 ist die schwächste Stelle.** Kein Weg direkt nach Metal (DXMT: nur 10/11, D3DMetal: 11/12), nur WineD3D
+  über Apples OpenGL 4.1 und DXVK 1.10.3. Betrifft viele Source- und Unity-Klassiker. Wege: DXVK 2.x auf KosmicKrisp,
+  langfristig bei DirectX 9 in DXMT mithelfen.
+- **DirectX 8 und älter (ddraw)** laufen nur über WineD3D. dgVoodoo2 (DX1–8 → D3D11 → DXMT) wäre ein Weg; erst
+  die Lizenz für die Weitergabe prüfen.
+- **OpenGL-Spiele** sind auf macOS OpenGL 4.1 begrenzt; was 4.3+ braucht, startet nicht. Weg: Zink auf KosmicKrisp.
+- **Winetricks-Zuordnung ergänzen** (`GameLog.winetricksVerb`): XNA Framework (`xna40`) und echtes .NET Framework
+  (`dotnet48`) für Spiele und Launcher, bei denen wine-mono nicht reicht.
+- **Video im Spiel testen.** winecx bringt `winegstreamer` mit GStreamer und `gptk-video` mit; Zwischensequenzen
+  (Media Foundation, H.264 in Unreal/Unity) sind noch nicht gezielt geprüft.
+
 ## Anti-Cheat und GeForce Now
 
 - **Store-Suche warnt nicht vor reinen Online-Spielen mit Anti-Cheat** (z. B. Bless Unleashed). Die Sperre
